@@ -482,7 +482,7 @@ static absl::optional<int64_t> ComputeMultiplierForUserScalar(HloInstruction* op
       if (!is_operand_at(0)) return absl::nullopt;
       for (int64_t d : user->dimensions()) {
         if (d == 0) {
-          return absl::nullopt;
+          return operand_mul;
         }
       }
       return operand_mul_val;
