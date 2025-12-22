@@ -83,8 +83,8 @@ void XlaReductionOp::Compile(XlaOpKernelContext* ctx) {
   xla::Literal axes_literal;
   OP_REQUIRES_OK(ctx, ctx->ConstantInputReshapedToIntVector(1, &axes));
 
-  VLOG(1) << "data shape: " << data_shape.DebugString();
-  VLOG(1) << "axes      : " << absl::StrJoin(axes, ",");
+  LOG(INFO) << "data shape: " << data_shape.DebugString();
+  LOG(INFO) << "axes      : " << absl::StrJoin(axes, ",");
 
   absl::InlinedVector<bool, 4> bitmap(data_shape.dims(), false);
   std::vector<int64_t> xla_axes;
