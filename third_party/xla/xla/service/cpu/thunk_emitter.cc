@@ -1086,6 +1086,9 @@ absl::StatusOr<ThunkSequence> ThunkEmitter::EmitCustomCallThunk(
     return EmitTopKThunk(custom_call);
   } else if (custom_call_target == "SliceToDynamic") {
     return EmitSliceToDynamicThunk(instruction);
+  } else if (custom_call_target == "GetOuterBatchValue") {
+    LOG(INFO) << "cxf mark2";
+    return EmitGetOuterBatchValueThunk(instruction);
   }
 
   // Check the API version.
@@ -1126,6 +1129,13 @@ absl::StatusOr<ThunkSequence> ThunkEmitter::EmitSliceToDynamicThunk(
   return MakeKernelThunkSequence(
       instruction, buffers, kernel,
       /*min_alignment=*/cpu_function_runtime::MinAlign());
+}
+
+absl::StatusOr<ThunkSequence> ThunkEmitter::EmitGetOuterBatchValueThunk(
+    const HloInstruction* instruction) {
+  LOG(INFO) << "Mark1: Handling GetOuterBatchValue for instruction: "
+            << instruction->ToString();
+  return absl::OkStatus();
 }
 
 absl::StatusOr<ThunkSequence> ThunkEmitter::EmitSliceThunk(
