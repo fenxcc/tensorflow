@@ -374,7 +374,7 @@ absl::Status IrEmitter::EmitConstantGlobals(
 }
 
 absl::Status IrEmitter::HandleConstant(HloInstruction* constant) {
-  VLOG(2) << "HandleConstant: " << constant->ToString();
+  LOG(INFO) << "HandleConstant: " << constant->ToString();
   // IrEmitter::EmitConstantGlobals has already taken care of emitting the body
   // of the constant.
   return EmitTargetAddressForOp(constant);

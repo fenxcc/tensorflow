@@ -1135,7 +1135,15 @@ absl::StatusOr<ThunkSequence> ThunkEmitter::EmitGetOuterBatchValueThunk(
     const HloInstruction* instruction) {
   LOG(INFO) << "Mark1: Handling GetOuterBatchValue for instruction: "
             << instruction->ToString();
-  return absl::OkStatus();
+  const HloCustomCallInstruction* custom_call =
+      Cast<HloCustomCallInstruction>(instruction);
+  TF_ASSIGN_OR_RETURN(
+      auto kernel, ir_emitter_.EmitGetOuterBatchValueHostKernel(custom_call));
+  TF_ASSIGN_OR_RETURN(BufferAllocation::Slice result_buffer,
+                      GetAllocationSlice(custom_call));
+  return MakeKernelThunkSequence(
+      custom_call, result_buffer, kernel,
+      /*min_alignment=*/cpu_function_runtime::MinAlign());
 }
 
 absl::StatusOr<ThunkSequence> ThunkEmitter::EmitSliceThunk(
