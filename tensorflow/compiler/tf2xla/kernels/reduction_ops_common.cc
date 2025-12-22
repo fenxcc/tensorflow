@@ -62,6 +62,8 @@ void XlaReductionOp::Compile(XlaOpKernelContext* ctx) {
   const TensorShape data_shape = ctx->InputShape(0);
   const TensorShape axes_tensor_shape = ctx->InputShape(1);
   VLOG(1) << "ReductionOp: " << ctx->op_kernel().name();
+  LOG(INFO) << "data shape: " << data_shape.DebugString();
+  LOG(INFO) << "axes      : " << axes_tensor_shape.DebugString();
 
   if (axes_tensor_shape.num_elements() == 0) {
     // The reduction axes is an empty vector, which means there are no
