@@ -2463,6 +2463,12 @@ absl::Status IrEmitter::HandleTopK(HloInstruction* hlo) {
   return absl::OkStatus();
 }
 
+absl::Status IrEmitter::HandleGetOuterBatchValue(HloInstruction* custom_call) {
+  // Emit the call to the GetOuterBatchValue function.
+  LOG(INFO) << "Emitting GetOuterBatchValue for instruction: " << custom_call->ToString();
+  return absl::OkStatus();
+}
+
 #if defined(INTEL_MKL)
 
 // Emits operands alloca vector for oneDNN custom calls.
@@ -2814,6 +2820,9 @@ absl::Status IrEmitter::HandleCustomCall(HloInstruction* custom_call) {
   }
   if (custom_call->custom_call_target() == "TopK") {
     return HandleTopK(custom_call);
+  }
+  if (custom_call->custom_call_target() == "GetOuterBatchValue") {
+    return HandleGetOuterBatchValue(custom_call);
   }
 #if defined(INTEL_MKL)
   if (custom_call->custom_call_target() == "__onednn$matmul") {
