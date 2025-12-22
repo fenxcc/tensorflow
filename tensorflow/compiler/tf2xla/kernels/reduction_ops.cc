@@ -136,6 +136,14 @@ class MeanOp : public XlaReductionOp {
                     const xla::XlaOp& scalar_rhs) override {
     xla::Add(scalar_lhs, scalar_rhs);
   }
+  xla::XlaOp GetOuterBatchValue(XlaOp operand) {
+    XlaBuilder* builder = operand.builder();
+    
+    // Create a custom call that will be lowered to LLVM IR in the IR emitter
+    Shape result_shape = ShapeUtil::MakeShape(S32, {});
+    return CustomCall(builder, "GetOuterBatchValue", {operand}, result_shape,
+                      "", false, {}, nullptr);
+    }
 
   xla::XlaOp BuildFinalizer(
       xla::XlaBuilder* builder, const xla::XlaOp& input,

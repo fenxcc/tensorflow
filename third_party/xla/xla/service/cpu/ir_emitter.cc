@@ -4297,6 +4297,13 @@ bool RecursivelyCheckForCustomCall(
       !computation.caller_instructions(HloOpcode::kCustomCall).empty();
 
   for (const HloInstruction* instruction : computation.instructions()) {
+    if (instruction->opcode() == HloOpcode::kCustomCall) {
+      auto call = Cast<HloCustomCallInstruction>(instr);
+      if (call->custom_call_target() == "GetOuterBatchValue") {
+        LOG(INFO) << "Found GetOuterBatchValue custom call in computation: "
+                  << computation.name();
+      }
+    }
     contains_custom_call |= instruction->opcode() == HloOpcode::kCustomCall;
     for (const HloComputation* nested_computation :
          instruction->called_computations()) {
