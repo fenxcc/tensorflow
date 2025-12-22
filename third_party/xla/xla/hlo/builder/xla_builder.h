@@ -3057,8 +3057,10 @@ XlaOp GetDimensionSize(XlaOp operand, int64_t dimension);
 
 XlaOp GetOuterBatchValue(XlaOp operand) {
   XlaBuilder* builder = operand.builder();
-  return builder->CustomCall("GetOuterBatchValue", {operand},
-                             ShapeUtil::MakeShape(S32, {}), "");
+  return builder->CustomCall(builder, "GetOuterBatchValue", {operand},
+                             ShapeUtil::MakeShape(S32, {}), "", false, {},
+                             nullptr, CustomCallSchedule::SCHEDULE_NONE,
+                             CustomCallApiVersion::API_VERSION_ORIGINAL);
 }
 
 // Sets the size of the given dimension of the operand. The operand must be
