@@ -147,10 +147,11 @@ class MeanOp : public XlaReductionOp {
     xla::XlaOp result = reduce_output;
     xla::Shape bounded_shape = builder->GetShape(input).value();
     int64_t divisor_value = bounded_shape.dimensions(dimensions_to_reduce[0]);
+    xla::XlaOp divisor;
     if (dimensions_to_reduce[0] == 0) {
-      auto divisor = xla::GetOuterBatchValue(input);
+      divisor = xla::GetOuterBatchValue(input);
     } else {
-      auto divisor = xla::GetDimensionSize(input, dimensions_to_reduce[0]);
+      divisor = xla::GetDimensionSize(input, dimensions_to_reduce[0]);
     }
     for (int i = 1; i < dimensions_to_reduce.size(); i++) {
       int64_t size_value = bounded_shape.dimensions(dimensions_to_reduce[i]);
