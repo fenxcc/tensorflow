@@ -203,7 +203,7 @@ IrEmitter2::EmitGetOuterBatchValueHostKernel(const HloInstruction* getBatch) {
                       EmitKernelPrototype(getBatch));
   llvm_ir::IrArray operand_array = kernel_prototype.arguments[0];
   llvm_ir::IrArray output_array = kernel_prototype.results[0];
-  int64_t multiplier = getBatch->operand(0).shape().outer_multiplier();
+  int64_t multiplier = getBatch->operand(0)->shape().outer_multiplier();
   if (multiplier <= 0) {
     LOG(ERROR) << "Invalid outer multiplier for GetOuterBatchValue: "
                << multiplier;
@@ -213,10 +213,13 @@ IrEmitter2::EmitGetOuterBatchValueHostKernel(const HloInstruction* getBatch) {
   llvm::IRBuilder<> b(module_->getContext());
   b.SetInsertPoint(kernel_prototype.function->getEntryBlock().getTerminator());
   llvm::Value* bdim_value =
-      llvm_ir::GetBatchDimByName(operand_array, multiplier);
+      llvm_ir::GetBatchDimByName(&b, multiplier);
+  llvm_ir::IrArray::Index output_index(
+      llvm::Type::getInt32Ty(module_->getContext()), 
+      /*multidimensional_index=*/{}, &b);
   llvm::Type* s32_type = llvm::Type::getInt32Ty(module_->getContext());
   llvm::Value* output_ptr =
-      output_array.EmitArrayElementAddress(/*index=*/{}, &b);
+      output_array.EmitArrayElementAddress(output_index, &b);
   b.CreateStore(bdim_value, output_ptr);
   return KernelInfo{kernel_prototype.function,
                     /*launch_dimensions=*/{},
