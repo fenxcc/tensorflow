@@ -91,6 +91,7 @@ void XlaReductionOp::Compile(XlaOpKernelContext* ctx) {
   auto num_elements = axes_tensor_shape.num_elements();
   xla_axes.reserve(num_elements);
   for (int64_t i = 0; i < num_elements; ++i) {
+    LOG(INFO) << "Processing axis: " << axes[i];
     int64_t index = axes[i];
     OP_REQUIRES(ctx,
                 !(index < -data_shape.dims() || index >= data_shape.dims()),
