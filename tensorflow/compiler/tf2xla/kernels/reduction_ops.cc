@@ -155,10 +155,11 @@ class MeanOp : public XlaReductionOp {
     }
     for (int i = 1; i < dimensions_to_reduce.size(); i++) {
       int64_t size_value = bounded_shape.dimensions(dimensions_to_reduce[i]);
+      xla::XlaOp size;
       if (dimensions_to_reduce[i] == 0) {
-        auto size = xla::GetOuterBatchValue(input);
+        size = xla::GetOuterBatchValue(input);
       } else {
-        auto size = xla::GetDimensionSize(input, dimensions_to_reduce[i]);
+        size = xla::GetDimensionSize(input, dimensions_to_reduce[i]);
       }
       if (size_value * divisor_value > std::numeric_limits<int32_t>::max()) {
         result = result / xla::ConvertElementType(divisor, xla_reduction_type_);
