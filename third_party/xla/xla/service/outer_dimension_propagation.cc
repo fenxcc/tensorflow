@@ -263,6 +263,10 @@ static absl::optional<int64_t> ComputeMultiplierForUserScalar(HloInstruction* op
   if (in_shape.IsTuple() || out_shape.IsTuple()) {
     return flag_unsupport;
   }
+  if (out_shape.dimensions_size() == 0 &&
+      user->IsCustomCall("GetOuterBatchValue")) {
+    return operand_mul;
+  }
   if (in_shape.dimensions_size() == 0 || out_shape.dimensions_size() == 0) {
     return absl::nullopt;
   }
