@@ -1087,7 +1087,6 @@ absl::StatusOr<ThunkSequence> ThunkEmitter::EmitCustomCallThunk(
   } else if (custom_call_target == "SliceToDynamic") {
     return EmitSliceToDynamicThunk(instruction);
   } else if (custom_call_target == "GetOuterBatchValue") {
-    LOG(INFO) << "cxf mark2";
     return EmitGetOuterBatchValueThunk(instruction);
   }
 
@@ -1133,7 +1132,7 @@ absl::StatusOr<ThunkSequence> ThunkEmitter::EmitSliceToDynamicThunk(
 
 absl::StatusOr<ThunkSequence> ThunkEmitter::EmitGetOuterBatchValueThunk(
     const HloInstruction* instruction) {
-  LOG(INFO) << "Mark1: Handling GetOuterBatchValue for instruction: "
+  VLOG(2) << "Handling GetOuterBatchValue for instruction: "
             << instruction->ToString();
   const HloCustomCallInstruction* custom_call =
       Cast<HloCustomCallInstruction>(instruction);

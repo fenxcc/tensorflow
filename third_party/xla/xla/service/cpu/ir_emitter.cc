@@ -374,7 +374,6 @@ absl::Status IrEmitter::EmitConstantGlobals(
 }
 
 absl::Status IrEmitter::HandleConstant(HloInstruction* constant) {
-  LOG(INFO) << "HandleConstant: " << constant->ToString();
   // IrEmitter::EmitConstantGlobals has already taken care of emitting the body
   // of the constant.
   return EmitTargetAddressForOp(constant);
@@ -2463,12 +2462,6 @@ absl::Status IrEmitter::HandleTopK(HloInstruction* hlo) {
   return absl::OkStatus();
 }
 
-absl::Status IrEmitter::HandleGetOuterBatchValue(HloInstruction* custom_call) {
-  // Emit the call to the GetOuterBatchValue function.
-  LOG(INFO) << "Emitting GetOuterBatchValue for instruction: " << custom_call->ToString();
-  return absl::OkStatus();
-}
-
 #if defined(INTEL_MKL)
 
 // Emits operands alloca vector for oneDNN custom calls.
@@ -2820,9 +2813,6 @@ absl::Status IrEmitter::HandleCustomCall(HloInstruction* custom_call) {
   }
   if (custom_call->custom_call_target() == "TopK") {
     return HandleTopK(custom_call);
-  }
-  if (custom_call->custom_call_target() == "GetOuterBatchValue") {
-    return HandleGetOuterBatchValue(custom_call);
   }
 #if defined(INTEL_MKL)
   if (custom_call->custom_call_target() == "__onednn$matmul") {
@@ -4306,13 +4296,6 @@ bool RecursivelyCheckForCustomCall(
       !computation.caller_instructions(HloOpcode::kCustomCall).empty();
 
   for (const HloInstruction* instruction : computation.instructions()) {
-    if (instruction->opcode() == HloOpcode::kCustomCall) {
-      auto call = Cast<HloCustomCallInstruction>(instruction);
-      if (call->custom_call_target() == "GetOuterBatchValue") {
-        LOG(INFO) << "Found GetOuterBatchValue custom call in computation: "
-                  << computation.name();
-      }
-    }
     contains_custom_call |= instruction->opcode() == HloOpcode::kCustomCall;
     for (const HloComputation* nested_computation :
          instruction->called_computations()) {

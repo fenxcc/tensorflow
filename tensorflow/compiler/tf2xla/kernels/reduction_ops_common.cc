@@ -62,8 +62,6 @@ void XlaReductionOp::Compile(XlaOpKernelContext* ctx) {
   const TensorShape data_shape = ctx->InputShape(0);
   const TensorShape axes_tensor_shape = ctx->InputShape(1);
   VLOG(1) << "ReductionOp: " << ctx->op_kernel().name();
-  LOG(INFO) << "data shape: " << data_shape.DebugString();
-  LOG(INFO) << "axes      : " << axes_tensor_shape.DebugString();
 
   if (axes_tensor_shape.num_elements() == 0) {
     // The reduction axes is an empty vector, which means there are no
@@ -83,15 +81,14 @@ void XlaReductionOp::Compile(XlaOpKernelContext* ctx) {
   xla::Literal axes_literal;
   OP_REQUIRES_OK(ctx, ctx->ConstantInputReshapedToIntVector(1, &axes));
 
-  LOG(INFO) << "data shape: " << data_shape.DebugString();
-  LOG(INFO) << "axes      : " << absl::StrJoin(axes, ",");
+  VLOG(1) << "data shape: " << data_shape.DebugString();
+  VLOG(1) << "axes      : " << absl::StrJoin(axes, ",");
 
   absl::InlinedVector<bool, 4> bitmap(data_shape.dims(), false);
   std::vector<int64_t> xla_axes;
   auto num_elements = axes_tensor_shape.num_elements();
   xla_axes.reserve(num_elements);
   for (int64_t i = 0; i < num_elements; ++i) {
-    LOG(INFO) << "Processing axis: " << axes[i];
     int64_t index = axes[i];
     OP_REQUIRES(ctx,
                 !(index < -data_shape.dims() || index >= data_shape.dims()),

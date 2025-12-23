@@ -185,10 +185,6 @@ class DfsHloVisitorWithDefaultBase
     return DefaultAction(call);
   }
   absl::Status HandleCustomCall(HloInstructionPtr custom_call) override {
-    if (custom_call->custom_call_target() == "GetOuterBatchValue") {
-      LOG(INFO) << "cxf mark3 Handling GetOuterBatchValue for instruction: "
-                << custom_call->ToString();
-    }
     return DefaultAction(custom_call);
   }
   absl::Status HandleSlice(HloInstructionPtr slice) override {
