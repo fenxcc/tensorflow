@@ -212,19 +212,14 @@ IrEmitter2::EmitGetOuterBatchValueHostKernel(const HloInstruction* getBatch) {
   }
   llvm::IRBuilder<> b(module_->getContext());
   b.SetInsertPoint(kernel_prototype.function->getEntryBlock().getTerminator());
-  llvm::Value* bdim_value =
-      llvm_ir::GetBatchDimByName(&b, multiplier);
-  llvm_ir::IrArray::Index output_index(
-      llvm::Type::getInt32Ty(module_->getContext()), 
-      /*multidimensional_index=*/{}, &b);
-  llvm::Type* s32_type = llvm::Type::getInt32Ty(module_->getContext());
+  llvm::Value* bdim_value = llvm_ir::GetBatchDimByName(&b, multiplier);
+  llvm_ir::IrArray::Index output_index(/*multidimensional_index=*/{},
+                                       getBatch->shape(), b.getInt32Ty());
   llvm::Value* output_ptr =
       output_array.EmitArrayElementAddress(output_index, &b);
   b.CreateStore(bdim_value, output_ptr);
-  return KernelInfo{kernel_prototype.function,
-                    /*launch_dimensions=*/{},
-                    std::move(kernel_prototype.arguments),
-                    std::move(kernel_prototype.results)};
+  return kernels_.emplace_back(
+      KernelInfo(std::move(kernel_prototype), se::BlockDim(), se::ThreadDim()));
 }
 
 absl::StatusOr<IrEmitter2::KernelInfo> IrEmitter2::EmitFusionHostKernel(

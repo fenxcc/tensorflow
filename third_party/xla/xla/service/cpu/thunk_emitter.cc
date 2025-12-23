@@ -1139,10 +1139,10 @@ absl::StatusOr<ThunkSequence> ThunkEmitter::EmitGetOuterBatchValueThunk(
       Cast<HloCustomCallInstruction>(instruction);
   TF_ASSIGN_OR_RETURN(
       auto kernel, ir_emitter_.EmitGetOuterBatchValueHostKernel(custom_call));
-  TF_ASSIGN_OR_RETURN(BufferAllocation::Slice result_buffer,
-                      GetAllocationSlice(custom_call));
+  TF_ASSIGN_OR_RETURN(auto result_buffer,
+                      GetHostKernelAllocationSlices(instruction));
   return MakeKernelThunkSequence(
-      custom_call, result_buffer, kernel,
+      instruction, result_buffer, kernel,
       /*min_alignment=*/cpu_function_runtime::MinAlign());
 }
 
