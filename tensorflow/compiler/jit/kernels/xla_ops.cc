@@ -54,6 +54,7 @@ limitations under the License.
 #include "tensorflow/compiler/jit/xla_host_send_device_context.h"
 #include "tensorflow/compiler/jit/xla_launch_util.h"
 #include "tensorflow/compiler/jit/xla_platform_info.h"
+#include "tensorflow/compiler/jit/kernels/xla_batch_matcher.h"
 #include "tensorflow/compiler/tf2xla/tf2xla_util.h"
 #include "tensorflow/compiler/tf2xla/xla_compiler.h"
 #include "tensorflow/compiler/tf2xla/xla_helpers.h"
@@ -433,7 +434,8 @@ absl::Status CompileToLocalExecutable(
     // dimension, detecting dynamic dimension via _is_batch attr in the
     // argument.
     std::vector<XlaCompiler::Argument> norm_args(args.begin(), args.end());
-    constexpr int64_t kMagicBound = 977;
+    int64_t filled_batch = 0;
+    XlaBatchMatcher* xla_batch_matcher = xla_device_compiler->xla_batch_matcher();
     if (options.flib_def != nullptr) {
       const FunctionDef* fdef = options.flib_def->Find(function.name());
       if (fdef != nullptr) {
@@ -445,23 +447,31 @@ absl::Status CompileToLocalExecutable(
           const AttrValue& v = it->second;
           if (it == attr_map.end()) continue;
           norm_args[arg_index].dynamic_dim = 0;
+
+          if (!filled_batch && xla_batch_matcher) {
+            TensorShape& shp = std::get<TensorShape>(norm_args[arg_index].shape);
+            filled_batch = xla_batch_matcher->get_xla_compile_batch(shp.dim_size(0));
+          }
         }
       }
     }
-    for (int i = 0; i < norm_args.size(); ++i) {
-      auto& arg = norm_args[i];
-      // argument rewrite.
-      if (arg.dynamic_dim == 0) {
-        TensorShape& shp = std::get<TensorShape>(arg.shape);
-        int64_t old = shp.dim_size(0);
-        shp.set_dim(0, kMagicBound);
-      }
-      // constant argument rewrite otherwise it still store the incoming batch
-      // request.
-      if (arg.kind == XlaCompiler::Argument::kConstant) {
-        auto flat = arg.constant_value.flat<int32>();
-        int32 old_batch = flat(0);
-        flat(0) = static_cast<int32>(kMagicBound);
+
+    if (filled_batch) {
+      for (int i = 0; i < norm_args.size(); ++i) {
+        auto& arg = norm_args[i];
+        // argument rewrite.
+        if (arg.dynamic_dim == 0) {
+          TensorShape& shp = std::get<TensorShape>(arg.shape);
+          int64_t old = shp.dim_size(0);
+          shp.set_dim(0, filled_batch);
+        }
+        // constant argument rewrite otherwise it still store the incoming batch
+        // request.
+        if (arg.kind == XlaCompiler::Argument::kConstant) {
+          auto flat = arg.constant_value.flat<int32>();
+          int32 old_batch = flat(0);
+          flat(0) = static_cast<int32>(filled_batch);
+        }
       }
     }
 

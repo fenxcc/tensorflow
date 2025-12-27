@@ -780,6 +780,8 @@ cc_library(
         ":flags_headers",
         ":tf_graph_to_hlo_compiler",
         ":xla_compile_util",
+        "//tensorflow/compiler/jit/kernels:xla_batch_matcher",
+        "//tensorflow/compiler/jit:flags",
         "//tensorflow/compiler/tf2xla:xla_compiler",
         "//tensorflow/core:framework",
         "//tensorflow/core:framework_lite",

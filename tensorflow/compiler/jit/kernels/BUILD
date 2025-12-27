@@ -56,6 +56,7 @@ cc_library(
         "//tensorflow/compiler/jit:tf_graph_to_hlo_compiler",
         "//tensorflow/compiler/jit:tf_to_hlo_compiler",
         "//tensorflow/compiler/jit:xla_compile_util",
+        "//tensorflow/compiler/jit/kernels:xla_batch_matcher",
         "//tensorflow/core:protos_all_cc",
         "//tensorflow/core/platform:refcount",
         "@com_google_absl//absl/base:core_headers",
@@ -81,6 +82,16 @@ cc_library(
         ":xla_ops_no_jit_rewrite_registration",
         "//tensorflow/compiler/jit:jit_compilation_passes",
         "//tensorflow/core:protos_all_cc",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "xla_batch_matcher",
+    srcs = ["xla_batch_matcher.cc"],
+    hdrs = ["xla_batch_matcher.h"],
+    deps = [
+        "//tensorflow/core/platform:logging",
     ],
     alwayslink = 1,
 )
