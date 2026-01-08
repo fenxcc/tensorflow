@@ -973,6 +973,8 @@ class OutDimPropagator {
     auto it0 = cur_map.find("0");
     if (it0 == cur_map.end()) return;
     int64_t operand_mul = it0->second;
+    // If the operand multiplier is zero, no need to propagate it.
+    if (operand_mul == 0) return;
     absl::optional<int64_t> opt_mul =
         ComputeMultiplierForUserScalar(cur, user, operand_mul);
     if (opt_mul.has_value()) {
