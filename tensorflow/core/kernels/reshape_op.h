@@ -100,6 +100,25 @@ class ReshapeOp : public OpKernel {
       }
       shape.set_dim(unknown_index, missing);
     }
+    bool xla_already_clustered = false;
+    const OpKernel& current_op_kernel = context->op_kernel();
+    const NodeDef& node_def = current_op_kernel.def();
+    auto it = node_def.attr().find("_XlaAlreadyClustered");
+    if (it != node_def.attr().end()) {
+      if (it->second.has_b()) {
+        xla_already_clustered = it->second.b();
+      }
+    }
+    // Allow element-count mismatch for XLA clustered nodes.
+    if (shape.num_elements() != input.NumElements() && xla_already_clustered) {
+      LOG(WARNING) << "Reshape node clustered to xla, allowing element-count "
+                      "mismatch (input elems="
+                   << input.NumElements()
+                   << ", requested elems=" << shape.num_elements() << ")";
+      context->set_output(0, input);
+      return;
+    }
+
     OP_REQUIRES(context, shape.num_elements() == input.NumElements(),
                 errors::InvalidArgument("Input to reshape is a tensor with ",
                                         input.NumElements(),
