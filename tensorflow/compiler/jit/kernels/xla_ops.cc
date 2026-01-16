@@ -839,6 +839,7 @@ void XlaCompileOp::Compute(OpKernelContext* ctx) {
     const std::vector<XlaCompiler::Argument>& args =
         args_and_variables_snapshot->first;
     variables_snapshot = std::move(args_and_variables_snapshot->second);
+    
 
     // Do not alias resource updates as locking variables in XlaCompile and
     // unlocking them in XlaRun may lead to deadlocks.
