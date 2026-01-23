@@ -838,6 +838,9 @@ class OutDimPropagator {
         case HloOpcode::kGetTupleElement:
           HandleGetTupleElement(user);
           break;
+        case HloOpcode::kReduce:
+          HandleReduce(user, cur, cur_map);
+          break;
         default:
           HandleDefaultPropagation(user, cur, cur_map);
           break;
@@ -963,11 +966,61 @@ class OutDimPropagator {
     if (!user_map.empty()) MergeAndEnqueue(gte, user_map);
   }
 
+  void HandleReduce(HloInstruction* user, HloInstruction* cur,
+                    const PathMulMap& cur_map) {
+    if (!user->shape().IsTuple()) {
+      HandleDefaultPropagation(user, cur, cur_map);
+      return;
+    }
+    auto it0 = cur_map.find("0");
+    if (it0 == cur_map.end()) return;
+    int64_t operand_mul = it0->second;
+    // If reduce reduces the leading (batch) dimension (dimension 0), then set
+    // multiplier 0
+    bool reduces_dim0 = false;
+    for (int64_t d : user->dimensions()) {
+      if (d == 0) {
+        reduces_dim0 = true;
+        break;
+      }
+    }
+    // Input leading dimension
+    const Shape& in_shape = cur->shape();
+    int64_t in_lead =
+        in_shape.dimensions_size() > 0 ? in_shape.dimensions(0) : -1;
+    PathMulMap add;
+    int64_t arity = user->shape().tuple_shapes_size();
+    for (int64_t i = 0; i < arity; ++i) {
+      const Shape& child_shape = user->shape().tuple_shapes(i);
+      if (reduces_dim0) {
+        // Leading dim removed -> multiplier becomes 0.
+        add.emplace(absl::StrCat(i), 0);
+        continue;
+      }
+      if (child_shape.dimensions_size() == 0 || in_lead <= 0) {
+        // Unsupported or dynamic: be conservative and mark conflicted.
+        MarkConflicted(user, "Reduce tuple child unsupported for propagation");
+        return;
+      }
+      int64_t child_lead = child_shape.dimensions(0);
+      if ((operand_mul * child_lead) % in_lead != 0) {
+        MarkConflicted(user, "Reduce tuple child multiplier not integer");
+        return;
+      }
+      int64_t val = operand_mul * child_lead / in_lead;
+      add.emplace(absl::StrCat(i), val);
+    }
+    if (!add.empty())
+      MergeAndEnqueue(user, add);
+    return;
+  }
+
   // Default propagation for non-tuple user ops using scalar-path "0"
   void HandleDefaultPropagation(HloInstruction* user, HloInstruction* cur,
                                 const PathMulMap& cur_map) {
     if (cur->shape().IsTuple()) {
-      LOG(ERROR) << "Can't handle tuple input in HandleDefaultPropagation:" << user->ToString();
+      LOG(ERROR) << "Can't handle tuple input in HandleDefaultPropagation:"
+                 << user->ToString();
       return;
     }
     auto it0 = cur_map.find("0");
