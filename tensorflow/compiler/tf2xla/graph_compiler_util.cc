@@ -159,6 +159,9 @@ absl::Status RewriteAndPruneGraph(
                                  &nodes_to_keep));
   TF_RETURN_IF_ERROR(
       AddRetvalNodes(graph, node_map, config.fetch(), &nodes_to_keep));
+
+  LOG(INFO) << "marker: Post rewrite: " << DumpGraphToFile("tf2xla_post_rewrite", *graph);
+
   VLOG(2) << "Post rewrite: " << DumpGraphToFile("tf2xla_post_rewrite", *graph);
   PruneForReverseReachability(graph, std::move(nodes_to_keep));
   FixupSourceAndSinkEdges(graph);

@@ -54,6 +54,7 @@ limitations under the License.
 #include "tensorflow/core/platform/types.h"
 #include "tensorflow/core/util/device_name_utils.h"
 #include "tensorflow/core/util/util.h"
+#include "tensorflow/core/util/dump_graph.h"
 
 #ifndef IS_MOBILE_PLATFORM
 #include "tensorflow/core/grappler/clusters/virtual_cluster.h"
@@ -629,6 +630,10 @@ absl::Status GraphExecutionState::InitBaseGraph(
 
   TF_RETURN_IF_ERROR(OptimizationPassRegistry::Global()->RunGrouping(
       OptimizationPassRegistry::PRE_PLACEMENT, optimization_options));
+
+  LOG(INFO) << "marker: Optimized (post-placement) graph: "
+            << DumpGraphToFile("optimized_graph_post_placement", *new_graph,
+                               flib_def_.get());
 
   if (run_placer_) {
     Placer placer(new_graph.get(), "", flib_def_.get(), device_set_,
