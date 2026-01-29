@@ -100,12 +100,29 @@ class ReshapeOp : public OpKernel {
       }
       shape.set_dim(unknown_index, missing);
     }
-    OP_REQUIRES(context, shape.num_elements() == input.NumElements(),
-                errors::InvalidArgument("Input to reshape is a tensor with ",
-                                        input.NumElements(),
-                                        " values, but the requested shape has ",
-                                        shape.num_elements()));
-
+    static bool flag = true;
+    if (shape.num_elements() != input.NumElements()) {
+      if (flag) {
+        LOG(ERROR) << "Input to reshape is a tensor with "
+                   << input.shape().DebugString()
+                   << " values, but the requested shape has "
+                   << shape.DebugString();
+        const std::string graph_dump_path = "/tmp/reshape_error_graph.pbtxt";
+        if (context->function_library() != nullptr) {
+          OP_REQUIRES_OK(context, context->function_library()->ToGraphDef(
+                                      &graph_dump_path));
+          flag = false;
+        } else {
+          LOG(ERROR) << "reshape error has no graph found";
+        }
+      }
+    }
+    //OP_REQUIRES(context, shape.num_elements() == input.NumElements(),
+    //            errors::InvalidArgument("Input to reshape is a tensor with ",
+    //                                    input.NumElements(),
+    //                                    " values, but the requested shape has ",
+    //                                    shape.num_elements()));
+//
     // Actually produce the reshaped output.
     Tensor output(input.dtype());
     CHECK(output.CopyFrom(input, shape));
