@@ -44,17 +44,14 @@ class DynamicPartitionOp_Shared : public OpKernel {
                                   OpOutputList* Tout) {
     OP_REQUIRES_OK(c, c->input("data", data));
     OP_REQUIRES_OK(c, c->input("partitions", partitions));
-    if (!TensorShapeUtils::StartsWith((*data)->shape(),
-                                      (*partitions)->shape())) {
-      const std::string graph_dump_path =
-          "/tmp/dynamic_partition_error_graph.pbtxt";
-      LOG(ERROR) << "Graph shape mismatch: data.shape = "
-                 << (*data)->shape().DebugString() << ", partitions.shape = "
-                 << (*partitions)->shape().DebugString();
-      if (c->function_library() != nullptr) {
-        OP_REQUIRES_OK(c, c->function_library()->ToGraphDef(&graph_dump_path));
-      }
-    }
+    OP_REQUIRES(
+        c,
+        TensorShapeUtils::StartsWith((*data)->shape(), (*partitions)->shape()),
+        errors::InvalidArgument(
+            "data.shape must start with partitions.shape, ",
+            "got data.shape = ", (*data)->shape().DebugString(),
+            ", partitions.shape = ", (*partitions)->shape().DebugString()));
+
     // Count how many occurrences of each partition id we have in partitions
     absl::InlinedVector<int, 32UL> partition_count(num_partitions_);
     auto e_partitions = (*partitions)->flat<int32>();
