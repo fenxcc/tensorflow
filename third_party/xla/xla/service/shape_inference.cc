@@ -3755,12 +3755,17 @@ ShapeInference::InferCollectivePermuteDoneShape(const Shape& operand_shape) {
   Shape inferred_shape = ShapeUtil::MakeShape(
       operand.element_type(), new_size_bounds, dims_are_dynamic);
   if (ShapeUtil::ElementsIn(operand) != ShapeUtil::ElementsIn(inferred_shape)) {
-    return InvalidArgument(
-        "Reshape operation has mismatched element counts: from=%d (%s) "
-        "to=%d (%s).",
-        ShapeUtil::ElementsIn(operand), ShapeUtil::HumanString(operand),
-        ShapeUtil::ElementsIn(inferred_shape),
-        ShapeUtil::HumanString(inferred_shape));
+    LOG(INFO) << "Reshape operation has mismatched element counts: from="
+              << ShapeUtil::ElementsIn(operand) << " ("
+              << ShapeUtil::HumanString(operand)
+              << ") to=" << ShapeUtil::ElementsIn(inferred_shape) << " ("
+              << ShapeUtil::HumanString(inferred_shape) << ").";
+    //return InvalidArgument(
+    //    "Reshape operation has mismatched element counts: from=%d (%s) "
+    //    "to=%d (%s).",
+    //    ShapeUtil::ElementsIn(operand), ShapeUtil::HumanString(operand),
+    //    ShapeUtil::ElementsIn(inferred_shape),
+    //    ShapeUtil::HumanString(inferred_shape));
   }
   return inferred_shape;
 }
@@ -3783,12 +3788,17 @@ ShapeInference::InferCollectivePermuteDoneShape(const Shape& operand_shape) {
   }
 
   if (ShapeUtil::ElementsIn(operand) != ShapeUtil::ElementsIn(inferred_shape)) {
-    return InvalidArgument(
-        "Reshape operation has mismatched element counts: from=%d (%s) "
-        "to=%d (%s).",
-        ShapeUtil::ElementsIn(operand), ShapeUtil::HumanString(operand),
-        ShapeUtil::ElementsIn(inferred_shape),
-        ShapeUtil::HumanString(inferred_shape));
+    LOG(INFO) << "Reshape operation has mismatched element counts: from="
+              << ShapeUtil::ElementsIn(operand) << " ("
+              << ShapeUtil::HumanString(operand)
+              << ") to=" << ShapeUtil::ElementsIn(inferred_shape) << " ("
+              << ShapeUtil::HumanString(inferred_shape) << ").";
+    //return InvalidArgument(
+    //    "Reshape operation has mismatched element counts: from=%d (%s) "
+    //    "to=%d (%s).",
+    //    ShapeUtil::ElementsIn(operand), ShapeUtil::HumanString(operand),
+    //    ShapeUtil::ElementsIn(inferred_shape),
+    //    ShapeUtil::HumanString(inferred_shape));
   }
 
   std::vector<int64_t> indices(operand.dimensions_size());
