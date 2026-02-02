@@ -455,14 +455,16 @@ absl::Status CompileToLocalExecutable(
       if (arg.dynamic_dim == 0) {
         TensorShape& shp = std::get<TensorShape>(arg.shape);
         int64_t old = shp.dim_size(0);
-        shp.set_dim(0, kMagicBound);
+        // shp.set_dim(0, kMagicBound);
+        shp.set_dim(0, old);
       }
       // constant argument rewrite otherwise it still store the incoming batch
       // request.
       if (arg.kind == XlaCompiler::Argument::kConstant) {
         auto flat = arg.constant_value.flat<int32>();
         int32 old_batch = flat(0);
-        flat(0) = static_cast<int32>(kMagicBound);
+        //flat(0) = static_cast<int32>(kMagicBound);
+        flat(0) = old_batch;
       }
     }
 
