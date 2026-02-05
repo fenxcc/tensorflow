@@ -37,12 +37,62 @@ limitations under the License.
 #include "tensorflow/core/platform/fingerprint.h"
 #include "tensorflow/core/platform/statusor.h"
 #include "tensorflow/core/util/dump_graph.h"
+#include "tensorflow/core/platform/env.h"
+#include "tensorflow/core/lib/io/path.h"
+#include "google/protobuf/text_format.h"
+#include <unistd.h>
 
 namespace tensorflow {
 
 namespace {
 
 const char* const kXlaClusterOutput = "XlaClusterOutput";
+
+ // If the env var TF_DUMP_GRAPH_PREFIX is set (non-null), write the provided
+ // Graph to a human-readable pbtxt under /tmp/tf_grappler_dumps/.
+ static void MaybeDumpEncapsulatedGraph(const Graph& graph) {
+   const char* dump_env = std::getenv("TF_DUMP_GRAPH_PREFIX");
+   if (dump_env == nullptr) return;
+
+  // Prepare output directory and filename.
+  tensorflow::Env* env = tensorflow::Env::Default();
+  const std::string out_dir = "/tmp/tf_grappler_dumps";
+  // Try to create dir; ignore error if exists.
+  env->RecursivelyCreateDir(out_dir).IgnoreError();
+
+  const int pid = static_cast<int>(getpid());
+  const int64_t ts = env->NowMicros() / 1000000;
+  const std::string fname = tensorflow::io::JoinPath(
+      out_dir, absl::StrCat("huawei_grappler_after_encap_", pid, "_", ts, ".pbtxt"));
+
+  // Convert Graph -> GraphDef
+  GraphDef gdef;
+  graph.ToGraphDef(&gdef);
+
+  // Serialize to text.
+  std::string text;
+  if (!google::protobuf::TextFormat::PrintToString(gdef, &text)) {
+    LOG(WARNING) << "MaybeDumpEncapsulatedGraph: failed to print GraphDef to text";
+    return;
+  }
+
+  std::unique_ptr<tensorflow::WritableFile> wf;
+  tensorflow::Status s = env->NewWritableFile(fname, &wf);
+  if (!s.ok()) {
+    LOG(WARNING) << "MaybeDumpEncapsulatedGraph: NewWritableFile failed: " << s;
+    return;
+  }
+  s = wf->Append(text);
+  if (!s.ok()) {
+    LOG(WARNING) << "MaybeDumpEncapsulatedGraph: Append failed: " << s;
+  }
+  s = wf->Close();
+  if (!s.ok()) {
+    LOG(WARNING) << "MaybeDumpEncapsulatedGraph: Close failed: " << s;
+  } else {
+    LOG(INFO) << "Wrote encapsulated graph (pbtxt) to " << fname;
+  }
+}
 
 bool IsCpuGpuCompile(const Graph* graph) {
   for (Node* n : graph->nodes()) {
@@ -178,6 +228,19 @@ absl::Status RewriteSubgraph(
     (*output_permutation)[index] = i;
     retvals[i]->AddAttr("index", i);
   }
+
+
+  std::vector<std::string> xla_cluster_input_names;
+  xla_cluster_input_names.reserve(arg_source_tensors.size());
+  for (const auto& out : arg_source_tensors) {
+    if (out.node != nullptr) {
+      xla_cluster_input_names.push_back(
+          absl::StrCat(out.node->name(), ":", out.index));
+    } else {
+      xla_cluster_input_names.push_back("<null>");
+    }
+  }
+  AddNodeAttr("xla_cluster_input_names", xla_cluster_input_names, call_def);
 
   AddNodeAttr(kXlaClusterIdAttr, call_def->name(), call_def);
   AddNodeAttr("_variable_start_index", variable_start_index, call_def);
@@ -328,6 +391,23 @@ absl::Status RewriteSubgraph(
     function.set_name(xla_function_info.function_name);
     AddNodeAttr("function", function, &def);
 
+    std::vector<std::string> xla_cluster_input_names;
+    xla_cluster_input_names.reserve(data_inputs.size());
+    for (int i = 0, end = data_inputs.size(); i < end; ++i) {
+      Node* src = data_inputs[i].first;
+      int src_output = data_inputs[i].second;
+      if (src != nullptr) {
+        // Format as "node_name:port" which is the typical GraphDef input style.
+        xla_cluster_input_names.push_back(
+            absl::StrCat(src->name(), ":", src_output));
+      } else {
+        xla_cluster_input_names.push_back("<null>");
+      }
+    }
+    // Attach as a node attribute so it's preserved in GraphDef dumps.
+    AddNodeAttr("xla_cluster_input_names", xla_cluster_input_names, &def);
+
+
     for (Node* node : nodes_to_remove) {
       VLOG(2) << "Deleting node " << node->DebugString();
       // Ensure that we do not attempt to add control edges to nodes that are
@@ -398,6 +478,15 @@ absl::Status EncapsulateXlaComputationsPass::Run(
   VLOG(1) << "EncapsulateXlaComputations() finished: "
           << DumpGraphToFile("encapsulate_xla_computations_after",
                              **options.graph, options.flib_def);
+  const char* dump_env = std::getenv("TF_DUMP_GRAPH_PREFIX");
+  LOG(INFO) << "Huawei: Dump prepare";
+  if (dump_env != nullptr) {
+    LOG(INFO) << "Huawei: Dump begin";
+    DumpGraphToFile("encapsulate_xla_computations_after", **options.graph, options.flib_def);
+  }
+  if ((options.graph != nullptr)) {
+    MaybeDumpEncapsulatedGraph(**options.graph);
+  }
   return absl::OkStatus();
 }
 
