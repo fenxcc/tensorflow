@@ -74,6 +74,8 @@ message RewriterConfig {
   // Shape optimizations (default is ON)
   // Simplify computations made on shapes.
   Toggle shape_optimization = 13;
+  // Shape only
+  Toggle shape_only_optimization = 33;
   // Remapping (default is ON)
   // Remap subgraphs onto more efficient implementations.
   Toggle remapping = 14;

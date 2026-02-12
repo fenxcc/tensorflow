@@ -130,6 +130,27 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "shape_only_optimizer",
+    srcs = [
+        "shape_only_optimizer.cc",
+        "shape_only_optimizer.h",
+    ],
+    hdrs = ["shape_only_optimizer.h"],
+    deps = [
+        ":graph_optimizer",
+        "//tensorflow/core:core_cpu_base",
+        "//tensorflow/core:framework",
+        "//tensorflow/core:lib",
+        "//tensorflow/core:graph",
+        "//tensorflow/core:protos_all_cc",
+        "//tensorflow/core/grappler:grappler_item",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
 tf_cc_test(
     name = "constant_folding_test",
     srcs = ["constant_folding_test.cc"],
@@ -651,6 +672,7 @@ cc_library(
         ":remapper",
         ":scoped_allocator_optimizer",
         ":shape_optimizer",
+        ":shape_only_optimizer",
         "//tensorflow/core:core_cpu_base",
         "//tensorflow/core:framework",
         "//tensorflow/core:framework_internal",
