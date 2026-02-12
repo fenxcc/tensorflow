@@ -1455,6 +1455,12 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "shape_only_kernels",
+    srcs = ["shape_only_kernels.cc"],
+    deps = ["//tensorflow:framework"],
+)
+
 tf_kernel_library(
     name = "ragged_tensor_to_variant_op",
     srcs = ["ragged_tensor_to_variant_op.cc"],

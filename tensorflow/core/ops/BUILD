@@ -416,6 +416,12 @@ cc_library(
     alwayslink = 1,
 )
 
+cc_library(
+    name = "shape_only_ops",
+    srcs = ["shape_only_ops.cc"],
+    deps = ["//tensorflow:framework"],
+)
+
 filegroup(
     name = "portable_op_registrations_and_gradients",
     srcs = ["//tensorflow/c/kernels:portable_all_ops"] + glob(

@@ -54,6 +54,7 @@ limitations under the License.
 #include "tensorflow/core/grappler/optimizers/remapper.h"
 #include "tensorflow/core/grappler/optimizers/scoped_allocator_optimizer.h"
 #include "tensorflow/core/grappler/optimizers/shape_optimizer.h"
+#include "tensorflow/core/grappler/optimizers/shape_only_optimizer.h"
 #include "tensorflow/core/grappler/utils/canonicalizer.h"
 #include "tensorflow/core/grappler/utils/colocation.h"
 #include "tensorflow/core/grappler/utils/functions.h"
@@ -221,6 +222,7 @@ std::unique_ptr<GraphOptimizer> MetaOptimizer::MakeNewOptimizer(
              cfg_.experimental_disable_compressed_tensor_optimization(),
              !cfg_.experimental_disable_folding_quantization_emulation()));
   MK_OPT("shape", "shape_optimization", new ShapeOptimizer());
+  MK_OPT("shape_only", "shape_only_optimization", new ShapeOnlyOptimizer());
   MK_OPT("remap", "remapping",
          new Remapper(cfg_.remapping(), cfg_.cpu_layout_conversion(),
                       xla_auto_clustering_on_));
@@ -373,6 +375,13 @@ absl::Status MetaOptimizer::InitializeOptimizers(
       VLOG(2) << "shape_optimization is not implemented in TFG yet";
     else
       optimizers->push_back(std::make_unique<ShapeOptimizer>());
+  }
+  if (BOTH_NOT_OFF(shape_only)) {
+    if (USER_IS_EXPERIMENTAL_MLIR(shape_only) ||
+        USER_IS_EXPERIMENTAL_BOTH(shape_only))
+      VLOG(2) << "shape_only is not implemented in TFG yet";
+    else
+      optimizers->push_back(std::make_unique<ShapeOnlyOptimizer>());
   }
   if (AutoMixedPrecisionEnabled(cfg_.auto_mixed_precision()) &&
       AutoMixedPrecisionEnabled(
@@ -1347,6 +1356,7 @@ bool MetaOptimizerEnabled(const ConfigProto& cfg) {
          rewrite_cfg.function_optimization() != RewriterConfig::OFF ||
          rewrite_cfg.constant_folding() != RewriterConfig::OFF ||
          rewrite_cfg.shape_optimization() != RewriterConfig::OFF ||
+         rewrite_cfg.shape_only_optimization() != RewriterConfig::OFF ||
          rewrite_cfg.remapping() != RewriterConfig::OFF ||
          rewrite_cfg.common_subgraph_elimination() != RewriterConfig::OFF ||
          rewrite_cfg.arithmetic_optimization() != RewriterConfig::OFF ||

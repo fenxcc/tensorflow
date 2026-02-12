@@ -130,6 +130,21 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "shape_only_optimizer",
+    srcs = [
+        "shape_only_optimizer.cc",
+        "shape_only_optimizer.h",
+    ],
+    hdrs = ["shape_only_optimizer.h"],
+    deps = [
+        "//tensorflow:framework",
+        "//tensorflow:lib",
+        "//tensorflow/core:graph",
+        "//tensorflow/compiler/jit:shape_inference",
+    ],
+)
+
 tf_cc_test(
     name = "constant_folding_test",
     srcs = ["constant_folding_test.cc"],
@@ -651,6 +666,7 @@ cc_library(
         ":remapper",
         ":scoped_allocator_optimizer",
         ":shape_optimizer",
+        ":shape_only_optimizer",
         "//tensorflow/core:core_cpu_base",
         "//tensorflow/core:framework",
         "//tensorflow/core:framework_internal",
