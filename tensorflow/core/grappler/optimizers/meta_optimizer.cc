@@ -376,9 +376,9 @@ absl::Status MetaOptimizer::InitializeOptimizers(
     else
       optimizers->push_back(std::make_unique<ShapeOptimizer>());
   }
-  if (BOTH_NOT_OFF(shape_only)) {
-    if (USER_IS_EXPERIMENTAL_MLIR(shape_only) ||
-        USER_IS_EXPERIMENTAL_BOTH(shape_only))
+  if (BOTH_NOT_OFF(shape_only_optimization)) {
+    if (USER_IS_EXPERIMENTAL_MLIR(shape_only_optimization) ||
+        USER_IS_EXPERIMENTAL_BOTH(shape_only_optimization))
       VLOG(2) << "shape_only is not implemented in TFG yet";
     else
       optimizers->push_back(std::make_unique<ShapeOnlyOptimizer>());

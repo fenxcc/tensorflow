@@ -6,16 +6,15 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/strings/match.h"
-#include "tensorflow/core/common_runtime/shape_refiner.h"
+#include "tensorflow/core/common_runtime/graph_constructor.h"
 #include "tensorflow/core/framework/node_def.pb.h"
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/tensor.pb.h"
 #include "tensorflow/core/graph/graph.h"
-#include "tensorflow/core/graph/graph_constructor.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/platform/logging.h"
-#include "tensorflow/compiler/jit/shape_inference.h"  // for InferShapes
 #include "tensorflow/core/framework/tensor_shape.pb.h"
+#include "tensorflow/core/grappler/grappler_item.h"
 
 namespace tensorflow {
 namespace grappler {

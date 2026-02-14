@@ -138,10 +138,16 @@ cc_library(
     ],
     hdrs = ["shape_only_optimizer.h"],
     deps = [
-        "//tensorflow:framework",
-        "//tensorflow:lib",
+        ":graph_optimizer",
+        "//tensorflow/core:core_cpu_base",
+        "//tensorflow/core:framework",
+        "//tensorflow/core:lib",
         "//tensorflow/core:graph",
-        "//tensorflow/compiler/jit:shape_inference",
+        "//tensorflow/core:protos_all_cc",
+        "//tensorflow/core/grappler:grappler_item",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/strings",
     ],
 )
 
