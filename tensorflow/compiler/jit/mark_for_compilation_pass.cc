@@ -1539,6 +1539,26 @@ absl::Status MarkForCompilationPassImpl::FindCompilationCandidates() {
     //                            (control edge)
     TF_ASSIGN_OR_RETURN(bool is_identity_driving_consts_in_loop,
                         IsIdentityDrivingConstsInLoop(node));
+
+    // Skip nodes annotated with output shapes that have unknown rank.
+    bool has_unknown_output_rank = false;
+    auto attr_it = node->def().attr().find("_output_shapes");
+    if (attr_it != node->def().attr().end()) {
+      const AttrValue& output_shapes_attr = attr_it->second;
+      if (output_shapes_attr.has_list()) {
+        for (const auto& s : output_shapes_attr.list().shape()) {
+          if (s.unknown_rank()) {
+            VLOG(INFO)
+                << "Rejecting " << node->name()
+                << ": output shape has unknown rank (from _output_shapes)";
+            has_unknown_output_rank = true;
+            break;
+          }
+        }
+      }
+    }
+    if (has_unknown_output_rank) continue;
+
     if (is_identity_driving_consts_in_loop) {
       VLOG(2) << "Rejecting " << node->name()
               << ": including it can create dependencies between while loop "
