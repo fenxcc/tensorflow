@@ -47,9 +47,6 @@ class ShapeOnlyOptimizer : public GraphOptimizer {
   // All nodes we consider "shape-like" for the purpose of tracing.
   bool IsShapeLikeOp(const string& op) const;
 
-  // Basic test of stateful/side-effectful ops we should not touch.
-  bool IsStatefulOrSideEffectOp(const NodeDef& nd) const;
-
   absl::flat_hash_set<string> candidates_;
 };
 

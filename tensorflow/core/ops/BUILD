@@ -335,6 +335,7 @@ cc_library(
         ":training_ops_op_lib",
         ":uniform_quant_ops_op_lib",
         ":word2vec_ops",
+        ":shape_only_ops",
     ] + select({
         # Non-tpu platforms don't need tpu dependency.
         "//tensorflow:chromiumos": [],
@@ -419,7 +420,7 @@ cc_library(
 cc_library(
     name = "shape_only_ops",
     srcs = ["shape_only_ops.cc"],
-    deps = ["//tensorflow:framework"],
+    deps = ["//tensorflow/core:framework"],
 )
 
 filegroup(

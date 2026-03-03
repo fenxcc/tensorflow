@@ -14,15 +14,15 @@ REGISTER_OP("ShapeOnly")
     .Output("output: T")
     .SetShapeFn([](shape_inference::InferenceContext* c) {
       // If optimizer provided a 'shape' attribute, use it as the output shape.
-      const TensorShapeProto* shape_proto = c->getAttrOfType<TensorShapeProto>("shape");
-      if (shape_proto) {
+      const AttrValue* shape_attr = c->GetAttr("shape");
+      if (shape_attr != nullptr && shape_attr->has_shape()) {
         shape_inference::ShapeHandle sh;
-        TF_RETURN_IF_ERROR(c->MakeShapeFromShapeProto(*shape_proto, &sh));
+        TF_RETURN_IF_ERROR(c->MakeShapeFromShapeProto(shape_attr->shape(), &sh));
         c->set_output(0, sh);
-        return Status::OK();
+        return absl::OkStatus();
       }
       // Otherwise conservatively return unknown shape. Runtime kernel computes
       // the actual shape from input tensor shapes.
       c->set_output(0, c->UnknownShape());
-      return Status::OK();
+      return absl::OkStatus();
     });

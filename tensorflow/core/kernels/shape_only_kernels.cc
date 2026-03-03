@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/register_types.h"
@@ -400,5 +399,3 @@ class ShapeOnlyOp : public OpKernel {
     *out_shape = out;
     return Status::OK();
   }
-
-  // ...existing code...
