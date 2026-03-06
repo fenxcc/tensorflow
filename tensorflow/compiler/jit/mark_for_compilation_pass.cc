@@ -42,6 +42,9 @@ limitations under the License.
 #include "tensorflow/compiler/jit/defs.h"
 #include "tensorflow/compiler/jit/device_util.h"
 #include "tensorflow/compiler/jit/flags.h"
+#include "tensorflow/compiler/jit/encapsulate_util.h"
+#include "absl/strings/str_split.h"
+#include "absl/strings/strip.h"
 #include "tensorflow/compiler/jit/resource_operation_safety_analysis.h"
 #include "tensorflow/compiler/jit/xla_cluster_util.h"
 #include "tensorflow/compiler/tf2xla/const_analysis.h"
@@ -683,6 +686,103 @@ absl::StatusOr<bool> MarkForCompilationPassImpl::Initialize() {
   initialized_ = true;
 
   TF_RETURN_IF_ERROR(FindCompilationCandidates());
+
+  // Seed-only clustering: if seed names provided, perform static shape
+  // inference and restrict compilation_candidates_ to valid seed subgraphs.
+  {
+    auto* flags = GetMarkForCompilationPassFlags();
+    if (!flags->tf_xla_cluster_seed_nodes.empty()) {
+      VLOG(3) << "Seed-based clustering enabled; performing static shape inference";
+      TF_RETURN_IF_ERROR(PerformStaticShapeInferenceBeforeEncapsulation(graph_));
+
+      // Parse comma-separated seed node names.
+      std::vector<absl::string_view> seeds =
+          absl::StrSplit(flags->tf_xla_cluster_seed_nodes, ',');
+      std::vector<string> seed_names;
+      for (auto s : seeds) {
+        string t = std::string(absl::StripAsciiWhitespace(s));
+        if (!t.empty()) seed_names.push_back(t);
+      }
+
+      if (!seed_names.empty()) {
+        absl::flat_hash_set<Node*> allowed_nodes;
+
+        for (const string& seed_name : seed_names) {
+          Node* seed = nullptr;
+          for (Node* n : graph_->nodes()) {
+            if (n->name() == seed_name) { seed = n; break; }
+          }
+          if (!seed) {
+            VLOG(1) << "Seed node not found: " << seed_name;
+            continue;
+          }
+
+          // Forward BFS from seed over data edges restricted to compilation candidates.
+          std::vector<Node*> q;
+          q.push_back(seed);
+          absl::flat_hash_set<Node*> seed_set;
+          seed_set.insert(seed);
+          for (size_t i = 0; i < q.size(); ++i) {
+            Node* cur = q[i];
+            for (const Edge* e : cur->out_edges()) {
+              if (e->IsControlEdge()) continue;
+              Node* dst = e->dst();
+              if (!IsCompilationCandidate(dst)) continue;
+              if (seed_set.insert(dst).second) q.push_back(dst);
+            }
+          }
+
+          // Backward static-only expansion & validation using _xla_inferred_shapes.
+          bool subgraph_valid = true;
+          std::vector<Node*> work(seed_set.begin(), seed_set.end());
+          for (size_t i = 0; i < work.size() && subgraph_valid; ++i) {
+            Node* cur = work[i];
+            auto it = cur->def().attr().find(kXlaInferredShapesAttrName);
+            if (it == cur->def().attr().end()) {
+              VLOG(3) << "Node missing _xla_inferred_shapes: " << cur->name();
+              subgraph_valid = false;
+              break;
+            }
+            const AttrValue& inferred = it->second;
+            if (!inferred.has_list()) { subgraph_valid = false; break; }
+            for (const auto& s : inferred.list().shape()) {
+              if (s.unknown_rank()) {
+                VLOG(2) << "Rejecting seed " << seed_name << " because node "
+                        << cur->name() << " has unknown_rank inferred shape";
+                subgraph_valid = false;
+                break;
+              }
+            }
+
+            // Add producers (static) into the seed subgraph.
+            for (const Edge* e : cur->in_edges()) {
+              if (e->IsControlEdge()) continue;
+              Node* src = e->src();
+              if (!IsCompilationCandidate(src)) continue;
+              if (seed_set.insert(src).second) work.push_back(src);
+            }
+          }
+
+          if (subgraph_valid) {
+            for (Node* n : seed_set) allowed_nodes.insert(n);
+          } else {
+            VLOG(1) << "Discarding seed subgraph: " << seed_name;
+          }
+        }
+
+        if (flags->tf_xla_cluster_seed_only) {
+          OrderedNodeSet new_candidates;
+          for (Node* n : allowed_nodes) new_candidates.insert(n);
+          compilation_candidates_ = std::move(new_candidates);
+        } else {
+          for (Node* n : allowed_nodes) compilation_candidates_.insert(n);
+        }
+
+        VLOG(2) << "After seed filtering, compilation_candidates_.size() = "
+                << compilation_candidates_.size();
+      }
+    }
+  }
 
   if (compilation_candidates_.empty()) {
     VLOG(2) << "No compilable candidates";

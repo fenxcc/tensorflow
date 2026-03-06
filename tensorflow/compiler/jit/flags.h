@@ -125,6 +125,13 @@ struct MarkForCompilationPassFlags {
   // Setting it to -1 disables marking clusters megamorphic.
   // Setting it to 0 uses the default behaviour of TensorFlow.
   int64_t tf_xla_threshold_for_megamorphic;
+
+  // If non-empty, Comma-separated exact node names used as clustering seeds.
+  std::string tf_xla_cluster_seed_nodes;
+
+  // If true, only nodes in custom seed-based subgraphs are eligible for XLA
+  // clustering. All other nodes are excluded from XLA auto-clustering.
+  bool tf_xla_cluster_seed_only;
 };
 
 // Flags associated with XLA Sparse Core.

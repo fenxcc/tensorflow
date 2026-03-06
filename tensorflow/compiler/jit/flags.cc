@@ -268,6 +268,9 @@ void AllocateAndParseFlags() {
   mark_for_compilation_flags->tf_xla_disable_strict_signature_checks = false;
   mark_for_compilation_flags->tf_xla_persistent_cache_prefix =
       "xla_compile_cache";
+  // Seed-based clustering flags
+  mark_for_compilation_flags->tf_xla_cluster_seed_nodes = std::string();
+  mark_for_compilation_flags->tf_xla_cluster_seed_only = false;
 
   device_flags = new XlaDeviceFlags;
   device_flags->tf_xla_compile_on_demand = false;
