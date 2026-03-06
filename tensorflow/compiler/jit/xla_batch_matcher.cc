@@ -150,10 +150,8 @@ int64_t XlaBatchMatcher::find_min_larger_batch(int64_t real_batch) {
   }
 
   if (all_batches_.empty()) {
-    int64_t val = GetNextPowerOfTwo(real_batch);
-    all_batches_.insert(all_batches_.begin(), val);
-    print_all_batches();
-    return val;
+    // Return the next power of two directly without modifying all_batches_
+    return GetNextPowerOfTwo(real_batch);
   }
 
   // Edge case 1: Real value < the smallest batch, use smallest
@@ -176,7 +174,7 @@ int64_t XlaBatchMatcher::find_min_larger_batch(int64_t real_batch) {
 int64_t XlaBatchMatcher::get_xla_compile_batch(int64_t real_batch) {
   // Match target batch size
   int64_t selected = find_min_larger_batch(real_batch);
-  if (real_batch != last_batch_) {
+  if (real_batch != last_batch_ || all_batches_.empty()) {
     last_batch_ = real_batch;
     LOG(INFO) << "[XLA_BATCH_INFO] Real batch: " << real_batch
       << " -> Selected compile batch: " << selected;
