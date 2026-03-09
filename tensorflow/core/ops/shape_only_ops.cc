@@ -5,12 +5,11 @@
 using namespace tensorflow;
 
 REGISTER_OP("ShapeOnly")
-    .Attr("N: int >= 0")
-    .Attr("Tin: list(type) = []")
+    .Attr("Tin: list(type) >= 1")
     .Attr("orig_op: string = \"\"")
     .Attr("shape: shape = {}")
     .Attr("T: type = DT_FLOAT")
-    .Input("inputs: N * Tin")
+    .Input("inputs: Tin")
     .Output("output: T")
     .SetShapeFn([](shape_inference::InferenceContext* c) {
       // If optimizer provided a 'shape' attribute, use it as the output shape.

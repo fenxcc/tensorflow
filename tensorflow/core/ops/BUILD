@@ -84,6 +84,7 @@ tf_gen_op_libs(
         "set_ops",
         "script_ops",
         "sendrecv_ops",
+        "shape_only_ops",
         "sparse_ops",
         "spectral_ops",
         "state_ops",
@@ -320,6 +321,7 @@ cc_library(
         ":sdca_ops_op_lib",
         ":sendrecv_ops_op_lib",
         ":set_ops_op_lib",
+        ":shape_only_ops_op_lib",
         ":sparse_csr_matrix_ops_op_lib",
         ":sparse_ops_op_lib",
         ":special_math_ops_op_lib",
@@ -335,7 +337,6 @@ cc_library(
         ":training_ops_op_lib",
         ":uniform_quant_ops_op_lib",
         ":word2vec_ops",
-        ":shape_only_ops",
     ] + select({
         # Non-tpu platforms don't need tpu dependency.
         "//tensorflow:chromiumos": [],
@@ -415,12 +416,6 @@ cc_library(
         ":mkl_nn_ops_op_lib",
     ]),
     alwayslink = 1,
-)
-
-cc_library(
-    name = "shape_only_ops",
-    srcs = ["shape_only_ops.cc"],
-    deps = ["//tensorflow/core:framework"],
 )
 
 filegroup(
