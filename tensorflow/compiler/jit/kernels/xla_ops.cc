@@ -450,50 +450,73 @@ absl::Status CompileToLocalExecutable(
           if (it == attr_map.end()) continue;
 
           if (!filled_batch && xla_batch_matcher) {
-            TensorShape& shp =
-                std::get<TensorShape>(norm_args[arg_index].shape);
-            old_batch = shp.dim_size(0);
-            filled_batch =
-                xla_batch_matcher->get_xla_compile_batch(shp.dim_size(0));
+            TensorShape& shp = std::get<TensorShape>(norm_args[arg_index].shape);
+            filled_batch = xla_batch_matcher->get_xla_compile_batch(shp.dim_size(0));
           }
-          TensorShape& shp = std::get<TensorShape>(norm_args[arg_index].shape);
-          std::vector<xla::DynExpr*> dyn_exprs;
-          for (int d : shp.dim_sizes()) {
-            dyn_exprs.push_back(xla::DynExpr::_(d));
-          }
-          dyn_exprs[0] = xla::DynExpr::V(1);
-          shp.set_expressions(dyn_exprs);
         }
       }
     }
 
+    struct SaveOldVar {
+      int arg_index;
+      int64_t dyn_dim;
+      int64_t old_value;
+    };
+    std::vector<SaveOldVar> old_vars;
+    // We will rewrite the argument shapes and constant values with the magic
+    // batch number, so we need to restore them after compilation.
     if (filled_batch) {
       for (int i = 0; i < norm_args.size(); ++i) {
         auto& arg = norm_args[i];
         TensorShape& shp = std::get<TensorShape>(norm_args[i].shape);
         // argument rewrite.
-        for (int j = 0; j < shp.get_expressions().size(); ++j) {
-          auto e = shp.get_expression(j);
-          if (e->is_dynamic()) {
-            shp.set_dim(j, filled_batch);
-            // Necessary because set_dim removes the expression:
-            shp.set_expression(j, e);
-          }
+        if (arg.dynamic_dim == 0) {
+          TensorShape& shp = std::get<TensorShape>(arg.shape);
+          int64_t old = shp.dim_size(0);
+          old_vars.push_back({i, arg.dynamic_dim, old});
+          shp.set_dim(0, filled_batch);
         }
         // constant argument rewrite otherwise it still store the incoming batch
         // request.
         if (arg.kind == XlaCompiler::Argument::kConstant) {
-          auto flat = arg.constant_value.flat<int32>();
-          if (old_batch == flat(0)) {
+          // To deal with both int32 and int64
+          if (arg.constant_value.dtype() == DT_INT32) {
+            auto flat = arg.constant_value.flat<int32>();
+            int64_t old = flat(0);
             flat(0) = static_cast<int32>(filled_batch);
+            old_vars.push_back({i, -1, old});
+          } else if (arg.constant_value.dtype() == DT_INT64) {
+            auto flat = arg.constant_value.flat<int64>();
+            int64_t old = flat(0);
+            flat(0) = static_cast<int64_t>(filled_batch);
+            old_vars.push_back({i, -1, old});
           }
         }
       }
     }
-
-    return xla_device_compiler->CompileIfNeeded(
+    auto status = xla_device_compiler->CompileIfNeeded(
         options, function, norm_args, compile_options, compile_mode, profiler,
         compilation_result, executable);
+    // Restore the old argument shapes and constant values if filled_batch is not zero.
+    if (filled_batch) {
+      for (const auto& old_var : old_vars) {
+        auto& arg = norm_args[old_var.arg_index];
+        if (old_var.dyn_dim != -1) {
+          TensorShape& shp = std::get<TensorShape>(arg.shape);
+          shp.set_dim(old_var.dyn_dim, old_var.old_value);
+        }
+        if (arg.kind == XlaCompiler::Argument::kConstant) {
+          if (arg.constant_value.dtype() == DT_INT32) {
+            auto flat = arg.constant_value.flat<int32>();
+            flat(0) = static_cast<int32>(old_var.old_value);
+          } else if (arg.constant_value.dtype() == DT_INT64) {
+            auto flat = arg.constant_value.flat<int64>();
+            flat(0) = static_cast<int64_t>(old_var.old_value);
+          }
+        }
+      }
+    }
+    return status;
   } else {
     return xla_device_compiler->CompileIfNeeded(
         options, function, args, compile_options, compile_mode, profiler,
