@@ -373,8 +373,13 @@ static void RebuildResultNodes(const GraphDef& gdef,
                                const absl::flat_hash_map<string, NodeDef>& created_shapeonly,
                                const absl::flat_hash_set<string>& candidates,
                                std::vector<NodeDef>* result_nodes) {
+  // Track which created nodes have already been inserted so we don't duplicate.
+  absl::flat_hash_set<string> inserted_keys;
+
   for (const NodeDef& n : gdef.node()) {
     NodeDef newn = n;
+    // Rewrite inputs of nodes that are shape consumers or candidates to point
+    // to the ShapeOnly replacements where appropriate.
     for (int i = 0; i < newn.input_size(); ++i) {
       string orig_in = newn.input(i);
       string cleaned = orig_in;
@@ -402,8 +407,32 @@ static void RebuildResultNodes(const GraphDef& gdef,
       if (!orig_in.empty() && orig_in[0] == '^') new_in = string("^") + new_in;
       newn.set_input(i, new_in);
     }
-    if (created_shapeonly.find(n.name()) != created_shapeonly.end()) continue;
+
+    // Always keep the original node in the output graph.
     result_nodes->push_back(std::move(newn));
+
+    // Immediately after the original node, insert any created ShapeOnly nodes
+    // that were derived from this producer (keys equal to `name` or starting
+    // with `name:` for per-output variants).
+    string producer = n.name();
+    string prefix = producer + ":";
+    for (const auto& kv : created_shapeonly) {
+      const string& key = kv.first;
+      if (inserted_keys.contains(key)) continue;
+      if (key == producer || absl::StartsWith(key, prefix)) {
+        result_nodes->push_back(kv.second);
+        inserted_keys.insert(key);
+      }
+    }
+  }
+
+  // Append any created ShapeOnly nodes whose producer was not present in the
+  // original graph ordering (should be rare). Ensure we don't duplicate.
+  for (const auto& kv : created_shapeonly) {
+    if (!inserted_keys.contains(kv.first)) {
+      result_nodes->push_back(kv.second);
+      inserted_keys.insert(kv.first);
+    }
   }
 }
 
@@ -422,7 +451,8 @@ absl::Status ShapeOnlyOptimizer::InsertShapeOnlyNodes(const GrapplerItem& item,
   FixupCreatedShapeOnlyInputs(&created_shapeonly);
   RebuildResultNodes(*gdef, created_shapeonly, candidates_, &result_nodes);
 
-  for (const auto& kv : created_shapeonly) result_nodes.push_back(kv.second);
+  // created_shapeonly nodes are inserted in-place by RebuildResultNodes above;
+  // no separate append here is necessary.
 
   GraphDef out;
   out.mutable_library()->CopyFrom(gdef->library());
