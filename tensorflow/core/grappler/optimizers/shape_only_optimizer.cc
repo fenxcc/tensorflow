@@ -299,6 +299,31 @@ static void CreateShapeOnlyNodes(
     if (IsForbiddenOpName(node->op()) || IsStatefulOrSideEffectNode(*node) || !IsSupportedOpName(node->op()))
       continue;
 
+    // Helper to propagate type-list attribute 'Tin' into the created node.
+    auto PropagateTin = [&](NodeDef* so) {
+      // Prefer copying an existing 'Tin' list if present.
+      auto it_tin = node->attr().find("Tin");
+      if (it_tin != node->attr().end()) {
+        (*so->mutable_attr())["Tin"] = it_tin->second;
+        return;
+      }
+      // Otherwise fall back to wrapping a single-type attr into a list.
+      auto it_single = node->attr().find("T");
+      if (it_single != node->attr().end()) {
+        (*so->mutable_attr())["Tin"].mutable_list()->add_type(it_single->second.type());
+        return;
+      }
+      auto it_dtype = node->attr().find("dtype");
+      if (it_dtype != node->attr().end()) {
+        (*so->mutable_attr())["Tin"].mutable_list()->add_type(it_dtype->second.type());
+        return;
+      }
+      // Last resort: derive dtype and put into Tin list.
+      DataType dtype = DT_FLOAT;
+      GetDtypeFromNodeDef(*node, &dtype);
+      (*so->mutable_attr())["Tin"].mutable_list()->add_type(dtype);
+    };
+
     if (node->op() == "DynamicPartition") {
       int64_t num_partitions = -1;
       auto ait = node->attr().find("num_partitions");
@@ -312,6 +337,7 @@ static void CreateShapeOnlyNodes(
         DataType dtype = DT_FLOAT;
         GetDtypeFromNodeDef(*node, &dtype);
         (*so.mutable_attr())["T"].set_type(dtype);
+        PropagateTin(&so);
         (*so.mutable_attr())["orig_op"].set_s(node->op());
         (*so.mutable_attr())["output_index"].set_i(i);
         if (!node->device().empty()) so.set_device(node->device());
@@ -327,6 +353,7 @@ static void CreateShapeOnlyNodes(
     DataType dtype = DT_FLOAT;
     GetDtypeFromNodeDef(*node, &dtype);
     (*so.mutable_attr())["T"].set_type(dtype);
+    PropagateTin(&so);
     (*so.mutable_attr())["orig_op"].set_s(node->op());
     if (!node->device().empty()) so.set_device(node->device());
     (*created_shapeonly)[cand_name] = so;
