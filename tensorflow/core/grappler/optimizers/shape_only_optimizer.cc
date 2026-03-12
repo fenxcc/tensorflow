@@ -15,6 +15,7 @@
 #include "tensorflow/core/platform/logging.h"
 #include "tensorflow/core/framework/tensor_shape.pb.h"
 #include "tensorflow/core/grappler/grappler_item.h"
+#include "tensorflow/core/util/dump_graph.h"
 
 namespace tensorflow {
 namespace grappler {
@@ -436,6 +437,13 @@ absl::Status ShapeOnlyOptimizer::InsertShapeOnlyNodes(const GrapplerItem& item,
 absl::Status ShapeOnlyOptimizer::Optimize(Cluster* cluster,
                                           const GrapplerItem& item,
                                           GraphDef* optimized_graph) {
+  // Dump graph before any optimization so we can compare before/after.
+  // Uses TensorFlow's standard DumpGraph helper which respects the
+  // TF_DUMP_GRAPH_FMT and TF_DUMP_GRAPH_PREFIX environment variables.
+  if (VLOG_IS_ON(1)) {
+    DumpGraphDefToFile("shape_only_optimizer_before", item.graph);
+  }
+
   // Stage 0: Analyze and mark candidate nodes.
   AnalyzeCandidates(item.graph);
   VLOG(1) << "ShapeOnlyOptimizer: Stage0 found " << candidates_.size()
@@ -445,6 +453,11 @@ absl::Status ShapeOnlyOptimizer::Optimize(Cluster* cluster,
   // Stage 2: Insert ShapeOnly nodes for candidates (safety checks applied).
   TF_RETURN_IF_ERROR(InsertShapeOnlyNodes(item, optimized_graph));
   VLOG(1) << "ShapeOnlyOptimizer: Stage2 ShapeOnly insert done.";
+
+  // Dump the resulting graph after ShapeOnly insertion for diffing.
+  if (VLOG_IS_ON(1)) {
+    DumpGraphDefToFile("shape_only_optimizer_after", *optimized_graph);
+  }
 
   return absl::OkStatus();
 }
