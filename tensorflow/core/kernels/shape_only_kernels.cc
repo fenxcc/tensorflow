@@ -3,6 +3,8 @@
 #include "tensorflow/core/framework/register_types.h"
 #include "tensorflow/core/framework/shape_inference.h"
 #include "tensorflow/core/framework/tensor.h"
+// Needed for IsRefType
+#include "tensorflow/core/framework/types.h"
 
 namespace tensorflow {
 
@@ -45,9 +47,16 @@ class ShapeOnlyOp : public OpKernel {
     // Dispatch based on orig_op
     if (!orig_op_.empty()) {
       if (IsPassthroughOp(orig_op_)) {
-        // passthrough: output shape == first input shape (if exists)
         if (ctx->num_inputs() >= 1) {
-          out_shape = ctx->input(0).shape();
+          // If input is a ref type, forward as ref; otherwise set output to
+          // reference the same Tensor (no copy).
+          if (IsRefType(ctx->input_dtype(0))) {
+            ctx->forward_ref_input_to_ref_output(0, 0);
+            return;
+          } else {
+            ctx->set_output(0, ctx->input(0));
+            return;
+          }
         }
       } else if (IsBroadcastOp(orig_op_)) {
         Status s = ComputeBroadcastShape(ctx, &out_shape);
@@ -399,3 +408,4 @@ class ShapeOnlyOp : public OpKernel {
     *out_shape = out;
     return Status::OK();
   }
+}
