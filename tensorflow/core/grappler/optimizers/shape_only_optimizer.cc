@@ -451,17 +451,58 @@ absl::Status ShapeOnlyOptimizer::InsertShapeOnlyNodes(const GrapplerItem& item,
   FixupCreatedShapeOnlyInputs(&created_shapeonly);
   RebuildResultNodes(*gdef, created_shapeonly, candidates_, &result_nodes);
 
-  // created_shapeonly nodes are inserted in-place by RebuildResultNodes above;
-  // no separate append here is necessary.
+  // Build consumer adjacency for the rewritten node list so we can detect
+  // original candidate nodes that have no remaining users and can be removed.
+  absl::flat_hash_map<string, absl::flat_hash_set<string>> consumers;
+  consumers.reserve(result_nodes.size());
+  for (const NodeDef& n : result_nodes) {
+    consumers[n.name()];  // ensure key exists
+  }
+  for (const NodeDef& n : result_nodes) {
+    for (const string& inp : n.input()) {
+      string pname = NodeNameFromInput(inp);
+      if (pname.empty()) continue;
+      consumers[pname].insert(n.name());
+    }
+  }
+
+  // Protect nodes referenced by fetches so we don't delete graph outputs.
+  absl::flat_hash_set<string> protected_nodes;
+  for (const string& f : item.fetch) protected_nodes.insert(NodeNameFromInput(f));
+
+  // Filter out removable original candidate nodes: those that are not ShapeOnly
+  // replacements, are in the candidate set, are stateless, do not produce
+  // resource dtype, are not protected by fetch and have zero consumers.
+  std::vector<NodeDef> filtered_nodes;
+  filtered_nodes.reserve(result_nodes.size());
+  for (const NodeDef& n : result_nodes) {
+    const string& name = n.name();
+    bool removed = false;
+    if (n.op() != "ShapeOnly" && candidates_.contains(name) && !IsStatefulOrSideEffectNode(n)) {
+      // If node produces resources, be conservative and keep it.
+      auto it_attr = n.attr().find("dtype");
+      if (it_attr == n.attr().end() || it_attr->second.type() != DT_RESOURCE) {
+        if (!protected_nodes.contains(name)) {
+          auto itc = consumers.find(name);
+          if (itc == consumers.end() || itc->second.empty()) {
+            VLOG(1) << "ShapeOnlyOptimizer: removing unused original node: " << name;
+            removed = true;
+          }
+        }
+      }
+    }
+    if (!removed) filtered_nodes.push_back(n);
+  }
 
   GraphDef out;
   out.mutable_library()->CopyFrom(gdef->library());
   out.mutable_versions()->CopyFrom(gdef->versions());
-  for (const NodeDef& n : result_nodes) *out.add_node() = n;
+  for (const NodeDef& n : filtered_nodes) *out.add_node() = n;
   *gdef = std::move(out);
 
   VLOG(1) << "ShapeOnlyOptimizer: inserted " << created_shapeonly.size()
-          << " ShapeOnly nodes and retargeted consumers.";
+          << " ShapeOnly nodes and retargeted consumers; removed "
+          << (result_nodes.size() - filtered_nodes.size()) << " unused originals.";
   return absl::OkStatus();
 }
 
