@@ -456,6 +456,7 @@ absl::Status ShapeOnlyOptimizer::InsertShapeOnlyNodes(const GrapplerItem& item,
 
   GraphDef out;
   out.mutable_library()->CopyFrom(gdef->library());
+  out.mutable_versions()->CopyFrom(gdef->versions());
   for (const NodeDef& n : result_nodes) *out.add_node() = n;
   *gdef = std::move(out);
 
