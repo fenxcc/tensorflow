@@ -327,6 +327,12 @@ class Div : public DynExpr {
 
   DynExpr* s() override;
 
+  std::set<int> get_all_ids() {
+    auto s = lhs->get_all_ids();
+    s.merge(rhs->get_all_ids());
+    return s;
+  }
+
   int64_t solve(int64_t x) {
     // Cannot solve if both lhs and rhs are dynamic...
     if (lhs->is_dynamic() && rhs->is_dynamic()) return -1;
