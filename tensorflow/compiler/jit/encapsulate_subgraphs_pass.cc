@@ -1154,6 +1154,7 @@ absl::Status EncapsulateSubgraphsPass::Run(
 
   // TODO(b/195757077): Remove this once there is a better way to disable
   // GraphOptimizationPasses that are not needed due to MLIR bridge.
+  bool has_xla_clusters = false;
   for (Node* n : (*options.graph)->nodes()) {
     // Skip the pass if we found TPUExecute or TPUExecuteAndUpdateVariables ops
     // in the graph, which indicates the graph is produced by TPU TF-XLA bridge
@@ -1162,6 +1163,15 @@ absl::Status EncapsulateSubgraphsPass::Run(
         n->type_string() == "TPUExecuteAndUpdateVariables") {
       return absl::OkStatus();
     }
+    if (n->attrs().Find(kXlaClusterAttr)) {
+      has_xla_clusters = true;
+    }
+  }
+  // If no nodes have been marked for XLA compilation, skip the pass to avoid
+  // the overhead of creating CPU devices and FunctionLibraryRuntime objects.
+  if (!has_xla_clusters) {
+    VLOG(1) << "No XLA clusters found, skipping EncapsulateSubgraphsPass";
+    return absl::OkStatus();
   }
 
   std::unique_ptr<Graph> graph_out;

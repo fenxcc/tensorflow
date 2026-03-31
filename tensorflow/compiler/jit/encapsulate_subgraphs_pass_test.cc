@@ -24,6 +24,7 @@ limitations under the License.
 #include "tensorflow/cc/ops/standard_ops.h"
 #include "tensorflow/compiler/jit/encapsulate_util.h"
 #include "tensorflow/compiler/jit/extract_outside_compilation_pass.h"
+#include "tensorflow/compiler/jit/mark_for_compilation_pass.h"
 #include "tensorflow/compiler/jit/test_util.h"
 #include "tensorflow/compiler/tf2xla/side_effect_util.h"
 #include "tensorflow/core/common_runtime/device_factory.h"
@@ -2707,6 +2708,10 @@ void CreateSubgraphTouchingRefVar(const Scope& s) {
 }
 
 TEST(EncapsulateSubgraphsTest, RefVariablesMarked) {
+  // When no XLA clusters are present, EncapsulateSubgraphsPass exits early and
+  // does not set kXlaHasReferenceVarsAttr, even for graphs with reference
+  // variables. This is correct since the attribute is only consumed by
+  // XlaLaunch/XlaCompile nodes which don't exist without clusters.
   Scope root = Scope::NewRootScope().ExitOnError();
   CreateSubgraphTouchingRefVar(root);
 
@@ -2720,12 +2725,14 @@ TEST(EncapsulateSubgraphsTest, RefVariablesMarked) {
   EncapsulateSubgraphsPass pass;
   TF_ASSERT_OK(pass.Run(options));
 
+  // With no XLA clusters, the pass exits early and does not set
+  // kXlaHasReferenceVarsAttr on any nodes.
   for (const Node* node : graph->nodes()) {
-    bool has_ref_var;
-    TF_ASSERT_OK(
-        GetNodeAttr(node->attrs(), kXlaHasReferenceVarsAttr, &has_ref_var));
-    EXPECT_TRUE(node->IsSink() || node->IsSource() || has_ref_var)
-        << "All nodes apart from source and sink can access reference variable";
+    bool has_ref_var = false;
+    EXPECT_FALSE(
+        GetNodeAttr(node->attrs(), kXlaHasReferenceVarsAttr, &has_ref_var).ok())
+        << "kXlaHasReferenceVarsAttr should not be set when no XLA clusters "
+           "exist";
   }
 }
 
@@ -2743,6 +2750,14 @@ TEST(EncapsulateSubgraphsTest, NoRefVarsNoAttr) {
   auto graph = std::make_unique<Graph>(OpRegistry::Global());
   TF_ASSERT_OK(root.ToGraph(graph.get()));
 
+  // Add XLA cluster attributes so the pass runs its full path including ref
+  // variable analysis. Without any kXlaClusterAttr nodes, the pass exits early
+  // and skips the expensive device/FLR setup and ref var analysis (since those
+  // attributes are only needed by XlaLaunch/XlaCompile nodes).
+  for (Node* node : graph->op_nodes()) {
+    node->AddAttr(kXlaClusterAttr, "cluster_0");
+  }
+
   GraphOptimizationPassWrapper wrapper;
   GraphOptimizationPassOptions options =
       wrapper.CreateGraphOptimizationPassOptions(&graph);
@@ -2755,6 +2770,35 @@ TEST(EncapsulateSubgraphsTest, NoRefVarsNoAttr) {
     TF_ASSERT_OK(
         GetNodeAttr(node->attrs(), kXlaHasReferenceVarsAttr, &has_ref_var));
     EXPECT_FALSE(has_ref_var) << "The graph does not have reference variables";
+  }
+}
+
+TEST(EncapsulateSubgraphsTest, NoXlaClustersEarlyExit) {
+  // Verify that EncapsulateSubgraphsPass exits early without doing expensive
+  // setup work (device creation, FLR creation) when no nodes have been marked
+  // with kXlaClusterAttr by the MarkForCompilationPass.
+  Scope root = Scope::NewRootScope().ExitOnError();
+  Output constant =
+      ops::Const(root.WithOpName("constant"), Input::Initializer(1.0));
+  Output neg = ops::Negate(root.WithOpName("negate"), constant);
+
+  auto graph = std::make_unique<Graph>(OpRegistry::Global());
+  TF_ASSERT_OK(root.ToGraph(graph.get()));
+
+  GraphOptimizationPassWrapper wrapper;
+  GraphOptimizationPassOptions options =
+      wrapper.CreateGraphOptimizationPassOptions(&graph);
+
+  EncapsulateSubgraphsPass pass;
+  TF_ASSERT_OK(pass.Run(options));
+
+  // The pass should have exited early without setting kXlaHasReferenceVarsAttr.
+  for (const Node* node : graph->nodes()) {
+    bool has_ref_var = false;
+    EXPECT_FALSE(
+        GetNodeAttr(node->attrs(), kXlaHasReferenceVarsAttr, &has_ref_var).ok())
+        << "kXlaHasReferenceVarsAttr should not be set when no XLA clusters "
+           "are present (early exit optimization)";
   }
 }
 

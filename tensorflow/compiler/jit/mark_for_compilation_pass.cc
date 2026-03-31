@@ -1919,7 +1919,7 @@ absl::Status MarkForCompilation(
     }
   }
 
-  return MarkForCompilationPassImpl{
+  TF_RETURN_IF_ERROR(MarkForCompilationPassImpl{
       debug_options,
       graph,
       flib_def,
@@ -1934,7 +1934,15 @@ absl::Status MarkForCompilation(
                 .session_metadata()
                 .name()
           : ""}
-      .Run();
+                        .Run());
+
+  // Mark the source node to indicate this graph has been fully processed by
+  // MarkForCompilation. This allows subsequent invocations (e.g., when
+  // PartitionedCall re-runs the optimization pipeline) to return early in O(1)
+  // time by checking the source node, instead of scanning all graph nodes.
+  graph->source_node()->AddAttr(kXlaAlreadyClustered, true);
+
+  return absl::OkStatus();
 }
 
 std::atomic<int64_t>* GetPointerToFuel(int64_t initial_value) {
