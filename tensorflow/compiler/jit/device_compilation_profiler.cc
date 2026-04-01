@@ -21,6 +21,7 @@ limitations under the License.
 #include <utility>
 
 #include "absl/strings/str_cat.h"
+#include "tensorflow/compiler/jit/flags.h"
 #include "tensorflow/compiler/jit/xla_activity.pb.h"
 #include "tensorflow/compiler/jit/xla_activity_listener.h"
 #include "tensorflow/core/framework/attr_value.pb.h"
@@ -158,12 +159,19 @@ bool DeviceCompilationProfiler::ShouldCompileCluster(
   // We avoid compiling clusters that have "gone megamorphic" i.e. have an
   // excessive amount of shape dynamism.
   if (it->second.is_megamorphic) {
-    BroadcastOptimizationRemark(XlaOptimizationRemark::MEGAMORPHIC_FUNCTION,
-                                function.name())
-        .IgnoreError();
-    VLOG(2) << "Not compiling cluster " << function.name()
-            << " because it is megamorphic.";
-    return false;
+    // When tf_xla_always_compile_on_cache_miss is set, skip the megamorphic
+    // gate and always compile.
+    if (GetBuildXlaOpsPassFlags()->tf_xla_always_compile_on_cache_miss) {
+      VLOG(2) << "Compiling megamorphic cluster " << function.name()
+              << " because tf_xla_always_compile_on_cache_miss is enabled.";
+    } else {
+      BroadcastOptimizationRemark(XlaOptimizationRemark::MEGAMORPHIC_FUNCTION,
+                                  function.name())
+          .IgnoreError();
+      VLOG(2) << "Not compiling cluster " << function.name()
+              << " because it is megamorphic.";
+      return false;
+    }
   }
 
   // TODO(b/255826209): Figure out if Lazy compilation is still needed given
@@ -179,13 +187,16 @@ bool DeviceCompilationProfiler::ShouldCompileCluster(
     return true;
   }
 
-  if (compile_mode == DeviceCompileMode::kAsync) {
-    // Asynchronous compilation is enabled.
-    if (num_ongoing_compilations_ >= kMaxNumOngoingCompilations) {
-      VLOG(2) << "Not asynchronously compiling cluster " << function.name()
-              << " because of too many ongoing compilations.";
-      return false;
-    }
+  if (compile_mode == DeviceCompileMode::kAsync &&
+      !GetBuildXlaOpsPassFlags()->tf_xla_always_compile_on_cache_miss &&
+      num_ongoing_compilations_ >= kMaxNumOngoingCompilations) {
+    VLOG(2) << "Not asynchronously compiling cluster " << function.name()
+            << " because of too many ongoing compilations.";
+    return false;
+  }
+
+  if (GetBuildXlaOpsPassFlags()->tf_xla_always_compile_on_cache_miss) {
+    return true;
   }
 
   bool reached_compile_threshold = current_request_count >= *compile_threshold;
