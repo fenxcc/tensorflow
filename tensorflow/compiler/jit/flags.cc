@@ -276,6 +276,7 @@ void AllocateAndParseFlags() {
   ops_flags = new XlaOpsCommonFlags;
   ops_flags->tf_xla_always_defer_compilation = false;
   ops_flags->tf_xla_async_compilation = false;
+  ops_flags->tf_xla_force_compile_on_miss = false;
   ops_flags->tf_xla_use_device_api.enabled_for_xla_launch_ = true;
   ops_flags->tf_xla_use_device_api.enabled_for_compile_on_demand_ = true;
   ops_flags->tf_xla_use_device_api.enabled_for_compile_and_run_ = true;
@@ -352,6 +353,14 @@ void AllocateAndParseFlags() {
             "When lazy compilation is enabled, asynchronous compilation starts "
             "the cluster compilation in the background, and the fallback path "
             "is executed until the compilation has finished."),
+       Flag("tf_xla_force_compile_on_miss",
+            &ops_flags->tf_xla_force_compile_on_miss,
+            "If true, the DeviceCompiler JIT path will always attempt to "
+            "compile on a cache miss regardless of DeviceCompilationProfiler "
+            "heuristics (megamorphic avoidance, lazy/async compilation "
+            "thresholds, and the max-ongoing-async-compilations limit are all "
+            "bypassed). Every new shape/signature will be compiled. Defaults "
+            "to false."),
        Flag("tf_xla_use_device_api_for_xla_launch",
             &ops_flags->tf_xla_use_device_api.enabled_for_xla_launch_,
             "If true, uses Device API (PjRt) for single device compilation and "

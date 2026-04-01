@@ -21,6 +21,7 @@ limitations under the License.
 #include <utility>
 
 #include "absl/strings/str_cat.h"
+#include "tensorflow/compiler/jit/flags.h"
 #include "tensorflow/compiler/jit/xla_activity.pb.h"
 #include "tensorflow/compiler/jit/xla_activity_listener.h"
 #include "tensorflow/core/framework/attr_value.pb.h"
@@ -133,6 +134,13 @@ absl::Status DeviceCompilationProfiler::RegisterCompilation(
 bool DeviceCompilationProfiler::ShouldCompileCluster(
     const NameAttrList& function, DeviceCompileMode compile_mode,
     int64_t current_request_count) {
+  // When tf_xla_force_compile_on_miss is enabled, bypass all heuristics and
+  // always compile on a cache miss. This disables megamorphic avoidance,
+  // compilation thresholds, and the async ongoing-compilations limit.
+  if (GetXlaOpsCommonFlags()->tf_xla_force_compile_on_miss) {
+    return true;
+  }
+
   std::optional<int64_t> compile_threshold;
   if (compile_mode == DeviceCompileMode::kLazy) {
     compile_threshold = kDefaultCompilationThreshold;

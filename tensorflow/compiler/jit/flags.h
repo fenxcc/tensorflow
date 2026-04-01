@@ -158,6 +158,14 @@ struct XlaOpsCommonFlags {
   // the main execution. The fallback path is taken while compilation happens.
   bool tf_xla_async_compilation;
 
+  // If true, the DeviceCompiler JIT path will always attempt to compile on a
+  // cache miss (kUncompiled state) regardless of DeviceCompilationProfiler
+  // heuristics. Specifically, megamorphic avoidance, lazy/async compilation
+  // thresholds, and the maximum number of ongoing async compilations limit are
+  // all bypassed. This guarantees that every new shape/signature is compiled.
+  // Defaults to false.
+  bool tf_xla_force_compile_on_miss;
+
   class PjRtForSingleDeviceCompilationRollout {
    public:
     // Allow using Device API (PjRt) for `device_type` in the XlaLaunch op.
