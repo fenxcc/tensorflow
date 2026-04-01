@@ -21,6 +21,7 @@ limitations under the License.
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include "tensorflow/compiler/jit/flags.h"
 #include "tensorflow/compiler/jit/tests/device_compiler_test_helper.h"
 #include "tensorflow/compiler/jit/xla_activity.pb.h"
 #include "tensorflow/core/framework/attr_value.pb.h"
@@ -237,6 +238,78 @@ TEST(DeviceCompilationProfilerTest, ShouldCompileClusterLazy) {
   }
   EXPECT_TRUE(profiler->ShouldCompileCluster(function, DeviceCompileMode::kLazy,
                                              kDefaultCompilationThreshold));
+}
+
+TEST(DeviceCompilationProfilerTest,
+     ShouldCompileClusterAlwaysCompileOnCacheMiss) {
+  // Save and set the flag.
+  bool saved_flag =
+      GetBuildXlaOpsPassFlags()->tf_xla_always_compile_on_cache_miss;
+  GetBuildXlaOpsPassFlags()->tf_xla_always_compile_on_cache_miss = true;
+
+  DeviceCompilationProfiler* profiler = new DeviceCompilationProfiler();
+  core::ScopedUnref profiler_ref(profiler);
+
+  NameAttrList function;
+  function.set_name("TestFunc");
+
+  const int64_t kCompileThreshold = 10;
+
+  // Make the cluster megamorphic by registering many compilations and few
+  // executions.
+  for (int i = 0; i < kCompileThreshold + 1; ++i) {
+    EXPECT_TRUE(profiler->RegisterCompilation(function, 1, false).ok());
+  }
+  // Register enough executions to pass the first-execution fast path
+  // (execution_count == 1) so the megamorphic check is actually exercised.
+  profiler->RegisterExecution(function);
+  profiler->RegisterExecution(function);
+
+  TF_ASSERT_OK_AND_ASSIGN(auto stats, profiler->GetCompileStats(function));
+  EXPECT_TRUE(stats.is_megamorphic);
+
+  // With the flag enabled, should still compile even though megamorphic.
+  EXPECT_TRUE(
+      profiler->ShouldCompileCluster(function, DeviceCompileMode::kAsync, 0));
+  EXPECT_TRUE(
+      profiler->ShouldCompileCluster(function, DeviceCompileMode::kLazy, 0));
+
+  // With the flag enabled, should compile even when async ongoing compilations
+  // are at the maximum.
+  DeviceCompilationProfiler* profiler2 = new DeviceCompilationProfiler();
+  core::ScopedUnref profiler2_ref(profiler2);
+
+  NameAttrList function2;
+  function2.set_name("TestFunc2");
+
+  // kMaxNumOngoingCompilations equals kNumAsyncDeviceCompilerThreads (= 10).
+  const int64_t kMaxNumOngoingCompilations = 10;
+  for (int i = 0; i < kMaxNumOngoingCompilations; ++i) {
+    profiler2->IncrementOngoingAsyncCompilations();
+  }
+  profiler2->RegisterExecution(function2);
+  profiler2->RegisterExecution(function2);
+  // Second execution: would normally be blocked by async limit, but flag
+  // bypasses it.
+  EXPECT_TRUE(
+      profiler2->ShouldCompileCluster(function2, DeviceCompileMode::kAsync, 0));
+
+  // With the flag enabled, lazy compilation threshold is also bypassed.
+  DeviceCompilationProfiler* profiler3 = new DeviceCompilationProfiler();
+  core::ScopedUnref profiler3_ref(profiler3);
+
+  NameAttrList function3;
+  function3.set_name("TestFunc3");
+
+  profiler3->RegisterExecution(function3);
+  profiler3->RegisterExecution(function3);
+  // Would normally require reaching kDefaultCompilationThreshold, but flag
+  // bypasses it.
+  EXPECT_TRUE(profiler3->ShouldCompileCluster(function3,
+                                              DeviceCompileMode::kLazy, 0));
+
+  // Restore the flag.
+  GetBuildXlaOpsPassFlags()->tf_xla_always_compile_on_cache_miss = saved_flag;
 }
 
 }  // namespace

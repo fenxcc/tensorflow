@@ -224,6 +224,7 @@ void AllocateAndParseFlags() {
   build_ops_flags->tf_xla_disable_full_embedding_pipelining_with_summaries =
       true;
   build_ops_flags->tf_xla_embedding_parallel_iterations = 0;
+  build_ops_flags->tf_xla_always_compile_on_cache_miss = false;
 
   mark_for_compilation_flags = new MarkForCompilationPassFlags;
   mark_for_compilation_flags->xla_auto_jit_flag.optimization_level_single_gpu =
@@ -326,6 +327,12 @@ void AllocateAndParseFlags() {
             "If >0 then use this many parallel iterations in "
             "embedding_pipelining and embedding_sequency. By default, use the "
             "parallel_iterations on the original model WhileOp."),
+       Flag("tf_xla_always_compile_on_cache_miss",
+            &build_ops_flags->tf_xla_always_compile_on_cache_miss,
+            "If true, XLA will compile on every cache miss for every new "
+            "shape/signature, bypassing megamorphic heuristics, lazy "
+            "compilation thresholds, and the async ongoing compilation limit. "
+            "Defaults to false."),
 
        Flag("tf_xla_compile_on_demand", &device_flags->tf_xla_compile_on_demand,
             "Switch a device into 'on-demand' mode, where instead of "

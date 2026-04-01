@@ -284,6 +284,11 @@ struct BuildXlaOpsPassFlags {
   // Force the WhileOps in embedding_pipelining and embedding_sequencing to use
   // this many parallel_iterations
   int tf_xla_embedding_parallel_iterations;
+
+  // If true, XLA will compile on every cache miss for every new
+  // shape/signature, bypassing megamorphic heuristics, lazy compilation
+  // thresholds, and the async ongoing compilation limit. Defaults to false.
+  bool tf_xla_always_compile_on_cache_miss;
 };
 
 // Flags for common MLIR configurations.
