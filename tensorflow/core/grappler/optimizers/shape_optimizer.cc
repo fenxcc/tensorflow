@@ -26,6 +26,7 @@ limitations under the License.
 #include "tensorflow/core/grappler/utils.h"
 #include "tensorflow/core/grappler/utils/symbolic_shapes.h"
 #include "tensorflow/core/lib/core/errors.h"
+#include "tensorflow/core/util/dump_graph.h"
 
 namespace tensorflow {
 namespace grappler {
@@ -66,6 +67,12 @@ absl::Status ShapeOptimizer::Optimize(Cluster* cluster,
   }
   if (!can_optimize) {
     return absl::AbortedError("Nothing to do.");
+  }
+
+  if (VLOG_IS_ON(1)) {
+    DumpGraphDefToFile(
+        absl::StrCat("before_ShapeOptimizer_", item.id),
+        item.graph);
   }
 
   *optimized_graph = item.graph;
@@ -191,6 +198,11 @@ absl::Status ShapeOptimizer::Optimize(Cluster* cluster,
         }
       }
     }
+  }
+  if (VLOG_IS_ON(1)) {
+    DumpGraphDefToFile(
+        absl::StrCat("after_ShapeOptimizer_", item.id),
+        *optimized_graph);
   }
   return absl::OkStatus();
 }
