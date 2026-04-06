@@ -1,7 +1,5 @@
 # Fuzztest TensorShape domains
 
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
-
 # copybara:uncomment package(default_applicable_licenses = ["//tensorflow:license"])
 
 cc_library(

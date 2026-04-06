@@ -35,8 +35,8 @@ class TypedConditionalAccumulatorBase : public ConditionalAccumulatorBase {
  public:
   TypedConditionalAccumulatorBase(const DataType& dtype,
                                   const PartialTensorShape& shape,
-                                  const std::string& name,
-                                  const std::string& reduction_type)
+                                  const string& name,
+                                  const string& reduction_type)
       : ConditionalAccumulatorBase(dtype, shape, name, reduction_type) {}
 
   /**

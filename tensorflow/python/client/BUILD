@@ -1,5 +1,3 @@
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
-
 # Contains targets that expose client session APIs
 load("//tensorflow:strict.default.bzl", "py_strict_library")
 load("//tensorflow:tensorflow.bzl", "tf_cuda_library")
@@ -187,6 +185,7 @@ py_strict_library(
     srcs = ["device_lib.py"],
     visibility = [
         "//tensorflow:internal",
+        "//third_party/mlperf/submissions/training/v0_7/models:__subpackages__",
         "//third_party/py/cleverhans:__subpackages__",
     ],
     deps = [
@@ -324,7 +323,7 @@ py_strict_library(
         "//tensorflow/python/util:numpy_compat",
         "//tensorflow/python/util:tf_export",
         "//third_party/py/numpy",
-        "@pypi//wrapt",
+        "@pypi_wrapt//:pkg",
     ],
 )
 

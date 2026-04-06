@@ -98,7 +98,7 @@ class QuantizeV2Op : public OpKernel {
       OP_REQUIRES(ctx, mode_string == "SCALED",
                   errors::InvalidArgument("Round mode 'HALF_TO_EVEN' "
                                           "only supported for mode 'SCALED', "
-                                          "but mode is '" +
+                                          "b  ut mode is '" +
                                           mode_string + "'."));
       round_mode_ = ROUND_HALF_TO_EVEN;
     }

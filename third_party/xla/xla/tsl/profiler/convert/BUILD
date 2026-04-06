@@ -12,13 +12,6 @@ package(
     licenses = ["notice"],
 )
 
-package_group(
-    name = "friends",
-    includes = [
-        "//xla/tsl/profiler:friends",
-    ],
-)
-
 cc_library(
     name = "trace_container",
     srcs = ["trace_container.cc"],
@@ -39,7 +32,6 @@ cc_library(
     srcs = [tf_profiler_alias("//xla/tsl/profiler/convert/", "xla_op_utils.cc")],
     hdrs = ["xla_op_utils.h"],
     visibility = internal_visibility([
-        ":friends",
         "//xla/tsl/profiler:internal",
         "//xla/tsl/profiler:xla_profiler_backends",
         "//xla/python:__pkg__",

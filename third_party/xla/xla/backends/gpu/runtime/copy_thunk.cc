@@ -62,7 +62,7 @@ absl::Status DeviceToDeviceCopyThunk::ExecuteOnStream(
 
 absl::StatusOr<ThunkProto> DeviceToDeviceCopyThunk::ToProto() const {
   ThunkProto proto;
-  *proto.mutable_thunk_info() = thunk_info().ToProto();
+  TF_ASSIGN_OR_RETURN(*proto.mutable_thunk_info(), GetThunkInfoProto());
   DeviceToDeviceCopyThunkProto* d2d_copy_thunk_proto =
       proto.mutable_device_to_device_copy_thunk();
   CopyThunkProto* copy_thunk_proto = d2d_copy_thunk_proto->mutable_copy_thunk();
@@ -118,7 +118,7 @@ absl::Status CopyThunk::AsyncEvents::Emplace(se::StreamExecutor* executor,
                                              const HloInstruction* instr,
                                              std::unique_ptr<se::Event> event) {
   Key key = {executor, instr};
-  absl::MutexLock lock(mutex_);
+  absl::MutexLock lock(&mutex_);
   VLOG(3) << "Emplace event " << event.get();
   if (auto [it, inserted] = events_.try_emplace(key, std::move(event));
       inserted) {
@@ -132,7 +132,7 @@ absl::Status CopyThunk::AsyncEvents::Emplace(se::StreamExecutor* executor,
 absl::StatusOr<std::unique_ptr<se::Event>> CopyThunk::AsyncEvents::Extract(
     se::StreamExecutor* executor, const HloInstruction* instr) {
   Key key = {executor, instr};
-  absl::MutexLock lock(mutex_);
+  absl::MutexLock lock(&mutex_);
   if (auto event = events_.extract(key)) {
     VLOG(3) << "Extract event " << event.mapped().get();
     return std::move(event.mapped());
@@ -142,7 +142,7 @@ absl::StatusOr<std::unique_ptr<se::Event>> CopyThunk::AsyncEvents::Extract(
 
 absl::StatusOr<ThunkProto> CopyThunk::ToProto() const {
   ThunkProto proto;
-  *proto.mutable_thunk_info() = thunk_info().ToProto();
+  TF_ASSIGN_OR_RETURN(*proto.mutable_thunk_info(), GetThunkInfoProto());
 
   CopyThunkProto* copy_thunk_proto = proto.mutable_copy_thunk();
   TF_ASSIGN_OR_RETURN(*copy_thunk_proto->mutable_source_buffer(),
@@ -207,7 +207,7 @@ absl::Status DeviceToHostCopyThunk::ExecuteOnStream(
 
 absl::StatusOr<ThunkProto> DeviceToHostCopyThunk::ToProto() const {
   ThunkProto proto;
-  *proto.mutable_thunk_info() = thunk_info().ToProto();
+  TF_ASSIGN_OR_RETURN(*proto.mutable_thunk_info(), GetThunkInfoProto());
 
   DeviceToHostCopyThunkProto* d2h_copy_thunk_proto =
       proto.mutable_device_to_host_copy_thunk();
@@ -288,7 +288,7 @@ absl::Status HostToDeviceCopyThunk::ExecuteOnStream(
 
 absl::StatusOr<ThunkProto> HostToDeviceCopyThunk::ToProto() const {
   ThunkProto proto;
-  *proto.mutable_thunk_info() = thunk_info().ToProto();
+  TF_ASSIGN_OR_RETURN(*proto.mutable_thunk_info(), GetThunkInfoProto());
 
   HostToDeviceCopyThunkProto* h2d_copy_thunk_proto =
       proto.mutable_host_to_device_copy_thunk();

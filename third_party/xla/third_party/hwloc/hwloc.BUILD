@@ -272,10 +272,6 @@ cc_library(
             "hwloc/topology-linux.c",
             "include/hwloc/linux.h",
         ],
-        "@local_xla//xla/tsl:linux_riscv64": [
-            "hwloc/topology-linux.c",
-            "include/hwloc/linux.h",
-        ],
         "@local_xla//xla/tsl:linux_s390x": [
             "hwloc/topology-linux.c",
             "include/hwloc/linux.h",

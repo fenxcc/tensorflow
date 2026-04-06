@@ -17,8 +17,10 @@ limitations under the License.
 
 #include "xla/stream_executor/platform.h"
 
-namespace stream_executor::sycl {
+namespace stream_executor {
+namespace sycl {
 
 PLATFORM_DEFINE_ID(kSyclPlatformId);
 
-}  // namespace stream_executor::sycl
+}  // namespace sycl
+}  // namespace stream_executor

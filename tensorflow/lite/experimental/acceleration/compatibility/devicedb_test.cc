@@ -14,7 +14,7 @@ limitations under the License.
 ==============================================================================*/
 #include "tensorflow/lite/experimental/acceleration/compatibility/devicedb.h"
 
-#include <map>
+#include <memory>
 #include <string>
 
 #include <gtest/gtest.h>

@@ -17,17 +17,19 @@ limitations under the License.
 #define XLA_BACKENDS_CPU_CODEGEN_COMPUTATION_KERNEL_EMITTER_H_
 
 #include <cstdint>
+#include <string>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/string_view.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Module.h"
 #include "xla/backends/cpu/codegen/target_machine_features.h"
+#include "xla/codegen/kernel_definition.h"
 #include "xla/codegen/kernel_emitter.h"
-#include "xla/codegen/llvm_kernel_source.h"
+#include "xla/codegen/llvm_kernel_definition.h"
+#include "xla/codegen/llvm_kernel_emitter.h"
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/service/buffer_assignment.h"
 
@@ -44,14 +46,15 @@ namespace xla::cpu {
 // producing a synthetic buffer_table for all arguments and results (including
 // intermediate instructions), though this may change in the future to use stack
 // allocations for small buffers.
-class ComputationKernelEmitter final : public KernelEmitter<LlvmKernelSource> {
+class ComputationKernelEmitter final : public LlvmKernelEmitter {
  public:
   ComputationKernelEmitter(const HloInstruction* instr,
                            const BufferAssignment* buffer_assignment,
                            const TargetMachineFeatures* target_machine);
 
-  absl::string_view name() const final { return "computation_kernel_emitter"; }
-  absl::StatusOr<KernelDefinition> EmitKernelDefinition() final;
+  absl::StatusOr<LlvmKernelDefinition> EmitKernelDefinition() final;
+
+  std::string name() const final { return "computation_kernel_emitter"; }
 
  private:
   absl::StatusOr<llvm::Function*> EmitNestedComputation(

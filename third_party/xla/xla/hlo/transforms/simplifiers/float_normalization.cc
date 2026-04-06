@@ -595,7 +595,6 @@ absl::Status FloatNormalizationVisitor::DefaultAction(HloInstruction* hlo) {
       hlo->opcode() == HloOpcode::kWhile ||            //
       hlo->opcode() == HloOpcode::kConditional ||      //
       hlo->opcode() == HloOpcode::kBitcastConvert ||   //
-      hlo->opcode() == HloOpcode::kBitcast ||          //
       hlo->opcode() == HloOpcode::kAsyncStart ||       //
       hlo->opcode() == HloOpcode::kAsyncDone ||        //
       hlo->HasSideEffectNoRecurse()) {
@@ -669,10 +668,10 @@ CloneComputationsForNonNormalizingInstructions(
 }
 }  // namespace
 
-absl::StatusOr<bool> FloatNormalization::RunImpl(
+absl::StatusOr<bool> FloatNormalization::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
-  XLA_VLOG_LINES(2, "FloatNormalization::RunImpl() for " +
+  XLA_VLOG_LINES(2, "FloatNormalization::Run() for " +
                         primitive_util::LowercasePrimitiveTypeName(
                             float_support_->LowPrecisionType()) +
                         ", before:\n" + module->ToString());
@@ -686,7 +685,7 @@ absl::StatusOr<bool> FloatNormalization::RunImpl(
     if (computations_to_skip.contains(comp)) continue;
     TF_RETURN_IF_ERROR(comp->Accept(&visitor));
   }
-  XLA_VLOG_LINES(2, "FloatNormalization::RunImpl() for " +
+  XLA_VLOG_LINES(2, "FloatNormalization::Run() for " +
                         primitive_util::LowercasePrimitiveTypeName(
                             float_support_->LowPrecisionType()) +
                         ", after:\n" + module->ToString());

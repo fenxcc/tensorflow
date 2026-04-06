@@ -71,15 +71,14 @@ absl::StatusOr<AttributeMap> AttributeMap::FromProto(
   return AttributeMap(std::move(map));
 }
 
-void AttributeMap::ToProto(AttributeMapProto& proto,
-                           SerDesVersion version) const {
+AttributeMapProto AttributeMap::ToProto(SerDesVersion version) const {
   // TODO(b/423702568): Change the return type to `absl::StatusOr<...>` for
   // graceful error handling.
   CHECK_GE(version.version_number(), SerDesVersionNumber(0))
       << "Unsupported " << version.version_number()
       << " for AttributeMap serialization";
 
-  proto.Clear();
+  AttributeMapProto proto;
   proto.set_version_number(SerDesVersionNumber(0).value());
 
   for (const auto& [key, value] : map_) {
@@ -106,6 +105,7 @@ void AttributeMap::ToProto(AttributeMapProto& proto,
         value);
     proto.mutable_attributes()->insert({key, std::move(value_proto)});
   }
+  return proto;
 }
 
 std::string AttributeMap::DebugString(size_t max_string_length,

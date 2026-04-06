@@ -120,10 +120,7 @@ __global__ void split_v_kernel(const T* __restrict__ input_ptr,
   int num_outputs = output_ptr_data.size;
 
   // verbose declaration needed due to template
-  constexpr size_t kAlignTI =
-      (alignof(T) > alignof(IntType)) ? alignof(T) : alignof(IntType);
-  constexpr size_t kAlign = (kAlignTI < 16) ? 16 : kAlignTI;
-  GPU_DYNAMIC_SHARED_MEM_DECL(kAlign, unsigned char, smem);
+  GPU_DYNAMIC_SHARED_MEM_DECL(sizeof(T), unsigned char, smem);
   IntType* smem_col_scan = reinterpret_cast<IntType*>(smem);
 
   if (useSmem) {

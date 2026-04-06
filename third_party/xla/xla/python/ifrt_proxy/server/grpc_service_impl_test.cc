@@ -22,7 +22,6 @@
 #include <gtest/gtest.h>
 #include "absl/log/log.h"
 #include "absl/status/status.h"
-#include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/str_cat.h"
@@ -38,12 +37,17 @@
 #include "xla/python/ifrt_proxy/server/grpc_server.h"
 #include "xla/python/ifrt_proxy/server/host_buffer.h"
 #include "xla/python/ifrt_proxy/server/version.h"
+#include "xla/tsl/platform/status_matchers.h"
 #include "xla/tsl/platform/test.h"
 
 namespace xla {
 namespace ifrt {
 namespace proxy {
 namespace {
+
+using ::tsl::testing::IsOk;
+using ::tsl::testing::IsOkAndHolds;
+using ::tsl::testing::StatusIs;
 
 IfrtProxyVersion Version() {
   IfrtProxyVersion version;
@@ -67,7 +71,7 @@ absl::StatusOr<std::unique_ptr<GrpcServer>> MakeGrpcServer() {
 }
 
 TEST(GrpcServiceImplTest, CanBeUsedToSetupAnGrpcServer) {
-  ASSERT_THAT(MakeGrpcServer(), absl_testing::IsOk());
+  ASSERT_THAT(MakeGrpcServer(), IsOk());
   // Also implicitly tests that destruction of both the server and the
   // implementation objects.
 }
@@ -116,8 +120,8 @@ TEST_P(GrpcIfrtServiceImplHostBufferTest, StoreAndLookupStringView) {
   const std::string data = GetTestData();
   absl::string_view source(data);
 
-  ASSERT_THAT(client.Store(kHandle, source).Await(), absl_testing::IsOk());
-  EXPECT_THAT(client.Lookup(kHandle).Await(), absl_testing::IsOkAndHolds(data));
+  ASSERT_THAT(client.Store(kHandle, source).Await(), IsOk());
+  EXPECT_THAT(client.Lookup(kHandle).Await(), IsOkAndHolds(data));
 
   EXPECT_TRUE(impl_.Test_DeleteHostBufferStore(kSessionId));
 }
@@ -133,8 +137,8 @@ TEST_P(GrpcIfrtServiceImplHostBufferTest, StoreAndLookupCord) {
   const std::string data = GetTestData();
 
   absl::Cord source(data);
-  ASSERT_THAT(client.Store(kHandle, source).Await(), absl_testing::IsOk());
-  EXPECT_THAT(client.Lookup(kHandle).Await(), absl_testing::IsOkAndHolds(data));
+  ASSERT_THAT(client.Store(kHandle, source).Await(), IsOk());
+  EXPECT_THAT(client.Lookup(kHandle).Await(), IsOkAndHolds(data));
 
   EXPECT_TRUE(impl_.Test_DeleteHostBufferStore(kSessionId));
 }
@@ -148,9 +152,9 @@ TEST_P(GrpcIfrtServiceImplHostBufferTest, Lookup) {
 
   constexpr uint64_t kHandle = 2;
   const std::string data = GetTestData();
-  ASSERT_THAT(store->Store(kHandle, data), absl_testing::IsOk());
+  ASSERT_THAT(store->Store(kHandle, data), IsOk());
 
-  EXPECT_THAT(client.Lookup(kHandle).Await(), absl_testing::IsOkAndHolds(data));
+  EXPECT_THAT(client.Lookup(kHandle).Await(), IsOkAndHolds(data));
 
   EXPECT_TRUE(impl_.Test_DeleteHostBufferStore(kSessionId));
 }
@@ -164,11 +168,11 @@ TEST_P(GrpcIfrtServiceImplHostBufferTest, Delete) {
 
   constexpr uint64_t kHandle = 2;
   const std::string data = GetTestData();
-  ASSERT_THAT(store->Store(kHandle, data), absl_testing::IsOk());
+  ASSERT_THAT(store->Store(kHandle, data), IsOk());
 
-  ASSERT_THAT(client.Delete(kHandle).Await(), absl_testing::IsOk());
+  ASSERT_THAT(client.Delete(kHandle).Await(), IsOk());
   EXPECT_THAT(client.Lookup(kHandle).Await(),
-              absl_testing::StatusIs(absl::StatusCode::kNotFound));
+              StatusIs(absl::StatusCode::kNotFound));
 
   EXPECT_TRUE(impl_.Test_DeleteHostBufferStore(kSessionId));
 }

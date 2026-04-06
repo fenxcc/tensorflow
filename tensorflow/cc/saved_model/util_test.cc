@@ -100,7 +100,7 @@ TEST_F(GetInputValuesTest, RequestContainsInvalidInputs) {
 
   std::vector<std::pair<string, Tensor>> inputs;
   EXPECT_THAT(GetInputValues(sig_, local_request, inputs),
-              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
+              StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST_F(GetInputValuesTest, RequestContainsAllTheInputs) {

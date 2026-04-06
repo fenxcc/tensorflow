@@ -46,22 +46,22 @@ struct GrapplerItem {
   // Create a copy of this GrapplerItem with graph swapped with the argument.
   GrapplerItem WithGraph(GraphDef&& graph) const;
 
-  std::string id;  // A unique id for this item
+  string id;  // A unique id for this item
 
   // Inputs
   GraphDef graph;
-  std::vector<std::pair<std::string, Tensor>> feed;
-  std::vector<std::string> fetch;
+  std::vector<std::pair<string, Tensor>> feed;
+  std::vector<string> fetch;
 
   // Initialization op(s).
-  std::vector<std::string> init_ops;
+  std::vector<string> init_ops;
   // Expected initialization time in seconds, or 0 if unknown
   int64_t expected_init_time = 0;
 
   // Save/restore ops (if any)
-  std::string save_op;
-  std::string restore_op;
-  std::string save_restore_loc_tensor;
+  string save_op;
+  string restore_op;
+  string save_restore_loc_tensor;
 
   // Queue runner(s) required to run the queue(s) of this model.
   std::vector<QueueRunnerDef> queue_runners;
@@ -69,7 +69,7 @@ struct GrapplerItem {
   // List of op names to keep in the graph. This includes nodes that are
   // referenced in various collections, and therefore must be preserved to
   // ensure that the optimized metagraph can still be loaded.
-  std::vector<std::string> keep_ops;
+  std::vector<string> keep_ops;
 
   // Return the set of node evaluated during a regular train/inference step.
   std::vector<const NodeDef*> MainOpsFanin() const;
@@ -81,7 +81,7 @@ struct GrapplerItem {
   std::vector<const NodeDef*> MainVariables() const;
   // Return a set of node names that must be preserved. This includes feed and
   // fetch nodes, keep_ops, init_ops.
-  std::unordered_set<std::string> NodesToPreserve() const;
+  std::unordered_set<string> NodesToPreserve() const;
 
   struct OptimizationOptions {
     // Is it allowed to add nodes to the graph that do not have registered
@@ -108,11 +108,11 @@ struct GrapplerItem {
     int intra_op_parallelism_threads = tsl::port::MaxParallelism();
   };
 
-  const std::unordered_set<std::string>& devices() const;
+  const std::unordered_set<string>& devices() const;
   // Adds a device to a set of available devices, only if it's a valid fully
   // defined device name. Returns `OkStatus()` if successfully added a device,
   // and an error otherwise.
-  absl::Status AddDevice(const std::string& device);
+  absl::Status AddDevice(const string& device);
   // Adds all valid devices from the other Grappler item to the device set.
   absl::Status AddDevices(const GrapplerItem& other);
   // Adds all valid devices from the nodes of the graph to the device set.
@@ -132,7 +132,7 @@ struct GrapplerItem {
   // A set of fully defined device names that can be used to place the nodes of
   // the `graph`.
   // Example of a fully defined name: "/job:work/replica:1/task:1/device:CPU:0"
-  std::unordered_set<std::string> devices_;
+  std::unordered_set<string> devices_;
 
   OptimizationOptions optimization_options_;
 };

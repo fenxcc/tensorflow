@@ -37,8 +37,7 @@ absl::Status RewriteLayoutWithShardedShape(
     const LayoutPreferenceFn& layout_preference_fn,
     const ShapeRepresentationFn& shape_representation_fn,
     xla::Shape* xla_shape) {
-  if (sharding && !sharding->IsTileMaximal() && !sharding->IsManual() &&
-      !sharding->IsUnreduced()) {
+  if (sharding && !sharding->IsTileMaximal() && !sharding->IsManual()) {
     // After sharding, per core shape might have different layout. For example,
     // before sharding, a shape [128, 128] will be assigned default
     // minor-to-major {1, 0}. But after we shard this shape to [128, 64] * 2,

@@ -21,7 +21,6 @@ limitations under the License.
 #include "absl/status/status.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
-#include "absl/synchronization/notification.h"
 #include "tensorflow/core/lib/core/errors.h"
 #include "tensorflow/core/lib/core/notification.h"
 #include "tensorflow/core/lib/core/threadpool.h"
@@ -92,7 +91,7 @@ TEST(TestReffedStatusCallback, RefMulti) {
 TEST(TestReffedStatusCallback, MultiThreaded) {
   std::atomic<int> num_called(0);
   absl::Status status;
-  absl::Notification n;
+  Notification n;
 
   auto done = [&num_called, &status, &n](const absl::Status& s) {
     ++num_called;

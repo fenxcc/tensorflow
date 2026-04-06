@@ -22,8 +22,7 @@ namespace tensorflow {
 absl::Status SendTensorsToRendezvous(
     RendezvousInterface* rendezvous, DeviceContext* device_context,
     const std::vector<AllocatorAttributes>& alloc_attrs,
-    const std::vector<std::string>& keys,
-    absl::Span<const Tensor> tensors_to_send) {
+    const std::vector<string>& keys, absl::Span<const Tensor> tensors_to_send) {
   if (keys.size() != tensors_to_send.size()) {
     return errors::InvalidArgument(
         "keys and tensors_to_send are not the same size. keys.size() = ",
@@ -57,7 +56,7 @@ absl::Status SendTensorsToRendezvous(
 void RecvOutputsFromRendezvousAsync(
     RendezvousInterface* rendezvous, DeviceContext* device_context,
     const std::vector<AllocatorAttributes>& alloc_attrs,
-    const std::vector<std::string>& keys, std::vector<Tensor>* received_tensors,
+    const std::vector<string>& keys, std::vector<Tensor>* received_tensors,
     StatusCallback done) {
   if (keys.empty()) {
     done(absl::OkStatus());
@@ -70,8 +69,8 @@ void RecvOutputsFromRendezvousAsync(
   }
 
   received_tensors->reserve(keys.size());
-  std::vector<std::tuple<std::string, Tensor*, Rendezvous::ParsedKey,
-                         AllocatorAttributes>>
+  std::vector<
+      std::tuple<string, Tensor*, Rendezvous::ParsedKey, AllocatorAttributes>>
       arguments;
   for (int i = 0; i < keys.size(); ++i) {
     Rendezvous::ParsedKey parsed;
@@ -91,7 +90,7 @@ void RecvOutputsFromRendezvousAsync(
 
   auto status_cb = new ReffedStatusCallback(std::move(done));
   for (auto& p : arguments) {
-    const std::string& key = std::get<0>(p);
+    const string& key = std::get<0>(p);
     Tensor* val = std::get<1>(p);
     Rendezvous::ParsedKey parsed = std::get<2>(p);
     Rendezvous::Args rendez_args;
@@ -125,7 +124,7 @@ absl::Status RecvOutputsFromRendezvous(RendezvousInterface* rendezvous,
   // Receives values requested by the caller.
   Rendezvous::ParsedKey parsed;
   for (auto& p : *out) {
-    const std::string& key = p.first;
+    const string& key = p.first;
     Tensor* val = &p.second;
     bool is_dead = false;
     TF_RETURN_IF_ERROR(Rendezvous::ParseKey(key, &parsed));

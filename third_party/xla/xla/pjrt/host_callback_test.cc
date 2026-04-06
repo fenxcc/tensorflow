@@ -25,7 +25,6 @@ limitations under the License.
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/synchronization/notification.h"
-#include "xla/future.h"
 #include "xla/pjrt/pjrt_client.h"
 #include "xla/tests/literal_test_util.h"
 #include "xla/tsl/lib/core/status_test_util.h"
@@ -65,11 +64,11 @@ class TestStream : public CopyToDeviceStream {
         chunk_(chunk),
         done_(done) {}
 
-  Future<> AddChunk(PjRtChunk chunk) override {
+  PjRtFuture<> AddChunk(PjRtChunk chunk) override {
     CHECK(!done_.HasBeenNotified());
     chunk_ = std::move(chunk);
     done_.Notify();
-    return Future<>(absl::OkStatus());
+    return PjRtFuture<>(absl::OkStatus());
   }
 
  private:

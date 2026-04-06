@@ -27,7 +27,6 @@ limitations under the License.
 #include "xla/shape_util.h"
 #include "xla/tests/hlo_test_base.h"
 #include "xla/tests/literal_test_util.h"
-#include "xla/tsl/platform/statusor.h"
 #include "xla/tsl/platform/test.h"
 #include "xla/xla.pb.h"
 #include "xla/xla_data.pb.h"
@@ -84,7 +83,7 @@ TEST_F(CpuFusionTest, FuseTwoElementwiseOps) {
   EXPECT_EQ(4, fusion_instruction->fused_instruction_count());
 
   // Compile and execute the computation.
-  TF_ASSERT_OK_AND_ASSIGN(const Literal result, Execute(std::move(module), {}));
+  auto result = ExecuteAndTransfer(module->Clone(), {});
 
   // Check the output correctness.
   LiteralTestUtil::ExpectR1Near<float>({1.0, 40.0, -5.0}, result, error_spec_);
@@ -131,7 +130,7 @@ TEST_F(CpuFusionTest, FuseElementwiseOpChain) {
   EXPECT_EQ(8, fusion_instruction->fused_instruction_count());
 
   // Compile and execute the computation.
-  TF_ASSERT_OK_AND_ASSIGN(const Literal result, Execute(std::move(module), {}));
+  auto result = ExecuteAndTransfer(module->Clone(), {});
 
   // Check the output correctness.
   LiteralTestUtil::ExpectR1Near<float>({14.0, 40.0, 40.0}, result, error_spec_);
@@ -221,7 +220,7 @@ TEST_F(CpuFusionTest, ElementwiseOpChainWithNonfusibleInstruction) {
       << fusion_instruction2->fused_instructions_computation()->ToString();
 
   // Compile and execute the computation.
-  TF_ASSERT_OK_AND_ASSIGN(const Literal result, Execute(std::move(module), {}));
+  auto result = ExecuteAndTransfer(module->Clone(), {});
 
   // Check the output correctness.
   LiteralTestUtil::ExpectR1Near<float>({14.0, 40.0, 40.0, 14.0, 40.0, 40.0},
@@ -280,9 +279,9 @@ TEST_F(CpuFusionTest, TestOperandOrderToAvoidDuplication) {
   EXPECT_EQ(4, fusion1->fused_instruction_count());
   EXPECT_EQ(4, fusion2->fused_instruction_count());
 
-  // The fusion has a single constant parameter.
-  EXPECT_EQ(1, fusion1->operand_count());
-  EXPECT_EQ(1, fusion2->operand_count());
+  // The fusion has no parameters, everything is fused including constants.
+  EXPECT_EQ(0, fusion1->operand_count());
+  EXPECT_EQ(0, fusion2->operand_count());
 }
 
 TEST_F(CpuFusionTest, DoNotDuplicateExpensiveOps) {

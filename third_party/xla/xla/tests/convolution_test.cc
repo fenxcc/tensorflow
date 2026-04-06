@@ -68,20 +68,20 @@ class ConvolutionTest : public ClientLibraryTestRunnerMixin<
   }
 };
 
-using TestTypes = ::testing::Types<int32_t, Eigen::half, float>;
+using TestTypes = ::testing::Types<
+// TODO(b/183565702): Support integer convs on GPU.
+#if !XLA_TEST_BACKEND_GPU
+    int32_t,
+#endif
+#ifndef XLA_BACKEND_DOES_NOT_SUPPORT_FLOAT16
+    Eigen::half,
+#endif
+    float>;
 
 template <typename T>
 class ForwardPassConvolution_3x3x256_256_OutputZ_Iota : public ConvolutionTest {
  public:
   void RunTest() {
-    if (std::is_same_v<int32_t, T> && test::DeviceTypeIs(test::kGpu)) {
-      // TODO(b/183565702): Support integer convs on GPU.
-      GTEST_SKIP();
-    }
-
-    if (std::is_same_v<Eigen::half, T> && test::DeviceTypeIs(test::kTpu)) {
-      GTEST_SKIP();
-    }
     const int kInputActivationSizeY = 3;
     const int kInputActivationSizeX = 3;
     const int kInputActivationSizeZ = 256;
@@ -132,14 +132,6 @@ template <typename T>
 class Convolve_1x1x1x2_1x1x1x2_Valid : public ConvolutionTest {
  public:
   void RunTest() {
-    if (std::is_same_v<int32_t, T> && test::DeviceTypeIs(test::kGpu)) {
-      // TODO(b/183565702): Support integer convs on GPU.
-      GTEST_SKIP();
-    }
-
-    if (std::is_same_v<Eigen::half, T> && test::DeviceTypeIs(test::kTpu)) {
-      GTEST_SKIP();
-    }
     XlaBuilder builder(TestName());
     Shape input_shape = ShapeUtil::MakeShapeWithType<T>({1, 1, 1, 2});
     Shape filter_shape = ShapeUtil::MakeShapeWithType<T>({1, 1, 1, 2});
@@ -171,14 +163,6 @@ template <typename T>
 class Convolve_1x1x4x4_1x1x2x2_Valid : public ConvolutionTest {
  public:
   void RunTest() {
-    if (std::is_same_v<int32_t, T> && test::DeviceTypeIs(test::kGpu)) {
-      // TODO(b/183565702): Support integer convs on GPU.
-      GTEST_SKIP();
-    }
-
-    if (std::is_same_v<Eigen::half, T> && test::DeviceTypeIs(test::kTpu)) {
-      GTEST_SKIP();
-    }
     XlaBuilder builder(TestName());
     Shape input_shape = ShapeUtil::MakeShapeWithType<T>({1, 1, 4, 4});
     Shape filter_shape = ShapeUtil::MakeShapeWithType<T>({1, 1, 2, 2});
@@ -217,14 +201,6 @@ template <typename T>
 class Convolve_1x1x4x4_1x1x2x2_Same : public ConvolutionTest {
  public:
   void RunTest() {
-    if (std::is_same_v<int32_t, T> && test::DeviceTypeIs(test::kGpu)) {
-      // TODO(b/183565702): Support integer convs on GPU.
-      GTEST_SKIP();
-    }
-
-    if (std::is_same_v<Eigen::half, T> && test::DeviceTypeIs(test::kTpu)) {
-      GTEST_SKIP();
-    }
     XlaBuilder builder(TestName());
     Shape input_shape = ShapeUtil::MakeShapeWithType<T>({1, 1, 4, 4});
     Shape filter_shape = ShapeUtil::MakeShapeWithType<T>({1, 1, 2, 2});
@@ -265,14 +241,6 @@ template <typename T>
 class Convolve_1x1x4x4_1x1x3x3_Same : public ConvolutionTest {
  public:
   void RunTest() {
-    if (std::is_same_v<int32_t, T> && test::DeviceTypeIs(test::kGpu)) {
-      // TODO(b/183565702): Support integer convs on GPU.
-      GTEST_SKIP();
-    }
-
-    if (std::is_same_v<Eigen::half, T> && test::DeviceTypeIs(test::kTpu)) {
-      GTEST_SKIP();
-    }
     XlaBuilder builder(TestName());
     Shape input_shape = ShapeUtil::MakeShapeWithType<T>({1, 1, 4, 4});
     Shape filter_shape = ShapeUtil::MakeShapeWithType<T>({1, 1, 3, 3});
@@ -369,14 +337,6 @@ template <typename T>
 class Convolve2D_1x3x3x5_3x3x5x3_Valid : public ConvolutionTest {
  public:
   void RunTest() {
-    if (std::is_same_v<int32_t, T> && test::DeviceTypeIs(test::kGpu)) {
-      // TODO(b/183565702): Support integer convs on GPU.
-      GTEST_SKIP();
-    }
-
-    if (std::is_same_v<Eigen::half, T> && test::DeviceTypeIs(test::kTpu)) {
-      GTEST_SKIP();
-    }
     XlaBuilder builder(TestName());
     std::vector<int64_t> input_dims = {1, 3, 3, 5};
     std::vector<int64_t> filter_dims = {3, 3, 5, 3};
@@ -433,14 +393,6 @@ template <typename T>
 class Convolve2D_1x6x6x1_6x2x1x1_Same : public ConvolutionTest {
  public:
   void RunTest() {
-    if (std::is_same_v<int32_t, T> && test::DeviceTypeIs(test::kGpu)) {
-      // TODO(b/183565702): Support integer convs on GPU.
-      GTEST_SKIP();
-    }
-
-    if (std::is_same_v<Eigen::half, T> && test::DeviceTypeIs(test::kTpu)) {
-      GTEST_SKIP();
-    }
     XlaBuilder builder(TestName());
     std::vector<int64_t> input_dims = {1, 6, 6, 1};
     std::vector<int64_t> filter_dims = {6, 2, 1, 1};
@@ -506,14 +458,6 @@ template <typename T>
 class Convolve1D_1x3x5_3x5x3_Valid : public ConvolutionTest {
  public:
   void RunTest() {
-    if (std::is_same_v<int32_t, T> && test::DeviceTypeIs(test::kGpu)) {
-      // TODO(b/183565702): Support integer convs on GPU.
-      GTEST_SKIP();
-    }
-
-    if (std::is_same_v<Eigen::half, T> && test::DeviceTypeIs(test::kTpu)) {
-      GTEST_SKIP();
-    }
     XlaBuilder builder(TestName());
     std::vector<int64_t> input_dims = {1, 3, 5};
     std::vector<int64_t> filter_dims = {3, 5, 3};
@@ -565,14 +509,6 @@ template <typename T>
 class Convolve2D_1x3x3x5_3x3x1x15_Depthwise_Valid : public ConvolutionTest {
  public:
   void RunTest() {
-    if (std::is_same_v<int32_t, T> && test::DeviceTypeIs(test::kGpu)) {
-      // TODO(b/183565702): Support integer convs on GPU.
-      GTEST_SKIP();
-    }
-
-    if (std::is_same_v<Eigen::half, T> && test::DeviceTypeIs(test::kTpu)) {
-      GTEST_SKIP();
-    }
     XlaBuilder builder(TestName());
     std::vector<int64_t> input_dims = {1, 3, 3, 5};
     std::vector<int64_t> filter_dims = {3, 3, 1, 15};
@@ -633,14 +569,6 @@ template <typename T>
 class Convolve2D_1x4x4x5_3x3x1x5_Depthwise_Valid : public ConvolutionTest {
  public:
   void RunTest() {
-    if (std::is_same_v<int32_t, T> && test::DeviceTypeIs(test::kGpu)) {
-      // TODO(b/183565702): Support integer convs on GPU.
-      GTEST_SKIP();
-    }
-
-    if (std::is_same_v<Eigen::half, T> && test::DeviceTypeIs(test::kTpu)) {
-      GTEST_SKIP();
-    }
     XlaBuilder builder(TestName());
     std::vector<int64_t> input_dims = {1, 4, 4, 5};
     std::vector<int64_t> filter_dims = {3, 3, 1, 5};
@@ -705,14 +633,6 @@ template <typename T>
 class Convolve2D_1x4x4x512_3x3x1x512_Depthwise_Valid : public ConvolutionTest {
  public:
   void RunTest() {
-    if (std::is_same_v<int32_t, T> && test::DeviceTypeIs(test::kGpu)) {
-      // TODO(b/183565702): Support integer convs on GPU.
-      GTEST_SKIP();
-    }
-
-    if (std::is_same_v<Eigen::half, T> && test::DeviceTypeIs(test::kTpu)) {
-      GTEST_SKIP();
-    }
     XlaBuilder builder(TestName());
     std::vector<int64_t> input_dims = {1, 4, 4, 512};
     std::vector<int64_t> filter_dims = {3, 3, 1, 512};
@@ -771,14 +691,6 @@ class Convolve2D_1x4x4x512_3x3x1x512_Depthwise_Valid_Output_Batch_In_Lanes
     : public ConvolutionTest {
  public:
   void RunTest() {
-    if (std::is_same_v<int32_t, T> && test::DeviceTypeIs(test::kGpu)) {
-      // TODO(b/183565702): Support integer convs on GPU.
-      GTEST_SKIP();
-    }
-
-    if (std::is_same_v<Eigen::half, T> && test::DeviceTypeIs(test::kTpu)) {
-      GTEST_SKIP();
-    }
     XlaBuilder builder(TestName());
     std::vector<int64_t> input_dims = {1, 4, 4, 512};
     std::vector<int64_t> filter_dims = {3, 3, 1, 512};
@@ -842,14 +754,6 @@ class Convolve2D_256x4x4x512_3x3x1x512_Depthwise_Input_Batch_in_Lanes
     : public ConvolutionTest {
  public:
   void RunTest() {
-    if (std::is_same_v<int32_t, T> && test::DeviceTypeIs(test::kGpu)) {
-      // TODO(b/183565702): Support integer convs on GPU.
-      GTEST_SKIP();
-    }
-
-    if (std::is_same_v<Eigen::half, T> && test::DeviceTypeIs(test::kTpu)) {
-      GTEST_SKIP();
-    }
     XlaBuilder builder(TestName());
     std::vector<int64_t> input_dims = {256, 4, 4, 512};
     std::vector<int64_t> filter_dims = {3, 3, 1, 512};
@@ -910,14 +814,6 @@ class Convolve2D_256x4x4x512_3x3x1x512_Depthwise_Both_Batch_in_Lanes
     : public ConvolutionTest {
  public:
   void RunTest() {
-    if (std::is_same_v<int32_t, T> && test::DeviceTypeIs(test::kGpu)) {
-      // TODO(b/183565702): Support integer convs on GPU.
-      GTEST_SKIP();
-    }
-
-    if (std::is_same_v<Eigen::half, T> && test::DeviceTypeIs(test::kTpu)) {
-      GTEST_SKIP();
-    }
     XlaBuilder builder(TestName());
     std::vector<int64_t> input_dims = {256, 4, 4, 512};
     std::vector<int64_t> filter_dims = {3, 3, 1, 512};
@@ -980,14 +876,6 @@ class Convolve2D_1x4x4x5_3x3x1x5_Depthwise_Valid_Output_Batch_In_Lanes
     : public ConvolutionTest {
  public:
   void RunTest() {
-    if (std::is_same_v<int32_t, T> && test::DeviceTypeIs(test::kGpu)) {
-      // TODO(b/183565702): Support integer convs on GPU.
-      GTEST_SKIP();
-    }
-
-    if (std::is_same_v<Eigen::half, T> && test::DeviceTypeIs(test::kTpu)) {
-      GTEST_SKIP();
-    }
     XlaBuilder builder(TestName());
     std::vector<int64_t> input_dims = {1, 4, 4, 5};
     std::vector<int64_t> filter_dims = {3, 3, 1, 5};
@@ -1055,14 +943,6 @@ template <typename T>
 class Convolve2D_1x4x4x160_3x3x1x160_Depthwise_Valid : public ConvolutionTest {
  public:
   void RunTest() {
-    if (std::is_same_v<int32_t, T> && test::DeviceTypeIs(test::kGpu)) {
-      // TODO(b/183565702): Support integer convs on GPU.
-      GTEST_SKIP();
-    }
-
-    if (std::is_same_v<Eigen::half, T> && test::DeviceTypeIs(test::kTpu)) {
-      GTEST_SKIP();
-    }
     XlaBuilder builder(TestName());
     std::vector<int64_t> input_dims = {1, 4, 4, 160};
     std::vector<int64_t> filter_dims = {3, 3, 1, 160};
@@ -1121,14 +1001,6 @@ class Convolve2D_1x4x4x160_3x3x1x160_Depthwise_Input_Batch_In_Lanes
     : public ConvolutionTest {
  public:
   void RunTest() {
-    if (std::is_same_v<int32_t, T> && test::DeviceTypeIs(test::kGpu)) {
-      // TODO(b/183565702): Support integer convs on GPU.
-      GTEST_SKIP();
-    }
-
-    if (std::is_same_v<Eigen::half, T> && test::DeviceTypeIs(test::kTpu)) {
-      GTEST_SKIP();
-    }
     XlaBuilder builder(TestName());
     std::vector<int64_t> input_dims = {1, 4, 4, 160};
     std::vector<int64_t> filter_dims = {3, 3, 1, 160};
@@ -1191,14 +1063,6 @@ class Convolve2D_1x4x4x160_3x3x1x160_Depthwise_Both_Batch_In_Lanes
     : public ConvolutionTest {
  public:
   void RunTest() {
-    if (std::is_same_v<int32_t, T> && test::DeviceTypeIs(test::kGpu)) {
-      // TODO(b/183565702): Support integer convs on GPU.
-      GTEST_SKIP();
-    }
-
-    if (std::is_same_v<Eigen::half, T> && test::DeviceTypeIs(test::kTpu)) {
-      GTEST_SKIP();
-    }
     XlaBuilder builder(TestName());
     std::vector<int64_t> input_dims = {1, 4, 4, 160};
     std::vector<int64_t> filter_dims = {3, 3, 1, 160};
@@ -1261,14 +1125,6 @@ class Convolve2D_1x4x4x1024_3x3x1x1024_Depthwise_Valid
     : public ConvolutionTest {
  public:
   void RunTest() {
-    if (std::is_same_v<int32_t, T> && test::DeviceTypeIs(test::kGpu)) {
-      // TODO(b/183565702): Support integer convs on GPU.
-      GTEST_SKIP();
-    }
-
-    if (std::is_same_v<Eigen::half, T> && test::DeviceTypeIs(test::kTpu)) {
-      GTEST_SKIP();
-    }
     XlaBuilder builder(TestName());
     std::vector<int64_t> input_dims = {1, 4, 4, 1024};
     std::vector<int64_t> filter_dims = {3, 3, 1, 1024};
@@ -1326,14 +1182,6 @@ template <typename T>
 class Convolve2D_1x2x2x6_2x2x2x12_Grouped_Valid : public ConvolutionTest {
  public:
   void RunTest() {
-    if (std::is_same_v<int32_t, T> && test::DeviceTypeIs(test::kGpu)) {
-      // TODO(b/183565702): Support integer convs on GPU.
-      GTEST_SKIP();
-    }
-
-    if (std::is_same_v<Eigen::half, T> && test::DeviceTypeIs(test::kTpu)) {
-      GTEST_SKIP();
-    }
     XlaBuilder builder(TestName());
     std::vector<int64_t> input_dims = {1, 2, 2, 6};
     std::vector<int64_t> filter_dims = {2, 2, 2, 12};
@@ -1393,14 +1241,6 @@ template <typename T>
 class Convolve2D_1x2x2x1024_2x2x128x512_Grouped_Valid : public ConvolutionTest {
  public:
   void RunTest() {
-    if (std::is_same_v<int32_t, T> && test::DeviceTypeIs(test::kGpu)) {
-      // TODO(b/183565702): Support integer convs on GPU.
-      GTEST_SKIP();
-    }
-
-    if (std::is_same_v<Eigen::half, T> && test::DeviceTypeIs(test::kTpu)) {
-      GTEST_SKIP();
-    }
     XlaBuilder builder(TestName());
     std::vector<int64_t> input_dims = {1, 2, 2, 1024};
     std::vector<int64_t> filter_dims = {2, 2, 128, 512};
@@ -1459,14 +1299,6 @@ template <typename T>
 class Convolve2D_1x2x2x1024_2x2x128x8_Grouped_Valid : public ConvolutionTest {
  public:
   void RunTest() {
-    if (std::is_same_v<int32_t, T> && test::DeviceTypeIs(test::kGpu)) {
-      // TODO(b/183565702): Support integer convs on GPU.
-      GTEST_SKIP();
-    }
-
-    if (std::is_same_v<Eigen::half, T> && test::DeviceTypeIs(test::kTpu)) {
-      GTEST_SKIP();
-    }
     XlaBuilder builder(TestName());
     std::vector<int64_t> input_dims = {1, 2, 2, 1024};
     std::vector<int64_t> filter_dims = {2, 2, 128, 8};
@@ -1525,14 +1357,6 @@ template <typename T>
 class Convolve2D_1x2x2x12_2x2x3x4_Grouped_Valid : public ConvolutionTest {
  public:
   void RunTest() {
-    if (std::is_same_v<int32_t, T> && test::DeviceTypeIs(test::kGpu)) {
-      // TODO(b/183565702): Support integer convs on GPU.
-      GTEST_SKIP();
-    }
-
-    if (std::is_same_v<Eigen::half, T> && test::DeviceTypeIs(test::kTpu)) {
-      GTEST_SKIP();
-    }
     XlaBuilder builder(TestName());
     std::vector<int64_t> input_dims = {1, 2, 2, 12};
     std::vector<int64_t> filter_dims = {2, 2, 3, 4};
@@ -1591,14 +1415,6 @@ class Convolve2D_1x2x2x12_2x2x3x4_Grouped_Valid_Filter_OF_In_Sublanes
     : public ConvolutionTest {
  public:
   void RunTest() {
-    if (std::is_same_v<int32_t, T> && test::DeviceTypeIs(test::kGpu)) {
-      // TODO(b/183565702): Support integer convs on GPU.
-      GTEST_SKIP();
-    }
-
-    if (std::is_same_v<Eigen::half, T> && test::DeviceTypeIs(test::kTpu)) {
-      GTEST_SKIP();
-    }
     XlaBuilder builder(TestName());
     std::vector<int64_t> input_dims = {1, 2, 2, 12};
     std::vector<int64_t> filter_dims = {2, 2, 4, 3};
@@ -1660,14 +1476,6 @@ template <typename T>
 class Convolve2D_1x1x1x12_1x1x3x4_Grouped_Valid : public ConvolutionTest {
  public:
   void RunTest() {
-    if (std::is_same_v<int32_t, T> && test::DeviceTypeIs(test::kGpu)) {
-      // TODO(b/183565702): Support integer convs on GPU.
-      GTEST_SKIP();
-    }
-
-    if (std::is_same_v<Eigen::half, T> && test::DeviceTypeIs(test::kTpu)) {
-      GTEST_SKIP();
-    }
     XlaBuilder builder(TestName());
     std::vector<int64_t> input_dims = {1, 1, 1, 12};
     std::vector<int64_t> filter_dims = {1, 1, 3, 4};

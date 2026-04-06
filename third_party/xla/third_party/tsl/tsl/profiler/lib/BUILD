@@ -292,7 +292,7 @@ cc_library(
 )
 
 cc_library(
-    name = "nvtx_utils_external",
+    name = "nvtx_utils_libtpu",
     srcs = ["nvtx_utils_stub.cc"],
     hdrs = ["nvtx_utils.h"],
     visibility = ["//visibility:public"],
@@ -310,8 +310,7 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = select({
         # Remove this once we clean up all the CUDA specific deps.
-        "libtpu_on_gce": [":nvtx_utils_external"],
-        # Place holder for internal dependencies
+        "libtpu_on_gce": [":nvtx_utils_libtpu"],
         "//conditions:default": [":nvtx_utils_impl"],
     }),
 )
@@ -370,7 +369,6 @@ cc_library(
         "@local_xla//xla/backends/profiler/plugin:__pkg__",
         "//learning/brain/tfrc/executor/stream_executor:__pkg__",
         "@local_xla//xla/backends/profiler/cpu:__pkg__",
-        "@local_xla//xla/backends/profiler/subprocess:__pkg__",
     ]),
     deps = [
         ":profiler_interface",

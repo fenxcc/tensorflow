@@ -1183,7 +1183,7 @@ absl::Status CopyInsertion::AddCopiesToResolveInterference(
         // have been copied.
         absl::flat_hash_set<int64_t> copied_operands;
         for (const auto& operand_and_output_index :
-             alias_info_->GetInPlaceInputOutputPairs(
+             HloDataflowAnalysis::GetInPlaceInputOutputPairs(
                  // Input/output buffer aliasing analysis needs to be done
                  // directly with the wrapped instruction when the compiler sees
                  // an async box.
@@ -1297,7 +1297,8 @@ absl::Status CopyInsertion::AddSpecialCaseCopies(
       HloPosition position = value2->defining_position();
       for (const HloUse& use : value->GetUses()) {
         // We already handle the copy of pin custom-call operands and shouldn't
-        // add another copy here.
+        // add
+        // another copy here.
         if (!use.instruction->IsCustomCall(kPinCustomCallTarget) &&
             use.instruction == position.instruction) {
           VLOG(3) << "Same instruction: " << position.instruction->ToString();
@@ -1499,7 +1500,7 @@ absl::Status CopyInsertion::RemoveUnnecessaryCopies(
   return absl::OkStatus();
 }
 
-absl::StatusOr<bool> CopyInsertion::RunImpl(
+absl::StatusOr<bool> CopyInsertion::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   // Copy insertion is performed in three steps:

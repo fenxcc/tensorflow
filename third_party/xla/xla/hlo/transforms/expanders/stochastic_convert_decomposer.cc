@@ -139,7 +139,7 @@ absl::Status DecomposeStochasticConvert(HloComputation* comp,
                        PrimitiveType_Name(to_type));
 }
 
-absl::StatusOr<bool> StochasticConvertDecomposer::RunImpl(
+absl::StatusOr<bool> StochasticConvertDecomposer::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   bool changed = false;

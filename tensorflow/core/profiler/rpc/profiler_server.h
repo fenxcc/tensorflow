@@ -19,6 +19,11 @@ limitations under the License.
 #include "absl/base/macros.h"
 #include "xla/tsl/profiler/rpc/profiler_server.h"
 
+// TODO: b/323943471 - This macro should eventually be provided by Abseil.
+#ifndef ABSL_DEPRECATE_AND_INLINE
+#define ABSL_DEPRECATE_AND_INLINE()
+#endif
+
 namespace tensorflow {
 namespace profiler {
 

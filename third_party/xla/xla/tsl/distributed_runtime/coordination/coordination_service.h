@@ -26,7 +26,6 @@ limitations under the License.
 #include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
-#include "absl/functional/any_invocable.h"
 #include "absl/hash/hash.h"
 #include "absl/log/log.h"
 #include "absl/status/status.h"
@@ -101,9 +100,16 @@ class CoordinationService {
                       std::unique_ptr<CoordinationClientCache> client_cache);
 
   ~CoordinationService() {
-    absl::MutexLock lock(state_mu_);
+    absl::MutexLock lock(&state_mu_);
     Stop();
   }
+
+  // This function is invoked after each task's local devices are appended in a
+  // deterministic order during WaitForAllTasks(). This is useful to convert the
+  // result into another message, or set global device ids.
+  void SetDeviceAggregationFunction(std::function<tensorflow::DeviceInfo(
+                                        const tensorflow::DeviceInfo& devices)>
+                                        post_aggregate_device_fn);
 
   // Register a task to the service.
   // Possible service errors:
@@ -157,12 +163,9 @@ class CoordinationService {
   std::vector<tensorflow::CoordinatedTaskStateInfo> GetTaskState(
       const std::vector<tensorflow::CoordinatedTask>& task);
 
-  // Watches the state and the error status of the job.
-  using WatchJobStateCallback = absl::AnyInvocable<void(
-      std::vector<tensorflow::CoordinatedTaskStateInfo>, int64_t)>;
-  void WatchJobState(absl::string_view job_name,
-                     std::optional<int64_t> version_number,
-                     WatchJobStateCallback);
+  // Gets the state and the error status of the job.
+  std::vector<tensorflow::CoordinatedTaskStateInfo> GetJobState(
+      absl::string_view job);
 
   // Insert a configuration key-value in the coordination service.
   // For now, a key-value can only be inserted once and cannot be updated.
@@ -178,12 +181,6 @@ class CoordinationService {
   // Get a configuration key-value from the coordination service. If the key
   // does not exist, return NotFound error.
   absl::StatusOr<std::string> TryGetKeyValue(absl::string_view key);
-
-  // Increment a configuration key-value by the provided increment. If the key
-  // does not exist, the value is initialized to 0 and then incremented. The
-  // result after incrementing is returned.
-  absl::StatusOr<std::string> IncrementKeyValue(absl::string_view key,
-                                                int64_t increment);
 
   // Gets all values under a directory (key).
   // A value is considered to be in the directory if its key is prefixed with
@@ -392,16 +389,16 @@ class CoordinationService {
   }
   // Initializes a new barrier. Returns false if the barrier should fail
   // immediately.
-  absl::Status InitializeBarrier(
+  bool InitializeBarrier(
       BarrierState* barrier, absl::string_view barrier_id, int64_t counter,
       absl::Duration timeout, const tensorflow::CoordinatedTask& task,
-      const std::vector<tensorflow::CoordinatedTask>& participating_tasks)
-      ABSL_EXCLUSIVE_LOCKS_REQUIRED(state_mu_);
+      const std::vector<tensorflow::CoordinatedTask>& participating_tasks,
+      BarrierCallback done) ABSL_EXCLUSIVE_LOCKS_REQUIRED(state_mu_);
   // Initialize `BarrierState`'s tasks_at_barrier map.
-  absl::Status InitializeTasksAtBarrier(
+  bool InitializeTasksAtBarrier(
       BarrierState* barrier,
-      const std::vector<tensorflow::CoordinatedTask>& participating_tasks)
-      ABSL_EXCLUSIVE_LOCKS_REQUIRED(state_mu_);
+      const std::vector<tensorflow::CoordinatedTask>& participating_tasks,
+      BarrierCallback done) ABSL_EXCLUSIVE_LOCKS_REQUIRED(state_mu_);
   // Adds a callback to be called when the barrier is done.
   // If there is an existing callback for that task, it will be overwritten,
   // cancelling the previous callback.
@@ -609,17 +606,6 @@ class CoordinationService {
   static tensorflow::CoordinatedTaskStateInfo CreateTaskStateInfo(
       const tensorflow::CoordinatedTask& task, const TaskState& state);
 
-  // Gets the task states for the provided job.
-  std::vector<tensorflow::CoordinatedTaskStateInfo> GetJobState(
-      absl::string_view job) ABSL_EXCLUSIVE_LOCKS_REQUIRED(state_mu_);
-
-  // Notifies all callbacks registered via WatchJobState.
-  void NotifyWatchJobStateCallbacks() ABSL_EXCLUSIVE_LOCKS_REQUIRED(state_mu_);
-
-  // This method should be called whenever the cluster state changes in a way
-  // such that NotifyWatchJobStateCallbacks should be called.
-  void ClusterStateUpdated() ABSL_EXCLUSIVE_LOCKS_REQUIRED(state_mu_);
-
   std::unique_ptr<CoordinationClientCache> client_cache_;
   Env& env_;
   const IncarnationId service_incarnation_{random::New64()};
@@ -645,9 +631,6 @@ class CoordinationService {
   absl::Mutex state_mu_;
   absl::flat_hash_map<std::string, std::unique_ptr<TaskState>> cluster_state_
       ABSL_GUARDED_BY(state_mu_);
-  int64_t cluster_state_version_number_ ABSL_GUARDED_BY(state_mu_) = 0;
-  std::vector<std::tuple<std::string, WatchJobStateCallback>>
-      watch_job_state_callbacks_ ABSL_GUARDED_BY(state_mu_);
   tensorflow::DeviceInfo cluster_devices_ ABSL_GUARDED_BY(state_mu_);
 
   KeyValueStore store_;

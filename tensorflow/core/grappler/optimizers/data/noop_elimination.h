@@ -28,7 +28,7 @@ class NoOpElimination : public TFDataOptimizerBase {
   NoOpElimination() = default;
   ~NoOpElimination() override = default;
 
-  std::string name() const override { return "noop_elimination"; };
+  string name() const override { return "noop_elimination"; };
 
   bool UsesFunctionLibrary() const override { return false; }
 

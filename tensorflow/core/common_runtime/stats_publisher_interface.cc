@@ -43,8 +43,7 @@ class NoOpStatsPublisher : public StatsPublisherInterface {
                              function_records) override {}
 
   std::unique_ptr<ProfileHandler> GetProfileHandler(
-      uint64_t step, int64_t execution_count,
-      const RunOptions& ropts) override {
+      uint64 step, int64_t execution_count, const RunOptions& ropts) override {
     return nullptr;
   }
 
@@ -75,7 +74,7 @@ StatsPublisherFactory StatsPublisherInterface::GetStatsPublisherFactory() {
 }
 
 std::unique_ptr<StatsPublisherInterface> CreateNoOpStatsPublisher(
-    const std::string& session, const BuildGraphOptions& bopts,
+    const string& session, const BuildGraphOptions& bopts,
     const SessionOptions& sopts) {
   return std::unique_ptr<StatsPublisherInterface>(new NoOpStatsPublisher);
 }

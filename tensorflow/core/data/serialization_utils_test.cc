@@ -23,7 +23,6 @@ limitations under the License.
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/str_cat.h"
 #include "xla/tsl/platform/statusor.h"
 #include "xla/tsl/protobuf/error_codes.pb.h"
 #include "tensorflow/core/common_runtime/device_factory.h"
@@ -105,7 +104,7 @@ TEST(SerializationUtilsTest, VariantTensorDataRoundtrip) {
 
 TEST(SerializationUtilsTest, VariantTensorDataNonExistentKey) {
   VariantTensorData data;
-  absl::StrAppend(&data.metadata_, "key1", "@@");
+  strings::StrAppend(&data.metadata_, "key1", "@@");
   data.tensors_.push_back(Tensor(DT_INT64, {1}));
   std::vector<const VariantTensorData*> reader_data;
   reader_data.push_back(&data);
@@ -142,7 +141,7 @@ TEST(SerializationUtilsTest, VariantTensorDataRoundtripIteratorName) {
 
 TEST(SerializationUtilsTest, VariantTensorDataNonExistentKeyIteratorName) {
   VariantTensorData data;
-  absl::StrAppend(&data.metadata_, "key1", "@@");
+  strings::StrAppend(&data.metadata_, "key1", "@@");
   data.tensors_.push_back(Tensor(DT_INT64, {1}));
   std::vector<const VariantTensorData*> reader_data;
   reader_data.push_back(&data);

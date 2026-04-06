@@ -63,7 +63,7 @@ class HloInstructionSequence {
   // Adds the instruction to the end of the sequence.
   void push_back(HloInstruction* instruction) {
     instruction_sequence_.push_back(instruction);
-    id_sequence_.push_back(instruction->unique_id());
+    id_sequence_.push_back(instruction->unique_id_64_bits());
   }
 
   void reserve(int64_t size) {
@@ -75,10 +75,9 @@ class HloInstructionSequence {
   void remove_instruction(HloInstruction* instruction) {
     auto instruction_it = std::find(instruction_sequence_.begin(),
                                     instruction_sequence_.end(), instruction);
-    if (instruction_it != instruction_sequence_.end() &&
-        instruction->parent() != nullptr) {
+    if (instruction_it != instruction_sequence_.end()) {
       auto id_it = std::find(id_sequence_.begin(), id_sequence_.end(),
-                             instruction->unique_id());
+                             instruction->unique_id_64_bits());
       instruction_sequence_.erase(instruction_it);
       id_sequence_.erase(id_it);
     }
@@ -91,12 +90,13 @@ class HloInstructionSequence {
         std::find(instruction_sequence_.begin(), instruction_sequence_.end(),
                   old_instruction);
     auto id_it = std::find(id_sequence_.begin(), id_sequence_.end(),
-                           old_instruction->unique_id());
+                           old_instruction->unique_id_64_bits());
     CHECK(instruction_it != instruction_sequence_.end())
-        << "Do not find instruction id " << old_instruction->unique_id();
+        << "Do not find instruction id "
+        << old_instruction->unique_id_64_bits();
     CHECK(id_it != id_sequence_.end());
     *instruction_it = new_instruction;
-    *id_it = new_instruction->unique_id();
+    *id_it = new_instruction->unique_id_64_bits();
   }
 
   // Adds the instruction to the sequence at a specified index,
@@ -104,7 +104,8 @@ class HloInstructionSequence {
     CHECK(0 <= index && index < size()) << "Index out of bounds";
     instruction_sequence_.insert(instruction_sequence_.begin() + index,
                                  instruction);
-    id_sequence_.insert(id_sequence_.begin() + index, instruction->unique_id());
+    id_sequence_.insert(id_sequence_.begin() + index,
+                        instruction->unique_id_64_bits());
   }
 
   bool contains(const HloInstruction* inst) const {
@@ -128,16 +129,6 @@ class HloInstructionSequence {
   // Returns the unique IDs of the instructions in the sequence (in order).
   const std::vector<int64_t>& ids() const { return id_sequence_; }
 
-  // Updates the sequence of unique IDs to match the sequence of instructions.
-  // This is required when the HLO Module calls Cleanup(), which invalidates
-  // the old unique IDs.
-  void update_id_sequence() {
-    id_sequence_.clear();
-    for (HloInstruction* instruction : instruction_sequence_) {
-      id_sequence_.push_back(instruction->unique_id());
-    }
-  }
-
  private:
   // The sequence as HloInstructions.
   std::vector<HloInstruction*> instruction_sequence_;
@@ -157,16 +148,9 @@ class HloSchedule {
  public:
   explicit HloSchedule(const HloModule* module) : module_(module) {}
 
-  // (De)Serialize an HloSchedule to/from a HloScheduleProto. If
-  // proto_id_to_instruction_id_map is provided, it will be used to map the
-  // instruction ids in the proto to the instruction ids in the HloModule. This
-  // is necessary if the HloModuleProto was created with
-  // preserve_instruction_ids=false. The map must use full instruction unique
-  // ids as keys.
+  // (De)Serialize an HloSchedule to/from a HloScheduleProto.
   static absl::StatusOr<HloSchedule> CreateFromProto(
-      const HloModule* module, const HloScheduleProto& proto,
-      const absl::flat_hash_map<int64_t, absl::flat_hash_map<int64_t, int64_t>>*
-          computation_id_to_instruction_id_remap = nullptr);
+      const HloModule* module, const HloScheduleProto& proto);
   absl::StatusOr<HloScheduleProto> ToProto() const;
 
   // Returns a reference to the sequence for the given computation.
@@ -241,9 +225,6 @@ class HloSchedule {
   // non-fusion computations in the module and every dependency in the module is
   // satisfied in the schedule.
   absl::Status Verify() const;
-
-  // Verifies that the given schedule is valid for the given computation.
-  absl::Status Verify(const HloComputation* computation) const;
 
   std::string ToString() const;
 

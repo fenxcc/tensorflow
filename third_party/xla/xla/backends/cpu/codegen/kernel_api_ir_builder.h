@@ -124,13 +124,14 @@ class KernelApiIrBuilder {
   absl::StatusOr<KernelPrototype> EmitKernelPrototype(
       llvm::Module& module, const HloInstruction* instr,
       const BufferAssignment* buffer_assignment,
-      absl::string_view generating_emitter_name, absl::string_view suffix = "");
+      const std::string& generating_emitter_name,
+      absl::string_view suffix = "");
 
   absl::StatusOr<KernelPrototype> EmitKernelPrototype(
       llvm::Module& module, absl::string_view name,
       absl::Span<const KernelParameter> arguments,
       absl::Span<const KernelParameter> results,
-      absl::string_view module_memory_region_name);
+      const std::string& module_memory_region_name);
 
   // Get the kernel name for the given HLO instruction.
   // If generate_unique_c_style_kernel_entry_points is enabled, the name will

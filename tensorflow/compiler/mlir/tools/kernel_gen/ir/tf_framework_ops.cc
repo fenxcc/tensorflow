@@ -97,14 +97,14 @@ LogicalResult TFAllocOp::verify() {
 std::optional<Operation *> TFAllocOp::buildDealloc(OpBuilder &builder,
                                                    Value alloc) {
   auto funcop = alloc.getParentRegion()->getParentOfType<func::FuncOp>();
-  return TFDeallocOp::create(builder, alloc.getLoc(), funcop.getArgument(0),
-                             alloc)
+  return builder
+      .create<TFDeallocOp>(alloc.getLoc(), funcop.getArgument(0), alloc)
       .getOperation();
 }
 
 std::optional<Value> TFAllocOp::buildClone(OpBuilder &builder, Value alloc) {
   // TODO(herhut): We should have our own clone op if one of these survives.
-  return mlir::bufferization::CloneOp::create(builder, alloc.getLoc(), alloc)
+  return builder.create<mlir::bufferization::CloneOp>(alloc.getLoc(), alloc)
       .getResult();
 }
 
@@ -115,14 +115,14 @@ std::optional<Value> TFAllocOp::buildClone(OpBuilder &builder, Value alloc) {
 std::optional<Operation *> JITExecuteOp::buildDealloc(OpBuilder &builder,
                                                       Value alloc) {
   auto funcop = alloc.getParentRegion()->getParentOfType<func::FuncOp>();
-  return TFDeallocOp::create(builder, alloc.getLoc(), funcop.getArgument(0),
-                             alloc)
+  return builder
+      .create<TFDeallocOp>(alloc.getLoc(), funcop.getArgument(0), alloc)
       .getOperation();
 }
 
 std::optional<Value> JITExecuteOp::buildClone(OpBuilder &builder, Value alloc) {
   // TODO(herhut): We should have our own clone op if one of these survives.
-  return mlir::bufferization::CloneOp::create(builder, alloc.getLoc(), alloc)
+  return builder.create<mlir::bufferization::CloneOp>(alloc.getLoc(), alloc)
       .getResult();
 }
 

@@ -52,11 +52,11 @@ SourceCode CppGenerator::SourceFileContents() const {
   return GenerateOneFile(cpp::RendererContext::kSource);
 }
 
-std::string CppGenerator::HeaderFileName() const {
+string CppGenerator::HeaderFileName() const {
   return io::JoinPath(path_config_.output_path, cpp_config_.unit + "_ops.h");
 }
 
-std::string CppGenerator::SourceFileName() const {
+string CppGenerator::SourceFileName() const {
   return io::JoinPath(path_config_.output_path, cpp_config_.unit + "_ops.cc");
 }
 

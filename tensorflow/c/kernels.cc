@@ -25,7 +25,6 @@ limitations under the License.
 
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
-#include "absl/synchronization/notification.h"
 #include "tensorflow/c/c_api.h"
 #include "tensorflow/c/c_api_internal.h"
 #include "tensorflow/c/c_api_macros.h"
@@ -51,6 +50,7 @@ limitations under the License.
 #include "tensorflow/core/framework/resource_mgr.h"
 #include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/types.h"
+#include "tensorflow/core/platform/notification.h"
 #include "tensorflow/core/protobuf/config.pb.h"
 
 // Required for IS_MOBILE_PLATFORM definition
@@ -246,7 +246,7 @@ class CAsyncOpKernel : public AsyncOpKernel {
   }
 
   void Compute(OpKernelContext* ctx) override {
-    absl::Notification n;
+    Notification n;
     ComputeAsync(ctx, [&n]() { n.Notify(); });
     n.WaitForNotification();
   }

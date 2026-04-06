@@ -13,7 +13,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "absl/synchronization/notification.h"
 #include "tensorflow/core/framework/common_shape_fns.h"
 #include "tensorflow/core/framework/dataset.h"
 #include "tensorflow/core/framework/op.h"
@@ -142,7 +141,7 @@ class ChooseFastestDatasetOp : public DatasetOpKernel {
         const string& prefix) const override {
       return std::make_unique<ChooseFastestIterator>(
           ChooseFastestIterator::Params{
-              this, absl::StrCat(prefix, "::ChooseFastest")});
+              this, strings::StrCat(prefix, "::ChooseFastest")});
     }
 
     const DataTypeVector& output_dtypes() const override {
@@ -208,7 +207,7 @@ class ChooseFastestDatasetOp : public DatasetOpKernel {
         for (size_t i = 0, num_inputs = dataset()->inputs_.size();
              i < num_inputs; ++i) {
           TF_RETURN_IF_ERROR(dataset()->inputs_[i]->MakeIterator(
-              ctx, this, absl::StrCat(prefix(), "[", i, "]"),
+              ctx, this, strings::StrCat(prefix(), "[", i, "]"),
               &input_impls_[i]));
         }
         return absl::OkStatus();
@@ -279,7 +278,7 @@ class ChooseFastestDatasetOp : public DatasetOpKernel {
             reader->ReadScalar(full_name("fastest_index"), &fastest_index_));
         if (fastest_index_ != -1) {
           TF_RETURN_IF_ERROR(dataset()->inputs_[fastest_index_]->MakeIterator(
-              ctx, this, absl::StrCat(prefix(), "[", fastest_index_, "]"),
+              ctx, this, strings::StrCat(prefix(), "[", fastest_index_, "]"),
               &fastest_input_impl_));
           TF_RETURN_IF_ERROR(RestoreInput(ctx, reader, fastest_input_impl_));
         } else if (reader->Contains(full_name("input_impls_empty"))) {
@@ -295,7 +294,7 @@ class ChooseFastestDatasetOp : public DatasetOpKernel {
 
      private:
       struct InvocationResult {
-        absl::Notification notification;
+        Notification notification;
         absl::Status status;
         bool end_of_sequence;
         std::vector<Tensor> out_tensors;
@@ -322,7 +321,7 @@ class ChooseFastestDatasetOp : public DatasetOpKernel {
              i < num_inputs; ++i) {
           threads[i].result = std::make_unique<InvocationResult>();
           threads[i].thread = ctx->StartThread(
-              absl::StrCat("tf_data_merge_", i),
+              strings::StrCat("tf_data_merge_", i),
               std::bind(&ChooseFastestIterator::RunnerThread, this, ctx,
                         threads[i].result.get(), i));
         }

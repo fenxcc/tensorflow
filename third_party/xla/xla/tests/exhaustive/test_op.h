@@ -171,15 +171,22 @@ class TestOp {
   void Run() && {
     typename Traits::ErrorSpecGen error_spec_gen;
     if (test_->Platform().IsCpu()) {
-      if (test_->Platform().IsIntelCpu()) {
-        error_spec_gen = PickFirstErrorSpecGenPresent<Traits>(
-            {cpu_x86_error_spec_gen_, cpu_error_spec_gen_, error_spec_gen_});
-      } else if (test_->Platform().IsArmCpu()) {
-        error_spec_gen = PickFirstErrorSpecGenPresent<Traits>(
-            {cpu_arm_error_spec_gen_, cpu_error_spec_gen_, error_spec_gen_});
-      } else {
-        error_spec_gen = PickFirstErrorSpecGenPresent<Traits>(
-            {cpu_error_spec_gen_, error_spec_gen_});
+      switch (std::get<Platform::CpuValue>(test_->Platform().value())) {
+        case Platform::CpuValue::X86_64: {
+          error_spec_gen = PickFirstErrorSpecGenPresent<Traits>(
+              {cpu_x86_error_spec_gen_, cpu_error_spec_gen_, error_spec_gen_});
+          break;
+        }
+        case Platform::CpuValue::AARCH64: {
+          error_spec_gen = PickFirstErrorSpecGenPresent<Traits>(
+              {cpu_arm_error_spec_gen_, cpu_error_spec_gen_, error_spec_gen_});
+          break;
+        }
+        default: {
+          error_spec_gen = PickFirstErrorSpecGenPresent<Traits>(
+              {cpu_error_spec_gen_, error_spec_gen_});
+          break;
+        }
       }
     } else if (test_->Platform().IsGpu()) {
       if (test_->Platform().IsNvidiaGpu()) {

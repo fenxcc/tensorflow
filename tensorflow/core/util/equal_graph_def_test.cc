@@ -72,7 +72,7 @@ class EqualGraphDefTest : public ::testing::Test {
 
   GraphDefBuilder e_;
   GraphDefBuilder a_;
-  std::string diff_;
+  string diff_;
 };
 
 TEST_F(EqualGraphDefTest, Match) {

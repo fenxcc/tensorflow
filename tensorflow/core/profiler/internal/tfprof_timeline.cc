@@ -126,7 +126,7 @@ void ChromeTraceFormatter::EmitCounter(
       bytes -= it->first;
     }
   }
-  args2["Not Displayed"] =
+  args2[std::string("Not Displayed")] =
       Json::Value(absl::StrFormat("%.2f MB", bytes / 1000000.0));
   event2["args"] = args2;
   events_.push_back(event2);

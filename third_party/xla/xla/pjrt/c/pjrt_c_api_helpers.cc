@@ -37,7 +37,6 @@ limitations under the License.
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "stablehlo/dialect/Version.h"
-#include "xla/future.h"
 #include "xla/layout.h"
 #include "xla/pjrt/c/pjrt_c_api.h"
 #include "xla/pjrt/c/pjrt_c_api_layouts_extension.h"
@@ -48,6 +47,7 @@ limitations under the License.
 #include "xla/pjrt/pjrt_common.h"
 #include "xla/pjrt/pjrt_device_description.h"
 #include "xla/pjrt/pjrt_executable.h"
+#include "xla/pjrt/pjrt_future.h"
 #include "xla/primitive_util.h"
 #include "xla/shape_util.h"
 #include "xla/tsl/platform/errors.h"
@@ -187,7 +187,6 @@ absl::StatusCode PjrtErrorToStatusCode(const PJRT_Error* error,
 
 absl::StatusCode PjrtErrorCodeToStatusCode(PJRT_Error_Code code) {
   switch (code) {
-    case PJRT_Error_Code_OK:
     case PJRT_Error_Code_CANCELLED:
     case PJRT_Error_Code_UNKNOWN:
     case PJRT_Error_Code_INVALID_ARGUMENT:
@@ -210,7 +209,6 @@ absl::StatusCode PjrtErrorCodeToStatusCode(PJRT_Error_Code code) {
 
 PJRT_Error_Code StatusCodeToPjrtErrorCode(absl::StatusCode code) {
   switch (static_cast<tsl::error::Code>(code)) {
-    case tsl::error::OK:
     case tsl::error::CANCELLED:
     case tsl::error::UNKNOWN:
     case tsl::error::INVALID_ARGUMENT:
@@ -228,6 +226,9 @@ PJRT_Error_Code StatusCodeToPjrtErrorCode(absl::StatusCode code) {
     case tsl::error::UNAVAILABLE:
     case tsl::error::DATA_LOSS:
       return static_cast<PJRT_Error_Code>(code);
+    case tsl::error::OK:
+      CHECK(false) << "Status::OK() cannot be converted to PJRT_Error code, "
+                      "use nullptr instead";
     case tensorflow::error::
         DO_NOT_USE_RESERVED_FOR_FUTURE_EXPANSION_USE_DEFAULT_IN_SWITCH_INSTEAD_:
       CHECK(false) << "got DO_NOT_USE_RESERVED_FOR_FUTURE_EXPANSION_"
@@ -458,22 +459,22 @@ xla::PjRtClient::HostBufferSemantics ConvertFromPjRtHostBufferSemantics(
   }
 }
 
-xla::Future<> ConvertCEventToCppFuture(PJRT_Event* c_event,
-                                       const PJRT_Api* c_api) {
+xla::PjRtFuture<> ConvertCEventToCppFuture(PJRT_Event* c_event,
+                                           const PJRT_Api* c_api) {
+  using xla::PjRtFuture;
   PJRT_Event_OnReady_Args event_onready_args;
   event_onready_args.struct_size = PJRT_Event_OnReady_Args_STRUCT_SIZE;
   event_onready_args.extension_start = nullptr;
   event_onready_args.event = c_event;
 
-  auto [promise, future] = xla::Future<>::MakePromise();
+  PjRtFuture<>::Promise promise = PjRtFuture<>::CreatePromise();
   event_onready_args.user_arg = new std::function<void(PJRT_Error*)>(
-      [promise = std::move(promise).ToShared(), c_event,
-       c_api](PJRT_Error* error) mutable {
+      [promise, c_event, c_api](PJRT_Error* error) mutable {
         if (error != nullptr) {
-          promise->Set(::pjrt::PjrtErrorToStatus(error, c_api));
+          promise.Set(::pjrt::PjrtErrorToStatus(error, c_api));
           ::pjrt::MakeErrorDeleter(c_api)(error);
         } else {
-          promise->Set();
+          promise.Set();
         }
         ::pjrt::MakeEventDeleter(c_api)(c_event);
       });
@@ -486,9 +487,9 @@ xla::Future<> ConvertCEventToCppFuture(PJRT_Event* c_event,
 
   PJRT_Error* error = c_api->PJRT_Event_OnReady(&event_onready_args);
   if (error != nullptr) {
-    return xla::Future<>(::pjrt::PjrtErrorToStatus(error, c_api));
+    return PjRtFuture<>(::pjrt::PjrtErrorToStatus(error, c_api));
   }
-  return std::move(future);
+  return PjRtFuture<>(std::move(promise));
 }
 
 static absl::StatusOr<PJRT_NamedValue> ConvertToPjRtNamedValue(
@@ -523,8 +524,8 @@ static absl::StatusOr<PJRT_NamedValue> ConvertToPjRtNamedValue(
     c_value.bool_value = std::get<bool>(value);
     c_value.value_size = 1;
   } else {
-    return absl::InvalidArgumentError(absl::StrCat(
-        "Unexpected PjRtValueType: '", value.index(), " with name: ", name));
+    return tsl::errors::InvalidArgument("Unexpected PjRtValueType: '",
+                                        value.index(), " with name: ", name);
   }
 
   return c_value;
@@ -601,8 +602,8 @@ static absl::StatusOr<PJRT_NamedValue_Type> GetPjrtNamedValueType(
   if (std::holds_alternative<bool>(cpp_value)) {
     return PJRT_NamedValue_Type::PJRT_NamedValue_kBool;
   }
-  return absl::InvalidArgumentError(
-      absl::StrCat("Unexpected PjRtValueType with index", cpp_value.index()));
+  return tsl::errors::InvalidArgument("Unexpected PjRtValueType with index",
+                                      cpp_value.index());
 }
 
 absl::Status ValidateCreateOptions(
@@ -612,16 +613,16 @@ absl::Status ValidateCreateOptions(
   for (const auto& [name, value] : value_map) {
     auto it = expected_name_and_types.find(name);
     if (it == expected_name_and_types.end()) {
-      return absl::InvalidArgumentError(absl::StrCat(
-          "Unexpected option name passed to PJRT_Client_Create: ", name));
+      return tsl::errors::InvalidArgument(
+          "Unexpected option name passed to PJRT_Client_Create: ", name);
     }
     TF_ASSIGN_OR_RETURN(PJRT_NamedValue_Type type,
                         GetPjrtNamedValueType(value));
     if (type != it->second) {
-      return absl::InvalidArgumentError(
-          absl::StrCat("Option passed to PJRT_Client_Create with name ", name,
-                       " has type index ", value.index(),
-                       " but expected type index is ", it->second));
+      return tsl::errors::InvalidArgument(
+          "Option passed to PJRT_Client_Create with name ", name,
+          " has type index ", value.index(), " but expected type index is ",
+          it->second);
     }
   }
   return absl::OkStatus();
@@ -686,7 +687,7 @@ absl::Status ActualStructSizeIsGreaterOrEqual(absl::string_view struct_name,
                                               size_t expected_size,
                                               size_t actual_size) {
   if (actual_size < expected_size) {
-    return absl::InvalidArgumentError(
+    return tsl::errors::InvalidArgument(
         StructSizeErrorMsg(struct_name, expected_size, actual_size));
   }
   if (actual_size > expected_size) {

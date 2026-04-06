@@ -41,8 +41,7 @@ absl::Status ValidateConfig(const tf2xla::Config& config);
 // feeds).
 absl::Status AddPlaceholdersForFeeds(
     const tf2xla::Config& config, const OpRegistryInterface* op_registry,
-    std::unordered_map<std::string, std::string>* feed_remapping,
-    GraphDef* graph_def);
+    std::unordered_map<string, string>* feed_remapping, GraphDef* graph_def);
 
 // Returns in <out> a copy of <in>, pruned to only include fetches from
 // <config>.
@@ -50,7 +49,7 @@ absl::Status PruneGraphDefInto(const tf2xla::Config& config, const GraphDef& in,
                                GraphDef* out);
 
 // Returns node:port for the given <id>.
-std::string TensorIdToString(const tf2xla::TensorId& id);
+string TensorIdToString(const tf2xla::TensorId& id);
 
 // Updates the sharding of <n> based on the sharding of its neighbors.
 // If <out_edges> is true, outgoing edges from <n> are considered; else incoming
@@ -62,7 +61,7 @@ void AddDtypeToKernelDefConstraint(absl::string_view name, DataType dtype,
                                    KernelDef* kdef);
 
 // Returns the next random seed to use for seeding xla rng.
-uint32_t GetXLARandomSeed();
+uint32 GetXLARandomSeed();
 
 // Indicates how a FunctionDef is associated with a graph node (e.g. the node is
 // a function call, or the node has function attrs).
@@ -75,14 +74,14 @@ class AssociatedFunctionInfo {
   };
 
   // The function is an attr of the node.
-  static AssociatedFunctionInfo FunctionAttr(const std::string& func_name,
+  static AssociatedFunctionInfo FunctionAttr(const string& func_name,
                                              const AttrValueMap& attrs,
-                                             const std::string& attr_name) {
+                                             const string& attr_name) {
     return AssociatedFunctionInfo(kFunctionAttr, func_name, attrs, attr_name);
   }
 
   // The node is a function call.
-  static AssociatedFunctionInfo FunctionCall(const std::string& func_name,
+  static AssociatedFunctionInfo FunctionCall(const string& func_name,
                                              const AttrValueMap& attrs) {
     // attr_name will not be used in this case.
     return AssociatedFunctionInfo(kFunctionCallNode, func_name, attrs,
@@ -90,7 +89,7 @@ class AssociatedFunctionInfo {
   }
 
   // The node is a SymbolicGradient op.
-  static AssociatedFunctionInfo SymbolicGradient(const std::string& func_name,
+  static AssociatedFunctionInfo SymbolicGradient(const string& func_name,
                                                  const AttrValueMap& attrs) {
     // attr_name will not be used in this case.
     return AssociatedFunctionInfo(kSymbolicGradient, func_name, attrs,
@@ -99,17 +98,15 @@ class AssociatedFunctionInfo {
 
   AssociatedFunctionType type() const { return type_; }
 
-  const std::string& func_name() const { return func_name_; }
+  const string& func_name() const { return func_name_; }
 
-  const std::string& attr_name() const { return attr_name_; }
+  const string& attr_name() const { return attr_name_; }
 
   const AttrValueMap& attrs() const { return attrs_; }
 
  private:
-  AssociatedFunctionInfo(AssociatedFunctionType type,
-                         const std::string& func_name,
-                         const AttrValueMap& attrs,
-                         const std::string& attr_name)
+  AssociatedFunctionInfo(AssociatedFunctionType type, const string& func_name,
+                         const AttrValueMap& attrs, const string& attr_name)
       : type_(type),
         func_name_(func_name),
         attrs_(attrs),
@@ -117,11 +114,11 @@ class AssociatedFunctionInfo {
 
   // Available for all instances.
   AssociatedFunctionType type_;
-  std::string func_name_;
+  string func_name_;
   AttrValueMap attrs_;
 
   // Only available if the function is defined in an attr.
-  std::string attr_name_;
+  string attr_name_;
 };
 
 // Returns if the NodeDef has associated function.
@@ -145,7 +142,7 @@ std::vector<AssociatedFunctionInfo> GetAssociatedFunctions(
 absl::Status RewriteAssociatedFunction(
     Graph* graph, Node* node, FunctionLibraryDefinition* fld,
     const AssociatedFunctionInfo& associated_function,
-    const std::string& rewritten_function_name);
+    const string& rewritten_function_name);
 
 // Class to act as cache for FunctionLibraryRuntime::Handle objects.
 class CachedFunctionHandles {
@@ -155,7 +152,7 @@ class CachedFunctionHandles {
   // Populates `handle` for requested function and attributes. If we have
   // instantiated the function with the same attributes before, `handle` will be
   // cached handle; otherwise instantiate the function and populate `handle`.
-  absl::Status GetOrInstantiate(const std::string& func_name, AttrSlice attrs,
+  absl::Status GetOrInstantiate(const string& func_name, AttrSlice attrs,
                                 FunctionLibraryRuntime::Handle* handle);
 
   // Releases all handles in the cache. Returns first non-OK status if any;
@@ -166,7 +163,7 @@ class CachedFunctionHandles {
 
  private:
   FunctionLibraryRuntime* flr_;
-  std::map<std::string, FunctionLibraryRuntime::Handle> handles_;
+  std::map<string, FunctionLibraryRuntime::Handle> handles_;
 
   CachedFunctionHandles(const CachedFunctionHandles&) = delete;
   void operator=(const CachedFunctionHandles&) = delete;
@@ -182,9 +179,9 @@ struct OutEdgeInfo {
 absl::StatusOr<Node*> ReplaceNode(Graph* g, Node* n, const NodeDef& node_def);
 
 // Helper function that builds an Identity node.
-absl::StatusOr<Node*> BuildIdentityNode(
-    Graph* graph, const std::string& node_name, DataType dtype,
-    const Node* input, std::optional<std::string> requested_device);
+absl::StatusOr<Node*> BuildIdentityNode(Graph* graph, const string& node_name,
+                                        DataType dtype, const Node* input,
+                                        std::optional<string> requested_device);
 
 // For "If"/"While" nodes, if some of their inputs are Const nodes, rewrite
 // body functions to use the Const nodes instead of original _Arg nodes.

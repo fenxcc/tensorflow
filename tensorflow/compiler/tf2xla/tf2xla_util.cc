@@ -58,9 +58,8 @@ absl::Status ValidateTensorId(const tf2xla::TensorId& id) {
   return absl::OkStatus();
 }
 
-absl::Status CheckNameDuplicates(const std::string& kind,
-                                 const std::string& name,
-                                 std::set<std::string>* names) {
+absl::Status CheckNameDuplicates(const string& kind, const string& name,
+                                 std::set<string>* names) {
   if (!name.empty()) {
     if (!names->insert(name).second) {
       return errors::InvalidArgument("duplicate ", kind, " name: ", name);
@@ -69,12 +68,12 @@ absl::Status CheckNameDuplicates(const std::string& kind,
   return absl::OkStatus();
 }
 
-absl::Status CheckFeedFetchNameConflicts(const std::string& kind,
-                                         const std::set<std::string>& names) {
+absl::Status CheckFeedFetchNameConflicts(const string& kind,
+                                         const std::set<string>& names) {
   // We don't allow the feeds or fetches to contain both "foo" and "foo_data",
   // since that will cause a collision in codegen symbols.
-  for (const std::string& name : names) {
-    const std::string name_data(name + "_data");
+  for (const string& name : names) {
+    const string name_data(name + "_data");
     if (names.find(name_data) != names.end()) {
       return errors::InvalidArgument("conflicting ", kind, " name: ", name,
                                      " and ", name_data);
@@ -228,7 +227,7 @@ absl::Status ReplaceRetvalInputWithArg(
 // the function to replace _Arg nodes in `const_input_index_to_node` with Const
 // inputs.
 absl::Status PropagateConstIntoFuncAttr(
-    Node* n, const std::string& attr_name,
+    Node* n, const string& attr_name,
     const absl::flat_hash_map<int, const Node*>& const_input_index_to_node,
     const FunctionLibraryDefinition* lookup_fld, FunctionLibraryDefinition* fld,
     bool passthrough_arg_to_retval = false) {
@@ -256,7 +255,7 @@ absl::Status PropagateConstIntoFuncAttr(
 
   // Save rewritten function.
   FunctionDef replace_fdef;
-  std::string new_func_name =
+  string new_func_name =
       fld->UniqueFunctionName(absl::StrCat(func_attr.name(), "_const_"));
   const StackTracesMap* stack_traces =
       lookup_fld->GetStackTraces(func_attr.name());
@@ -302,7 +301,7 @@ absl::Status PropagateConstIntoIfNode(
   // Rewrite "then_branch" and "else_branch" function, replace usage of those
   // _Arg nodes with corresponding const node.
   for (const auto& attr_name :
-       std::vector<std::string>{"then_branch", "else_branch"}) {
+       std::vector<string>{"then_branch", "else_branch"}) {
     TF_RETURN_IF_ERROR(PropagateConstIntoFuncAttr(
         if_node, attr_name, const_input_index_to_node, lookup_fld, fld));
   }
@@ -310,14 +309,13 @@ absl::Status PropagateConstIntoIfNode(
   return absl::OkStatus();
 }
 
-using GraphCache =
-    absl::flat_hash_map<std::string, std::unique_ptr<FunctionBody>>;
+using GraphCache = absl::flat_hash_map<string, std::unique_ptr<FunctionBody>>;
 
 absl::StatusOr<FunctionBody*> FindOrInsert(
     GraphCache* cache, const NameAttrList& body_attr,
     const FunctionLibraryDefinition* lookup_fld,
     const FunctionLibraryDefinition* fallback_fld) {
-  const std::string name = body_attr.name();
+  const string name = body_attr.name();
   std::unique_ptr<FunctionBody>& value = (*cache)[name];
   if (!value) {
     const FunctionDef* body_func = lookup_fld->Find(name);
@@ -415,7 +413,7 @@ absl::Status PropagateConstIntoAndAroundWhileNode(
   absl::flat_hash_map<int, Node*> const_input_index_to_mutable_node;
   NameAttrList body_attr;
   TF_RETURN_IF_ERROR(GetNodeAttr(while_node->def(), "body", &body_attr));
-  const std::string fn_name = body_attr.name();
+  const string fn_name = body_attr.name();
   const FunctionDef* body_func = lookup_fld->Find(fn_name);
   if (!body_func) {
     return errors::Internal("Propagate: Cannot find body function ", fn_name,
@@ -463,7 +461,7 @@ absl::Status PropagateConstIntoAndAroundWhileNode(
 
   // Rewrite "cond" and "body" function, replace usage of those _Arg nodes with
   // corresponding const node.
-  for (const auto& attr_name : std::vector<std::string>{"cond", "body"}) {
+  for (const auto& attr_name : std::vector<string>{"cond", "body"}) {
     TF_RETURN_IF_ERROR(PropagateConstIntoFuncAttr(
         while_node, attr_name, const_input_index_to_node, lookup_fld, fld,
         /*passthrough_arg_to_retval=*/attr_name == "body"));
@@ -489,7 +487,7 @@ absl::StatusOr<bool> IsLoopInvariant(
 }
 
 absl::Status ValidateConfig(const tf2xla::Config& config) {
-  std::set<std::string> names;
+  std::set<string> names;
   for (const tf2xla::Feed& feed : config.feed()) {
     TF_RETURN_IF_ERROR(ValidateTensorId(feed.id()));
     TF_RETURN_IF_ERROR(TensorShape::IsValidShape(feed.shape()));
@@ -510,20 +508,19 @@ absl::Status ValidateConfig(const tf2xla::Config& config) {
 
 absl::Status AddPlaceholdersForFeeds(
     const tf2xla::Config& config, const OpRegistryInterface* op_registry,
-    std::unordered_map<std::string, std::string>* feed_remapping,
-    GraphDef* graph_def) {
+    std::unordered_map<string, string>* feed_remapping, GraphDef* graph_def) {
   struct PlaceholderInfo {
     const tf2xla::Feed* feed = nullptr;  // point to Feed in <config>.
-    std::string placeholder_name;
+    string placeholder_name;
     DataType data_type = DT_INVALID;
   };
 
   // Put each fed tensor into a map by name:port. A map is used for determinism
   // when creating placeholders (genrules want deterministic output).
-  std::map<std::string, PlaceholderInfo> placeholder_info;
+  std::map<string, PlaceholderInfo> placeholder_info;
   for (int i = 0; i < config.feed_size(); ++i) {
     const tf2xla::Feed* feed = &config.feed(i);
-    const std::string name_port = TensorIdToString(feed->id());
+    const string name_port = TensorIdToString(feed->id());
     PlaceholderInfo& info = placeholder_info[name_port];
     info.feed = feed;
     info.placeholder_name = absl::StrCat("aot_feed_", feed->id().output_index(),
@@ -532,7 +529,7 @@ absl::Status AddPlaceholdersForFeeds(
   }
 
   // Verify node exists and determine data type.
-  std::unordered_map<std::string, const NodeDef*> name_to_node;
+  std::unordered_map<string, const NodeDef*> name_to_node;
   for (int i = 0; i < graph_def->node_size(); ++i) {
     name_to_node[graph_def->node(i).name()] = &graph_def->node(i);
   }
@@ -612,25 +609,25 @@ absl::Status PruneGraphDefInto(const tf2xla::Config& config, const GraphDef& in,
   out->clear_node();
 
   // Tensors needed for feeding.
-  std::set<std::pair<std::string, int>> feed_tensors;
+  std::set<std::pair<string, int>> feed_tensors;
   for (const tf2xla::Feed& feed : config.feed()) {
     feed_tensors.insert(
         std::make_pair(feed.id().node_name(), feed.id().output_index()));
   }
 
   // Maps node name to reachability.
-  std::unordered_map<std::string, std::pair<bool, const NodeDef*>> node_by_name;
+  std::unordered_map<string, std::pair<bool, const NodeDef*>> node_by_name;
   for (const NodeDef& node : in.node()) {
     node_by_name[node.name()] = std::pair<bool, const NodeDef*>(false, &node);
   }
 
   // Traverse.
-  std::queue<std::string> name_queue;
+  std::queue<string> name_queue;
   for (int i = 0; i < config.fetch_size(); ++i) {
     name_queue.push(config.fetch(i).id().node_name());
   }
   while (!name_queue.empty()) {
-    const std::string name = name_queue.front();
+    const string name = name_queue.front();
     name_queue.pop();
 
     auto find_it = node_by_name.find(name);
@@ -645,9 +642,9 @@ absl::Status PruneGraphDefInto(const tf2xla::Config& config, const GraphDef& in,
     map_entry.first = true;
 
     // Push input nodes of the currently visited node to name_queue.
-    for (const std::string& in_edge : map_entry.second->input()) {
+    for (const string& in_edge : map_entry.second->input()) {
       auto id = ParseTensorName(in_edge);
-      const std::string node_name = std::string(id.first);
+      const string node_name = string(id.first);
       if (feed_tensors.find(std::make_pair(node_name, id.second)) ==
           feed_tensors.end()) {
         name_queue.push(node_name);
@@ -671,7 +668,7 @@ absl::Status PruneGraphDefInto(const tf2xla::Config& config, const GraphDef& in,
   return absl::OkStatus();
 }
 
-std::string TensorIdToString(const tf2xla::TensorId& id) {
+string TensorIdToString(const tf2xla::TensorId& id) {
   return absl::StrCat(id.node_name(), ":", id.output_index());
 }
 
@@ -685,7 +682,7 @@ absl::Status SetNodeShardingFromNeighbors(Node* n, bool out_edges) {
         std::optional<xla::OpSharding> sharding,
         ParseShardingFromDevice(
             *possible_match,
-            /*num_cores_per_replica=*/std::numeric_limits<int32_t>::max(),
+            /*num_cores_per_replica=*/std::numeric_limits<int32>::max(),
             /*add_metadata=*/false));
     if (sharding && sharding->type() == xla::OpSharding::MAXIMAL) {
       const int core_annotation = sharding.value().tile_assignment_devices(0);
@@ -712,7 +709,7 @@ void AddDtypeToKernelDefConstraint(absl::string_view name, DataType dtype,
 }
 
 namespace {
-uint32_t InitialRandomSeed() {
+uint32 InitialRandomSeed() {
   // Support plumbing the TF seed through to XLA is being worked on.
   // If a user wants deterministic behavior, their best option
   // is to start with a known checkpoint. This also handles issues when
@@ -727,13 +724,13 @@ uint32_t InitialRandomSeed() {
 }
 }  // namespace
 
-uint32_t GetXLARandomSeed() {
+uint32 GetXLARandomSeed() {
   // We initialize counter with an odd number and increment it by two
   // everytime. This ensures that it will never be zero, even
   // after an overflow. When seeded with zero, some XLA backends
   // can return all zeros instead of random numbers.
-  static std::atomic<uint32_t> counter(InitialRandomSeed());
-  uint32_t seed = counter.fetch_add(2);
+  static std::atomic<uint32> counter(InitialRandomSeed());
+  uint32 seed = counter.fetch_add(2);
   std::srand(seed);
   return std::rand() | 1;
 }
@@ -769,7 +766,7 @@ bool HasAssociatedFunction(const NodeDef& node_def,
 std::vector<AssociatedFunctionInfo> GetAssociatedFunctions(
     const Node& node, const FunctionLibraryDefinition* fld) {
   std::vector<AssociatedFunctionInfo> results;
-  const std::string& op = node.type_string();
+  const string& op = node.type_string();
   if (fld->Contains(op)) {
     // This is a function call node.
     AttrValueMap attrs(node.attrs().begin(), node.attrs().end());
@@ -798,7 +795,7 @@ std::vector<AssociatedFunctionInfo> GetAssociatedFunctions(
 absl::Status RewriteAssociatedFunction(
     Graph* graph, Node* node, FunctionLibraryDefinition* fld,
     const AssociatedFunctionInfo& associated_function,
-    const std::string& rewritten_function_name) {
+    const string& rewritten_function_name) {
   switch (associated_function.type()) {
     case AssociatedFunctionInfo::kFunctionCallNode: {
       // Change this node to call the new function.
@@ -837,7 +834,7 @@ absl::Status RewriteAssociatedFunction(
       GradientDef gradient_def;
       gradient_def.set_function_name(func.name());
       gradient_def.set_gradient_func(rewritten_function_name);
-      std::string original_grad_func = fld->FindGradient(func.name());
+      string original_grad_func = fld->FindGradient(func.name());
       if (original_grad_func.empty()) {
         TF_RETURN_IF_ERROR(fld->AddGradientDef(gradient_def));
       } else if (original_grad_func != rewritten_function_name) {
@@ -866,9 +863,9 @@ absl::Status RewriteAssociatedFunction(
 }
 
 absl::Status CachedFunctionHandles::GetOrInstantiate(
-    const std::string& func_name, AttrSlice attrs,
+    const string& func_name, AttrSlice attrs,
     FunctionLibraryRuntime::Handle* handle) {
-  std::string canonicalized_name = Canonicalize(func_name, attrs);
+  string canonicalized_name = Canonicalize(func_name, attrs);
   auto iter = handles_.find(canonicalized_name);
   if (iter != handles_.end()) {
     *handle = iter->second;
@@ -922,8 +919,8 @@ absl::StatusOr<Node*> ReplaceNode(Graph* g, Node* n, const NodeDef& node_def) {
 }
 
 absl::StatusOr<Node*> BuildIdentityNode(
-    Graph* graph, const std::string& node_name, DataType dtype,
-    const Node* input, std::optional<std::string> requested_device) {
+    Graph* graph, const string& node_name, DataType dtype, const Node* input,
+    std::optional<string> requested_device) {
   // Create identity node.
   NodeDef ndef;
   ndef.set_name(node_name);
@@ -978,7 +975,7 @@ absl::Status PruneUnreachableFunctionsFromGraph(
   g.ToGraphDef(&graph_def);
   FunctionLibraryDefinition reachable_functions =
       fld->ReachableDefinitions(graph_def);
-  for (const std::string& func_name : fld->ListFunctionNames()) {
+  for (const string& func_name : fld->ListFunctionNames()) {
     if (!reachable_functions.Find(func_name)) {
       TF_RETURN_IF_ERROR(fld->RemoveFunction(func_name));
     }
@@ -1109,7 +1106,7 @@ absl::Status RewriteTensorListWithConstElement(Graph* g,
 
     // Add rewritten backward While body function.
     FunctionDef new_fdef;
-    std::string new_name = fld->UniqueFunctionName(
+    string new_name = fld->UniqueFunctionName(
         absl::StrCat(bwd_body_attr.name(), "_tl_rewrite_"));
     TF_RETURN_IF_ERROR(
         GraphToFunctionDef(*bwd_fbody->graph, new_name, &new_fdef));

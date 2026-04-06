@@ -104,11 +104,12 @@ class RewriteQuantizeCompositeOp
     RankedTensorType output_type = RankedTensorType::get(
         input_shaped_type.getShape(), quantized_element_type);
     TFL::QuantizeOp tfl_quantize_op =
-        TFL::QuantizeOp::create(rewriter, op.getLoc(), output_type,
-                                /*input=*/op.getOperand(0),
-                                /*qtype=*/TypeAttr::get(output_type));
+        rewriter.create<TFL::QuantizeOp>(op.getLoc(), output_type,
+                                         /*input=*/op.getOperand(0),
+                                         /*qtype=*/TypeAttr::get(output_type));
 
-    rewriter.replaceOp(op, tfl_quantize_op.getOutput());
+    rewriter.replaceAllOpUsesWith(op, tfl_quantize_op.getOutput());
+    rewriter.eraseOp(op);
     return success();
   }
 };
@@ -243,9 +244,10 @@ class RewriteDequantizeCompositeOp
     }
 
     TFL::DequantizeOp tfl_dequantize_op =
-        TFL::DequantizeOp::create(rewriter, composite_op.getLoc(), output_type,
-                                  /*input=*/tfl_quantize_input);
-    rewriter.replaceOp(composite_op, tfl_dequantize_op.getOutput());
+        rewriter.create<TFL::DequantizeOp>(composite_op.getLoc(), output_type,
+                                           /*input=*/tfl_quantize_input);
+    rewriter.replaceAllOpUsesWith(composite_op, tfl_dequantize_op.getOutput());
+    rewriter.eraseOp(composite_op);
 
     return success();
   }
@@ -256,9 +258,14 @@ class RewriteFakeQuantCompositeOp
   using OpRewritePattern<stablehlo::CompositeOp>::OpRewritePattern;
 
  public:
+  explicit RewriteFakeQuantCompositeOp(MLIRContext* context)
+      : OpRewritePattern<stablehlo::CompositeOp>(context) {
+    setHasBoundedRewriteRecursion();
+  }
+
   LogicalResult matchAndRewrite(stablehlo::CompositeOp op,
                                 PatternRewriter& rewriter) const final {
-    if (op.getName() != "quant.fake_quant" || IsDrqFakeQuant(op)) {
+    if (op.getName() != "quant.fake_quant") {
       return failure();
     }
 
@@ -304,16 +311,18 @@ class RewriteFakeQuantCompositeOp
     }
     RankedTensorType intermediate_type = RankedTensorType::get(
         input_shaped_type.getShape(), quantized_element_type);
-    TFL::QuantizeOp tfl_quantize_op =
-        TFL::QuantizeOp::create(rewriter, op.getLoc(), intermediate_type,
-                                /*input=*/op.getOperand(num_operands - 1),
-                                /*qtype=*/TypeAttr::get(intermediate_type));
+    TFL::QuantizeOp tfl_quantize_op = rewriter.create<TFL::QuantizeOp>(
+        op.getLoc(), intermediate_type,
+        /*input=*/op.getOperand(num_operands - 1),
+        /*qtype=*/TypeAttr::get(intermediate_type));
 
     Type output_type = op.getType(0);
-    TFL::DequantizeOp tfl_dequantize_op = TFL::DequantizeOp::create(
-        rewriter, op.getLoc(), output_type, /*input=*/tfl_quantize_op);
+    TFL::DequantizeOp tfl_dequantize_op = rewriter.create<TFL::DequantizeOp>(
+        op.getLoc(), output_type, /*input=*/tfl_quantize_op);
 
-    rewriter.replaceOp(op, tfl_dequantize_op.getOutput());
+    rewriter.replaceAllOpUsesWith(op, tfl_dequantize_op.getOutput());
+    rewriter.eraseOp(op);
+
     return success();
   }
 };
@@ -323,7 +332,8 @@ class RemovePreventGradient : public OpRewritePattern<TF::PreventGradientOp> {
 
   LogicalResult matchAndRewrite(TF::PreventGradientOp op,
                                 PatternRewriter& rewriter) const final {
-    rewriter.replaceOp(op, op.getInput());
+    rewriter.replaceAllOpUsesWith(op, op.getInput());
+    rewriter.eraseOp(op);
     return success();
   }
 };
@@ -333,7 +343,8 @@ class RemoveIdentity : public OpRewritePattern<TF::IdentityOp> {
 
   LogicalResult matchAndRewrite(TF::IdentityOp op,
                                 PatternRewriter& rewriter) const final {
-    rewriter.replaceOp(op, op.getInput());
+    rewriter.replaceAllOpUsesWith(op, op.getInput());
+    rewriter.eraseOp(op);
     return success();
   }
 };
@@ -356,17 +367,10 @@ class UpdateFunctionOutputType : public OpRewritePattern<func::ReturnOp> {
     }
 
     auto return_op_types = return_op.getOperandTypes();
-    auto current_func_type = func_op.getFunctionType();
-
-    // If the function's result types already match the return op's
-    // operand types, report failure so the rewriter converges.
-    if (current_func_type.getResults() == return_op_types) {
-      return failure();
-    }
-
     rewriter.startOpModification(func_op);
     auto new_func_type = mlir::FunctionType::get(
-        func_op.getContext(), current_func_type.getInputs(), return_op_types);
+        func_op.getContext(), func_op.getFunctionType().getInputs(),
+        return_op_types);
     func_op.setFunctionType(new_func_type);
     rewriter.finalizeOpModification(func_op);
 
@@ -402,8 +406,34 @@ void LowerQuantAnnotationsPass::runOnOperation() {
   patterns.add<RewriteQuantizeCompositeOp, RewriteDequantizeCompositeOp,
                RewriteFakeQuantCompositeOp>(&ctx);
 
-  if (failed(
-          applyPatternsGreedily(module, std::move(patterns), greedy_config))) {
+  ConversionTarget target(getContext());
+  target.addLegalDialect<func::FuncDialect>();
+  target.addLegalDialect<TF::TensorFlowDialect>();
+  target.addLegalDialect<TFL::TensorFlowLiteDialect>();
+  target.addLegalDialect<quant::QuantDialect>();
+  target.addLegalDialect<arith::ArithDialect>();
+
+  // Declare all the MHLO ops as legal except for the quantization composites we
+  // want to lower.
+  target.addDynamicallyLegalDialect<stablehlo::StablehloDialect>(
+      [](Operation* op) {
+        auto mhlo_op = dyn_cast_or_null<stablehlo::CompositeOp>(op);
+        if (!mhlo_op) {
+          return true;
+        }
+        // DRQ fake quant survives this pass to be later fused into the DRQ
+        // kernel. We cannot lower this to Q-DQ since scale/zero_point are
+        // unknown.
+        if (IsDrqFakeQuant(mhlo_op)) {
+          return true;
+        }
+        return mhlo_op.getName() != "quant.quantize" &&
+               mhlo_op.getName() != "quant.dequantize" &&
+               mhlo_op.getName() != "quant.fake_quant";
+      });
+
+  if (failed(applyPartialConversion(getOperation(), target,
+                                    std::move(patterns)))) {
     getOperation().emitError("Composite lowering pass failed.");
     signalPassFailure();
   }

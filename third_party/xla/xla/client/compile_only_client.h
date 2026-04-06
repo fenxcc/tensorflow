@@ -61,7 +61,7 @@ class CompileOnlyClient : public Client {
   // code. |metadata|, if provided, is populated during compilation.
   absl::StatusOr<std::vector<std::unique_ptr<AotCompilationResult>>>
   CompileAheadOfTime(
-      const AotXlaComputationInstance& computation,
+      absl::Span<const AotXlaComputationInstance> computations,
       const AotCompilationOptions& options,
       std::unique_ptr<AotCompilationMetadata>* metadata = nullptr);
 

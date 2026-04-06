@@ -48,23 +48,6 @@ struct MhloToScalarOp {
 };
 
 template <>
-struct MhloToScalarOp<mhlo::AcosOp> {
-  using FOp = ::mlir::math::AcosOp;
-};
-
-template <>
-struct MhloToScalarOp<mhlo::AcoshOp> {
-  using FOp = ::mlir::math::AcoshOp;
-};
-template <>
-struct MhloToScalarOp<mhlo::AsinOp> {
-  using FOp = ::mlir::math::AsinOp;
-};
-template <>
-struct MhloToScalarOp<mhlo::AsinhOp> {
-  using FOp = ::mlir::math::AsinhOp;
-};
-template <>
 struct MhloToScalarOp<mhlo::AddOp> {
   using FOp = ::mlir::arith::AddFOp;
   using IOp = ::mlir::arith::AddIOp;
@@ -94,10 +77,6 @@ template <>
 struct MhloToScalarOp<mhlo::ClzOp> {
   using IOp = ::mlir::math::CountLeadingZerosOp;
   using UOp = ::mlir::math::CountLeadingZerosOp;
-};
-template <>
-struct MhloToScalarOp<mhlo::CoshOp> {
-  using FOp = ::mlir::math::CoshOp;
 };
 template <>
 struct MhloToScalarOp<mhlo::CosineOp> {
@@ -180,10 +159,6 @@ struct MhloToScalarOp<mhlo::SineOp> {
   using COp = ::mlir::complex::SinOp;
 };
 template <>
-struct MhloToScalarOp<mhlo::SinhOp> {
-  using FOp = ::mlir::math::SinhOp;
-};
-template <>
 struct MhloToScalarOp<mhlo::TanOp> {
   using FOp = ::mlir::math::TanOp;
   using COp = ::mlir::complex::TanOp;
@@ -192,10 +167,6 @@ template <>
 struct MhloToScalarOp<mhlo::Atan2Op> {
   using FOp = ::mlir::math::Atan2Op;
   using COp = ::mlir::complex::Atan2Op;
-};
-template <>
-struct MhloToScalarOp<mhlo::AtanhOp> {
-  using FOp = ::mlir::math::AtanhOp;
 };
 template <>
 struct MhloToScalarOp<mhlo::TanhOp> {
@@ -349,8 +320,8 @@ inline Value mapMhloOpToStdScalarOp<mhlo::AbsOp>(
 // Return a constant for v of type t, splat if t is a vector type.
 inline Value getConstantOrSplat(OpBuilder* b, Location loc, Type t,
                                 Attribute v) {
-  if (ShapedType shapedType = mlir::dyn_cast<ShapedType>(t)) {
-    v = SplatElementsAttr::get(shapedType, v);
+  if (VectorType vecType = mlir::dyn_cast<VectorType>(t)) {
+    v = SplatElementsAttr::get(vecType, v);
   }
   return b->create<arith::ConstantOp>(loc, t, cast<TypedAttr>(v));
 }
@@ -893,7 +864,7 @@ inline Value mapMhloOpToStdScalarOp<mhlo::ClampOp>(
 }
 
 template <typename U, typename S>
-inline Value makeSafeIntDiv(ImplicitLocOpBuilder& lb, bool isUnsigned,
+inline Value makeSafeIntDiv(ImplicitLocOpBuilder& lb, Type originalType,
                             Value lhs, Value rhs, Value returnedOnZero,
                             Value returnedOnSignedOverflow) {
   Type type = lhs.getType();
@@ -908,7 +879,7 @@ inline Value makeSafeIntDiv(ImplicitLocOpBuilder& lb, bool isUnsigned,
       lb.create<arith::CmpIOp>(arith::CmpIPredicate::eq, rhs, zero);
 
   // For unsigned just set the divisor to 1 when it would be 0.
-  if (isUnsigned) {
+  if (originalType.isUnsignedInteger()) {
     Value safeRhs = lb.create<arith::SelectOp>(rhsIsZero, one, rhs);
     Value safeDiv = lb.create<U>(lhs, safeRhs);
     return lb.create<arith::SelectOp>(rhsIsZero, returnedOnZero, safeDiv);
@@ -956,7 +927,7 @@ inline Value mapMhloOpToStdScalarOp<mhlo::DivOp>(
   Value minusOne = makeConstant(APInt::getAllOnes(elementType.getWidth()));
   Value smin = makeConstant(APInt::getSignedMinValue(elementType.getWidth()));
   return makeSafeIntDiv<arith::DivUIOp, arith::DivSIOp>(
-      lb, originalType.isUnsignedInteger(), adaptor.getLhs(), adaptor.getRhs(),
+      lb, originalType, adaptor.getLhs(), adaptor.getRhs(),
       /*returnedOnZero=*/minusOne,
       /*returnedOnSignedOverflow=*/smin);
 }
@@ -980,7 +951,7 @@ inline Value mapMhloOpToStdScalarOp<mhlo::RemOp>(
   Type type = adaptor.getLhs().getType();
   Value zero = lb.create<arith::ConstantOp>(lb.getZeroAttr(type));
   return makeSafeIntDiv<arith::RemUIOp, arith::RemSIOp>(
-      lb, originalType.isUnsignedInteger(), adaptor.getLhs(), adaptor.getRhs(),
+      lb, originalType, adaptor.getLhs(), adaptor.getRhs(),
       /*returnedOnZero=*/adaptor.getLhs(),
       /*returnedOnSignedOverflow=*/zero);
 }

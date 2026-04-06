@@ -1,5 +1,4 @@
 load("@llvm-project//mlir:tblgen.bzl", "gentbl_cc_library", "td_library")
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//tensorflow:tensorflow.bzl", "tf_cc_test")
 load("//tensorflow:tensorflow.default.bzl", "get_compatible_with_portable")
 
@@ -75,7 +74,7 @@ cc_library(
     textual_hdrs = [
         "types.def",
     ],
-    visibility = ["//visibility:public"],
+    visibility = ["//tensorflow:__subpackages__"],
     deps = [
         ":AttributesIncGen",
         ":DialectIncGen",

@@ -1,4 +1,3 @@
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//tensorflow:tensorflow.default.bzl", "tf_py_strict_test", "tf_python_pybind_extension")
 
 package(

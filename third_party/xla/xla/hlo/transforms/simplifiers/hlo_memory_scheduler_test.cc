@@ -22,12 +22,8 @@ limitations under the License.
 #include <string>
 #include <vector>
 
-#include <gtest/gtest.h>
 #include "absl/algorithm/container.h"
-#include "absl/base/nullability.h"
 #include "absl/container/flat_hash_map.h"
-#include "absl/log/check.h"
-#include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "xla/hlo/analysis/alias_info.h"
 #include "xla/hlo/analysis/hlo_alias_analysis.h"
@@ -46,7 +42,6 @@ limitations under the License.
 #include "xla/shape.h"
 #include "xla/shape_util.h"
 #include "xla/tsl/lib/core/status_test_util.h"
-#include "xla/tsl/platform/statusor.h"
 #include "xla/xla_data.pb.h"
 
 namespace xla {
@@ -58,19 +53,18 @@ class HloSchedulingTest : public HloHardwareIndependentTestBase {
 };
 
 int64_t PeakMemoryUseOfEntryComputation(
-    HloModule* module,
-    const LogicalBuffer::SizeFunction* absl_nonnull size_function) {
+    HloModule* module, LogicalBuffer::SizeFunction size_function) {
   CHECK(module->has_entry_computation());
   CHECK(module->has_schedule());
 
-  AliasInfo alias_info;
   std::unique_ptr<HloAliasAnalysis> alias_analysis =
-      HloAliasAnalysis::Run(module, &alias_info).value();
+      HloAliasAnalysis::Run(module).value();
 
   const HloSchedule& schedule = module->schedule();
 
   HloComputation* computation = module->entry_computation();
   const HloInstructionSequence& sequence = schedule.sequence(computation);
+  AliasInfo alias_info;
   return HeapSimulator::Run(
              std::make_unique<NoFragmentationStatsHeap<HloValue>>(),
              *computation, sequence, *alias_analysis, &alias_info,
@@ -160,13 +154,13 @@ ENTRY root {
   TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<HloModule> module,
                           ParseAndReturnVerifiedModule(module_str));
 
-  BufferValue::SizeFunction size_fn = [](const BufferValue& buffer) {
+  auto size_fn = [](const BufferValue& buffer) {
     return ShapeUtil::ByteSizeOf(buffer.shape(), /*pointer_size=*/8);
   };
   int64_t peak_memory;
   TF_ASSERT_OK_AND_ASSIGN(
       HloSchedule schedule,
-      ScheduleModule(module.get(), ListMemoryScheduler(&alias_info_, &size_fn),
+      ScheduleModule(module.get(), ListMemoryScheduler(&alias_info_, size_fn),
                      /*execution_threads=*/{}, &peak_memory));
   TF_ASSERT_OK(module->set_schedule(schedule));
   // Verify that all instructions are in the sequence.
@@ -189,7 +183,7 @@ ENTRY root {
   SequentialHloOrdering ordering(schedule);
   EXPECT_TRUE(ordering.ExecutesBefore(instructions_by_name.at("d"),
                                       instructions_by_name.at("e")));
-  EXPECT_EQ(PeakMemoryUseOfEntryComputation(module.get(), &size_fn),
+  EXPECT_EQ(PeakMemoryUseOfEntryComputation(module.get(), size_fn),
             peak_memory);
 }
 

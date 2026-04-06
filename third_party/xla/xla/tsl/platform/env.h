@@ -18,25 +18,25 @@ limitations under the License.
 
 #include <stdint.h>
 
-#include <cstddef>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include "absl/functional/any_invocable.h"
-#include "absl/log/log.h"
-#include "absl/status/status.h"
 #include "absl/strings/ascii.h"
-#include "absl/strings/string_view.h"
-#include "google/protobuf/message.h"
-#include "google/protobuf/message_lite.h"
+#include "absl/synchronization/mutex.h"
 #include "xla/tsl/platform/env_time.h"
-#include "xla/tsl/platform/file_statistics.h"
+#include "xla/tsl/platform/errors.h"
 #include "xla/tsl/platform/file_system.h"
 #include "xla/tsl/platform/macros.h"
+#include "xla/tsl/platform/status.h"
+#include "xla/tsl/platform/types.h"
 #include "tsl/platform/numa.h"
+#include "tsl/platform/platform.h"
 #include "tsl/platform/protobuf.h"
+#include "tsl/platform/stringpiece.h"
 
 // Delete leaked Windows definitions.
 #ifdef PLATFORM_WINDOWS
@@ -104,7 +104,7 @@ class Env {
                          const std::string& value);
 
   absl::Status SetOption(const std::string& scheme, const std::string& key,
-                         const std::vector<std::string>& values);
+                         const std::vector<string>& values);
 
   absl::Status SetOption(const std::string& scheme, const std::string& key,
                          const std::vector<int64_t>& values);
@@ -211,11 +211,11 @@ class Env {
   /// Returns true if all the listed files exist, false otherwise.
   /// if status is not null, populate the vector with a detailed status
   /// for each file.
-  bool FilesExist(const std::vector<std::string>& files,
+  bool FilesExist(const std::vector<string>& files,
                   std::vector<absl::Status>* status);
 
-  bool FilesExist(const std::vector<std::string>& files,
-                  TransactionToken* token, std::vector<absl::Status>* status) {
+  bool FilesExist(const std::vector<string>& files, TransactionToken* token,
+                  std::vector<absl::Status>* status) {
     return true;
   }
 
@@ -223,11 +223,10 @@ class Env {
   /// directory. The names are relative to "dir".
   ///
   /// Original contents of *results are dropped.
-  absl::Status GetChildren(const std::string& dir,
-                           std::vector<std::string>* result);
+  absl::Status GetChildren(const std::string& dir, std::vector<string>* result);
 
   absl::Status GetChildren(const std::string& dir, TransactionToken* token,
-                           std::vector<std::string>* result) {
+                           std::vector<string>* result) {
     return absl::OkStatus();
   }
 
@@ -241,11 +240,11 @@ class Env {
   ///
   /// More details about `pattern` in FileSystem::GetMatchingPaths.
   virtual absl::Status GetMatchingPaths(const std::string& pattern,
-                                        std::vector<std::string>* results);
+                                        std::vector<string>* results);
 
   absl::Status GetMatchingPaths(const std::string& pattern,
                                 TransactionToken* token,
-                                std::vector<std::string>* results) {
+                                std::vector<string>* results) {
     return absl::OkStatus();
   }
 
@@ -348,11 +347,20 @@ class Env {
   ///  TF
   absl::Status HasAtomicMove(const std::string& path, bool* has_atomic_move);
 
+  /// Returns whether the give path is on a file system
+  /// that has ability to create a new temp file. This can be used
+  /// to determine if there needs to be a temp location to safely write objects.
+  /// If this returns false, TensorFlow will write directly to output files
+  /// instead of creating a temporary file and swapping it in. This may mean
+  /// that incomplete writes are visible to consumers.
+  absl::Status CanCreateTempFile(const std::string& fname,
+                                 bool* can_create_temp_file);
+
   /// Stores the size of `fname` in `*file_size`.
-  absl::Status GetFileSize(const std::string& fname, uint64_t* file_size);
+  absl::Status GetFileSize(const std::string& fname, uint64* file_size);
 
   absl::Status GetFileSize(const std::string& fname, TransactionToken* token,
-                           uint64_t* file_size) {
+                           uint64* file_size) {
     return absl::OkStatus();
   }
 
@@ -427,19 +435,19 @@ class Env {
   // provide a routine to get the absolute time.
 
   /// \brief Returns the number of nano-seconds since the Unix epoch.
-  virtual uint64_t NowNanos() const { return EnvTime::NowNanos(); }
+  virtual uint64 NowNanos() const { return EnvTime::NowNanos(); }
 
   /// \brief Returns the number of micro-seconds since the Unix epoch.
-  virtual uint64_t NowMicros() const { return EnvTime::NowMicros(); }
+  virtual uint64 NowMicros() const { return EnvTime::NowMicros(); }
 
   /// \brief Returns the number of seconds since the Unix epoch.
-  virtual uint64_t NowSeconds() const { return EnvTime::NowSeconds(); }
+  virtual uint64 NowSeconds() const { return EnvTime::NowSeconds(); }
 
   /// Sleeps/delays the thread for the prescribed number of micro-seconds.
   virtual void SleepForMicroseconds(int64_t micros) = 0;
 
   /// Returns the process ID of the calling process.
-  int32_t GetProcessId();
+  int32 GetProcessId();
 
   /// \brief Returns a new thread that is running fn() and is identified
   /// (for debugging/performance-analysis) by "name".
@@ -449,15 +457,6 @@ class Env {
   virtual Thread* StartThread(
       const ThreadOptions& thread_options, const std::string& name,
       absl::AnyInvocable<void()> fn) TF_MUST_USE_RESULT = 0;
-
-  /// \brief Starts a new detached thread that runs fn() and is identified
-  /// (for debugging/performance-analysis) by "name".
-  ///
-  virtual void StartDetachedThread(const ThreadOptions& thread_options,
-                                   const std::string& name,
-                                   absl::AnyInvocable<void()> fn) {
-    LOG(FATAL) << "StartDetachedThread is not implemented in this environment.";
-  }
 
   // Returns the thread id of calling thread.
   // Posix: Returns pthread id which is only guaranteed to be unique within a
@@ -512,7 +511,7 @@ class Env {
                                             const std::string& version) = 0;
 
   // Returns a possible list of local temporary directories.
-  virtual void GetLocalTempDirectories(std::vector<std::string>* list) = 0;
+  virtual void GetLocalTempDirectories(std::vector<string>* list) = 0;
 
  private:
   std::unique_ptr<FileSystemRegistry> file_system_registry_;
@@ -539,7 +538,7 @@ class EnvWrapper : public Env {
   }
 
   absl::Status GetRegisteredFileSystemSchemes(
-      std::vector<std::string>* schemes) override {
+      std::vector<string>* schemes) override {
     return target_->GetRegisteredFileSystemSchemes(schemes);
   }
 
@@ -552,7 +551,7 @@ class EnvWrapper : public Env {
     return target_->MatchPath(path, pattern);
   }
 
-  uint64_t NowMicros() const override { return target_->NowMicros(); }
+  uint64 NowMicros() const override { return target_->NowMicros(); }
   void SleepForMicroseconds(int64_t micros) override {
     target_->SleepForMicroseconds(micros);
   }
@@ -561,12 +560,6 @@ class EnvWrapper : public Env {
                       absl::AnyInvocable<void()> fn) override {
     return target_->StartThread(thread_options, name, std::move(fn));
   }
-  void StartDetachedThread(const ThreadOptions& thread_options,
-                           const std::string& name,
-                           absl::AnyInvocable<void()> fn) override {
-    target_->StartDetachedThread(thread_options, name, std::move(fn));
-  }
-
   int64_t GetCurrentThreadId() override {
     return target_->GetCurrentThreadId();
   }
@@ -596,7 +589,7 @@ class EnvWrapper : public Env {
   std::string GetRunfilesDir() override { return target_->GetRunfilesDir(); }
 
  private:
-  void GetLocalTempDirectories(std::vector<std::string>* list) override {
+  void GetLocalTempDirectories(std::vector<string>* list) override {
     target_->GetLocalTempDirectories(list);
   }
 
@@ -665,7 +658,7 @@ absl::Status ReadBinaryProto(Env* env, const std::string& fname,
 inline absl::Status WriteTextProto(Env* /* env */,
                                    const std::string& /* fname */,
                                    const protobuf::MessageLite& /* proto */) {
-  return absl::UnimplementedError("Can't write text protos with protolite.");
+  return errors::Unimplemented("Can't write text protos with protolite.");
 }
 absl::Status WriteTextProto(Env* env, const std::string& fname,
                             const protobuf::Message& proto);
@@ -675,7 +668,7 @@ absl::Status WriteTextProto(Env* env, const std::string& fname,
 inline absl::Status ReadTextProto(Env* /* env */,
                                   const std::string& /* fname */,
                                   protobuf::MessageLite* /* proto */) {
-  return absl::UnimplementedError("Can't parse text protos with protolite.");
+  return errors::Unimplemented("Can't parse text protos with protolite.");
 }
 absl::Status ReadTextProto(Env* env, const std::string& fname,
                            protobuf::Message* proto);
@@ -701,8 +694,7 @@ struct Register {
     // after TF 2.6+.
     if (try_modular_filesystems) {
       const char* env_value = getenv("TF_USE_MODULAR_FILESYSTEM");
-      std::string load_plugin =
-          env_value ? absl::AsciiStrToLower(env_value) : "";
+      string load_plugin = env_value ? absl::AsciiStrToLower(env_value) : "";
       if (load_plugin == "true" || load_plugin == "1") {
         // We don't register the static filesystem and wait for SIG IO one
         LOG(WARNING) << "Using modular file system for '" << scheme << "'."

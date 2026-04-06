@@ -16,7 +16,6 @@ limitations under the License.
 #ifndef XLA_TSL_PLATFORM_PREFETCH_H_
 #define XLA_TSL_PLATFORM_PREFETCH_H_
 
-#include "absl/base/macros.h"
 #include "absl/base/prefetch.h"
 
 namespace tsl {
@@ -31,13 +30,11 @@ enum PrefetchHint {
 };
 
 template <PrefetchHint hint>
-ABSL_DEPRECATE_AND_INLINE()
 void prefetch(const void* x) {
   absl::PrefetchToLocalCache(x);
 }
 
 template <>
-ABSL_DEPRECATE_AND_INLINE()
 inline void prefetch<PREFETCH_HINT_NTA>(const void* x) {
   absl::PrefetchToLocalCacheNta(x);
 }

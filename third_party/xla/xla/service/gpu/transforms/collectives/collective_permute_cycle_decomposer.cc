@@ -190,13 +190,14 @@ absl::StatusOr<HloInstruction*> CreatePartitionOrReplicaId(
     HloComputation* computation, CollectiveOpGroupMode mode,
     absl::string_view cp_name) {
   switch (mode) {
-    case CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_CROSS_REPLICA:
+    case CollectiveOpGroupMode::kCrossReplica:
       return computation->AddInstruction(HloInstruction::CreateReplicaId(),
                                          absl::StrCat(cp_name, "-rep-id"));
-    case CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_CROSS_PARTITION:
+    case CollectiveOpGroupMode::kCrossPartition:
       return computation->AddInstruction(HloInstruction::CreatePartitionId(),
                                          absl::StrCat(cp_name, "-part-id"));
-    default:
+    case CollectiveOpGroupMode::kCrossReplicaAndPartition:
+    case CollectiveOpGroupMode::kFlattenedID:
       return absl::InternalError(
           absl::StrFormat("Unexpected collective group mode for %s", cp_name));
   }
@@ -231,8 +232,7 @@ absl::Status DecomposeCollectivePermuteCycle(
       AddCP(cp, computation, back_pairs, "-bwd", attrs.first, cp->channel_id());
 
   // Forward edge.
-  bool is_cross_partition =
-      (mode == CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_CROSS_PARTITION);
+  bool is_cross_partition = (mode == CollectiveOpGroupMode::kCrossPartition);
   std::optional<int64_t> fwd_channel_id =
       is_cross_partition ? std::optional(next_channel_id) : std::nullopt;
   HloInstruction* fwd_cp =
@@ -273,7 +273,7 @@ absl::Status DecomposeCollectivePermuteCycle(
 }
 }  // namespace
 
-absl::StatusOr<bool> CollectivePermuteCycleDecomposer::RunImpl(
+absl::StatusOr<bool> CollectivePermuteCycleDecomposer::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   bool changed = false;

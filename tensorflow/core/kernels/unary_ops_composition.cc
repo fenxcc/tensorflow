@@ -43,13 +43,12 @@ struct UnaryOpsCompositionBase {
     int cost;
   };
 
-  bool HasComputeFn(const std::string& name) {
+  bool HasComputeFn(const string& name) {
     return compute_fns.find(name) != compute_fns.end();
   }
 
  protected:
-  void RegisterComputeFn(const std::string& name, ComputeFn compute_fn,
-                         int cost) {
+  void RegisterComputeFn(const string& name, ComputeFn compute_fn, int cost) {
     VLOG(5) << "Register compute fn: name=" << name << " cost=" << cost;
     compute_fns[name] = {compute_fn, cost};
   }
@@ -57,9 +56,9 @@ struct UnaryOpsCompositionBase {
  private:
   friend class UnaryOpsComposition<T>;
 
-  absl::Status ExportComputeFns(const std::vector<std::string>& op_names,
+  absl::Status ExportComputeFns(const std::vector<string>& op_names,
                                 std::vector<ComputeFn>* fns, int* cost) {
-    for (const std::string& op_name : op_names) {
+    for (const string& op_name : op_names) {
       auto it = compute_fns.find(op_name);
       if (it == compute_fns.end())
         return errors::InvalidArgument(
@@ -73,7 +72,7 @@ struct UnaryOpsCompositionBase {
     return absl::OkStatus();
   }
 
-  std::unordered_map<std::string, ComputeFnRegistration> compute_fns;
+  std::unordered_map<string, ComputeFnRegistration> compute_fns;
 };
 
 template <typename T>
@@ -152,7 +151,7 @@ class UnaryOpsComposition : public OpKernel {
 
   Support support_;
 
-  std::vector<std::string> op_names_;
+  std::vector<string> op_names_;
   std::vector<ComputeFn> fns_;
   int cost_ = 0;
 };

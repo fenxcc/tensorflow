@@ -22,11 +22,10 @@ limitations under the License.
 namespace tensorflow {
 namespace generator {
 
-std::string Call(const std::string& function,
-                 std::vector<std::string> arguments);
-std::string Call(const std::string& object, const std::string& method,
-                 std::vector<std::string> arguments, const char* oper = "->");
-std::string Quoted(const std::string& s);
+string Call(const string &function, std::vector<string> arguments);
+string Call(const string &object, const string &method,
+            std::vector<string> arguments, const char *oper = "->");
+string Quoted(const string &s);
 
 }  // namespace generator
 }  // namespace tensorflow

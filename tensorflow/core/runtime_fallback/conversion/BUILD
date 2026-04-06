@@ -1,5 +1,3 @@
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
-
 package(
     # copybara:uncomment default_applicable_licenses = ["//tensorflow:license"],
     default_visibility = ["//tensorflow/core/runtime_fallback:internal"],

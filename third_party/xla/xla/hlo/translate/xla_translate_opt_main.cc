@@ -17,9 +17,10 @@ limitations under the License.
 #include "mlir/InitAllDialects.h"
 #include "mlir/InitAllPasses.h"
 #include "mlir/Tools/mlir-opt/MlirOptMain.h"
-#include "xla/hlo/translate/register.h"
+#include "stablehlo/dialect/Register.h"
 #include "xla/mlir/framework/ir/xla_framework.h"
 #include "xla/mlir/framework/transforms/passes.h"
+#include "xla/mlir_hlo/mhlo/IR/register.h"
 #include "tsl/platform/init_main.h"
 
 int main(int argc, char **argv) {
@@ -29,7 +30,8 @@ int main(int argc, char **argv) {
   mlir::registerAllPasses();
   mlir::DialectRegistry registry;
   mlir::registerAllDialects(registry);
-  xla::RegisterMlirToHloDependentDialects(registry);
+  mlir::mhlo::registerAllMhloDialects(registry);
+  mlir::stablehlo::registerAllDialects(registry);
   mlir::xla_framework::registerXlaFrameworkPasses();
   registry.insert<mlir::xla_framework::XLAFrameworkDialect>();
   return failed(mlir::MlirOptMain(

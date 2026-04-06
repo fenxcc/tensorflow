@@ -1,7 +1,6 @@
 # Description:
 # TensorFlow Java API.
 
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_java//java:defs.bzl", "java_library", "java_plugin")
 load(
     "//tensorflow:tensorflow.bzl",

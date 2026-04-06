@@ -156,11 +156,9 @@ class VariableAggregation(enum.Enum):
 # Note that we are currently relying on the integer values of the Python enums
 # matching the integer values of the proto enums.
 
-if VariableAggregationV2.__doc__ is not None:
-  VariableAggregation.__doc__ = (
-      VariableAggregationV2.__doc__
-      + "* `ONLY_FIRST_TOWER`: Deprecated alias for `ONLY_FIRST_REPLICA`.\n  "
-  )
+VariableAggregation.__doc__ = (
+    VariableAggregationV2.__doc__ +
+    "* `ONLY_FIRST_TOWER`: Deprecated alias for `ONLY_FIRST_REPLICA`.\n  ")
 
 
 def validate_synchronization_aggregation_trainable(synchronization, aggregation,

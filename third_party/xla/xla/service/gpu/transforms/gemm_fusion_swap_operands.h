@@ -31,8 +31,9 @@ class GemmFusionSwapOperands : public HloModulePass {
     return "gemm-fusion-swap-operands";
   }
 
- protected:
-  absl::StatusOr<bool> RunImpl(
+ public:
+  using HloPassInterface::Run;
+  absl::StatusOr<bool> Run(
       HloModule* module,
       const absl::flat_hash_set<absl::string_view>& execution_threads) override;
 };

@@ -20,15 +20,16 @@ limitations under the License.
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "mlir-c/IR.h"
-#include "mlir/Bindings/Python/NanobindAdaptors.h"  // IWYU pragma: keep; Needed to allow MlirModule -> ModuleOp.
+#include "mlir/Bindings/Python/PybindAdaptors.h"  // IWYU pragma: keep; Needed to allow MlirModule -> ModuleOp.
 #include "mlir/CAPI/IR.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/OperationSupport.h"
-#include "nanobind/nanobind.h"
-#include "nanobind/stl/string.h"  // IWYU pragma: keep
-#include "nanobind/stl/string_view.h"  // IWYU pragma: keep
-#include "xla/pjrt/status_casters.h"
+#include "pybind11/detail/common.h"
+#include "pybind11/pybind11.h"
+#include "pybind11/pytypes.h"
+#include "pybind11_abseil/absl_casters.h"
+#include "xla/pjrt/status_casters.h"  // IWYU pragma: keep; Needed for ValueOrThrow
 #include "xla/python/ifrt/ir/ifrt_ir_program.h"
 #include "xla/python/ifrt/ir/transforms/utils.h"
 #include "xla/python/ifrt/ir/version.h"
@@ -36,28 +37,26 @@ limitations under the License.
 #include "xla/python/ifrt/support/module_parsing.h"
 #include "xla/tsl/platform/statusor.h"
 
-namespace nb = nanobind;
-
 namespace xla {
 namespace ifrt {
 
 namespace {
 
-absl::StatusOr<nb::bytes> SerializedVersionedProgram(
+absl::StatusOr<py::bytes> SerializedVersionedProgram(
     MlirModule module, absl::string_view ifrt_ir_version,
     absl::string_view atom_program_version, bool version_in_place) {
   auto program = std::make_unique<IfrtIRProgram>(unwrap(module));
   TF_ASSIGN_OR_RETURN(
-      Serialized serialized,
+      auto serialized,
       Serialize(*program,
                 std::make_unique<SerializeIfrtIRProgramOptions>(
                     std::string(ifrt_ir_version),
                     std::string(atom_program_version), version_in_place)));
   // Return just the data, to avoid the dependency on the Serialized proto.
-  return nb::bytes(serialized.data().data(), serialized.data().size());
+  return py::bytes(serialized.data());
 }
 
-absl::StatusOr<nb::bytes> SerializedVersionedProgram(
+absl::StatusOr<py::bytes> SerializedVersionedProgram(
     absl::string_view module_str, absl::string_view ifrt_ir_version,
     absl::string_view atom_program_version, bool version_in_place) {
   mlir::MLIRContext context;
@@ -71,7 +70,7 @@ absl::StatusOr<nb::bytes> SerializedVersionedProgram(
                     std::string(ifrt_ir_version),
                     std::string(atom_program_version), version_in_place)));
   // Return just the data, to avoid the dependency on the Serialized proto.
-  return nb::bytes(serialized.data().data(), serialized.data().size());
+  return py::bytes(serialized.data());
 }
 
 absl::StatusOr<mlir::ModuleOp> DeserializeVersionedProgram(
@@ -87,21 +86,20 @@ absl::StatusOr<mlir::ModuleOp> DeserializeVersionedProgram(
   return std::move(program->mlir_module);
 }
 
-absl::StatusOr<nb::bytes> DeserializeVersionedProgram(
+absl::StatusOr<py::bytes> DeserializeVersionedProgram(
     absl::string_view serialized_program) {
   mlir::MLIRContext context;
   support::RegisterMlirDialects(context);
   TF_ASSIGN_OR_RETURN(
       auto module, DeserializeVersionedProgram(&context, serialized_program));
-  std::string out =
-      OperationToString(module, mlir::OpPrintingFlags().enableDebugInfo(true));
-  return nb::bytes(out.data(), out.size());
+  return py::bytes(
+      OperationToString(module, mlir::OpPrintingFlags().enableDebugInfo(true)));
 }
 
 }  // namespace
 
-NB_MODULE(ir_py, m) {
-  nb::enum_<Version::CompatibilityRequirement>(m, "CompatibilityRequirement")
+PYBIND11_MODULE(ir_py, m) {
+  py::enum_<Version::CompatibilityRequirement>(m, "CompatibilityRequirement")
       .value("NONE", Version::CompatibilityRequirement::NONE)
       .value("WEEK_4", Version::CompatibilityRequirement::WEEK_4)
       .value("WEEK_12", Version::CompatibilityRequirement::WEEK_12)
@@ -112,7 +110,7 @@ NB_MODULE(ir_py, m) {
       [](Version::CompatibilityRequirement requirement) {
         return Version::fromCompatibilityRequirement(requirement).toString();
       },
-      nb::arg("requirement"));
+      py::arg("requirement"));
 
   m.def("get_current_version",
         []() { return Version::getCurrentVersion().toString(); });
@@ -127,23 +125,23 @@ NB_MODULE(ir_py, m) {
       "serialize_versioned_program",
       [](MlirModule module, absl::string_view ifrt_ir_version,
          absl::string_view atom_program_version,
-         bool version_in_place) -> nb::bytes {
+         bool version_in_place) -> py::bytes {
         return xla::ValueOrThrow(SerializedVersionedProgram(
             module, ifrt_ir_version, atom_program_version, version_in_place));
       },
-      nb::arg("module"), nb::arg("ifrt_ir_version"),
-      nb::arg("atom_program_version"), nb::arg("version_in_place"));
+      py::arg("module"), py::arg("ifrt_ir_version"),
+      py::arg("atom_program_version"), py::arg("version_in_place"));
   m.def(
       "serialize_versioned_program_str",
       [](absl::string_view module_str, absl::string_view ifrt_ir_version,
          absl::string_view atom_program_version,
-         bool version_in_place) -> nb::bytes {
+         bool version_in_place) -> py::bytes {
         return xla::ValueOrThrow(
             SerializedVersionedProgram(module_str, ifrt_ir_version,
                                        atom_program_version, version_in_place));
       },
-      nb::arg("module_str"), nb::arg("ifrt_ir_version"),
-      nb::arg("atom_program_version"), nb::arg("version_in_place"));
+      py::arg("module_str"), py::arg("ifrt_ir_version"),
+      py::arg("atom_program_version"), py::arg("version_in_place"));
 
   // Deserializes a versioned IFRT IR program to IFRT IR.
   m.def(
@@ -153,14 +151,14 @@ NB_MODULE(ir_py, m) {
         return wrap(xla::ValueOrThrow(
             DeserializeVersionedProgram(unwrap(context), serialized_program)));
       },
-      nb::arg("context"), nb::arg("serialized_program"));
+      py::arg("context"), py::arg("serialized_program"));
   m.def(
       "deserialize_versioned_program_str",
-      [](absl::string_view serialized_program) -> nb::bytes {
+      [](absl::string_view serialized_program) -> py::bytes {
         return xla::ValueOrThrow(
             DeserializeVersionedProgram(serialized_program));
       },
-      nb::arg("serialized_program"));
+      py::arg("serialized_program"));
 }
 
 }  // namespace ifrt

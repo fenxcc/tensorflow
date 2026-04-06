@@ -89,7 +89,7 @@ func::FuncOp createLstmCompositeFunc(mlir::Builder* builder, bool ln,
 
 class LstmUtilsTest : public ::testing::Test {
  protected:
-  LstmUtilsTest() = default;
+  LstmUtilsTest() {}
 
   void SetUp() override {
     context_ = std::make_unique<mlir::MLIRContext>();

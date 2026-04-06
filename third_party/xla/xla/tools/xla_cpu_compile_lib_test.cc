@@ -22,7 +22,6 @@ limitations under the License.
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include "absl/status/status.h"
-#include "absl/status/status_matchers.h"
 #include "absl/synchronization/mutex.h"
 #include "xla/hlo/ir/hlo_module.h"
 #include "xla/service/platform_util.h"
@@ -31,15 +30,16 @@ limitations under the License.
 #include "xla/tests/hlo_test_base.h"
 #include "xla/tools/xla_compile_lib.h"
 #include "xla/tsl/lib/core/status_test_util.h"
-#include "xla/tsl/platform/env.h"
-#include "xla/tsl/platform/env_time.h"
-#include "xla/tsl/platform/errors.h"
-#include "xla/tsl/platform/statusor.h"
-#include "xla/tsl/platform/test.h"
 #include "xla/tsl/protobuf/error_codes.pb.h"
 #include "xla/tsl/protobuf/status.pb.h"
 #include "xla/util.h"
+#include "tsl/platform/env.h"
+#include "tsl/platform/env_time.h"
+#include "tsl/platform/errors.h"
 #include "tsl/platform/path.h"
+#include "tsl/platform/status_matchers.h"
+#include "tsl/platform/statusor.h"
+#include "tsl/platform/test.h"
 
 namespace xla {
 namespace {
@@ -47,6 +47,9 @@ namespace {
 using ::testing::IsEmpty;
 using ::testing::IsNull;
 using ::testing::Not;
+using ::tsl::testing::IsOk;
+using ::tsl::testing::IsOkAndHolds;
+using ::tsl::testing::StatusIs;
 
 class XlaCompileLibTest : public HloTestBase {
  protected:
@@ -68,21 +71,19 @@ TEST_F(XlaCompileLibTest, CompilesForCpu) {
   CompilationResult result;
   EXPECT_THAT(CompileExecutable(std::move(module_), BackendType::kCpu,
                                 std::nullopt, result),
-              absl_testing::IsOkAndHolds(Not(IsEmpty())));
+              IsOkAndHolds(Not(IsEmpty())));
 }
 
 TEST_F(XlaCompileLibTest, ErrorsOnUnexpectedPlatform) {
   XlaCompileOptions options;
   options.platform = "tpu";
-  EXPECT_THAT(XlaCompileMain(options),
-              absl_testing::StatusIs(tsl::error::UNIMPLEMENTED));
+  EXPECT_THAT(XlaCompileMain(options), StatusIs(tsl::error::UNIMPLEMENTED));
 }
 
 TEST_F(XlaCompileLibTest, WriteResultFilePropagatesErrors) {
   TimerStats stats;
   CompilationResult result;
-  EXPECT_THAT(WriteResultFile("/does/not/exist", stats, result),
-              Not(absl_testing::IsOk()));
+  EXPECT_THAT(WriteResultFile("/does/not/exist", stats, result), Not(IsOk()));
 }
 
 TEST_F(XlaCompileLibTest, WriteResultFileWritesTheFile) {
@@ -91,7 +92,7 @@ TEST_F(XlaCompileLibTest, WriteResultFileWritesTheFile) {
 
   TimerStats stats;
   {
-    absl::MutexLock ml(stats.stats_mutex);
+    absl::MutexLock ml(&stats.stats_mutex);
     stats.cumulative_secs = 5.5;
     stats.max_secs = 5.5;
   }
@@ -119,14 +120,14 @@ TEST_F(XlaCompileLibTest, WriteResultFileWritesTheFile) {
 }
 
 TEST_F(XlaCompileLibTest, LoadModuleErrors) {
-  EXPECT_THAT(LoadModule("/does/not/exist"), Not(absl_testing::IsOk()));
+  EXPECT_THAT(LoadModule("/does/not/exist"), Not(IsOk()));
 }
 
 TEST_F(XlaCompileLibTest, ErrorsOnMissingOutputPaths) {
   XlaCompileOptions options;
   options.platform = "gpu";
   EXPECT_THAT(XlaCompileMain(options),
-              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
+              StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST_F(XlaCompileLibTest, LoadModuleLoadsTextFormat) {
@@ -135,8 +136,7 @@ TEST_F(XlaCompileLibTest, LoadModuleLoadsTextFormat) {
   TF_ASSERT_OK(tsl::WriteStringToFile(tsl::Env::Default(), module_file,
                                       module_->ToString()));
 
-  EXPECT_THAT(LoadModule(module_file),
-              absl_testing::IsOkAndHolds(Not(IsNull())));
+  EXPECT_THAT(LoadModule(module_file), IsOkAndHolds(Not(IsNull())));
 }
 
 TEST_F(XlaCompileLibTest, MainForCpu) {
@@ -168,7 +168,7 @@ TEST_F(XlaCompileLibTest, LoadAutotuneDataCpu) {
   mod.hlo_module = std::move(module_);
 
   EXPECT_THAT(internal::LoadAutotuneDataFromModule(&mod, BackendType::kCpu),
-              absl_testing::IsOkAndHolds(false));
+              IsOkAndHolds(false));
 }
 
 }  // namespace

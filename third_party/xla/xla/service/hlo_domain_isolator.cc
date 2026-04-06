@@ -123,7 +123,7 @@ absl::StatusOr<bool> HloDomainIsolator::UpdateDomains(
   return changed;
 }
 
-absl::StatusOr<bool> HloDomainIsolator::RunImpl(
+absl::StatusOr<bool> HloDomainIsolator::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   DomainCreator creator = creator_factory_();

@@ -20,15 +20,14 @@ limitations under the License.
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/types/span.h"
-#include "llvm/ADT/SmallVector.h"
-#include "xla/codegen/tiling/tiled_hlo_instruction.h"
-#include "xla/hlo/analysis/indexing_map.h"
-#include "xla/hlo/analysis/symbolic_expr.h"
+#include "mlir/IR/MLIRContext.h"
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/service/gpu/hlo_fusion_analysis.h"
+#include "xla/service/gpu/model/tiled_hlo_instruction.h"
 #include "xla/stream_executor/device_description.h"
 
-namespace xla::gpu {
+namespace xla {
+namespace gpu {
 
 using CoalescingMap = absl::flat_hash_map<const HloInstruction*, bool>;
 
@@ -99,6 +98,7 @@ double BandwidthUtilizationRateHeuristicForTiledMemoryAccess(
 bool IsTiledReadCoalescedHeuristic(const TiledHloInstruction& operand,
                                    const se::DeviceDescription& device_info);
 
-}  // namespace xla::gpu
+}  // namespace gpu
+}  // namespace xla
 
 #endif  // XLA_SERVICE_GPU_MODEL_COALESCING_ANALYSIS_H_

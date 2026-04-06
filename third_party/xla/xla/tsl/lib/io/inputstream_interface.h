@@ -16,9 +16,10 @@ limitations under the License.
 #ifndef XLA_TSL_LIB_IO_INPUTSTREAM_INTERFACE_H_
 #define XLA_TSL_LIB_IO_INPUTSTREAM_INTERFACE_H_
 
-#include <cstdint>
+#include <string>
 
-#include "absl/status/status.h"
+#include "xla/tsl/platform/errors.h"
+#include "xla/tsl/platform/status.h"
 #include "xla/tsl/platform/types.h"
 #include "tsl/platform/cord.h"
 
@@ -41,7 +42,7 @@ class InputStreamInterface {
   //  * OK - in case of success.
   //  * OUT_OF_RANGE - not enough bytes remaining before end of file.
   virtual absl::Status ReadNBytes(int64_t bytes_to_read, absl::Cord* cord) {
-    return absl::UnimplementedError(
+    return errors::Unimplemented(
         "ReadNBytes(int64, absl::Cord*) is not implemented.");
   }
 #endif

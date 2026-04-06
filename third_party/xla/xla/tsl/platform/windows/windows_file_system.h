@@ -16,7 +16,6 @@ limitations under the License.
 #ifndef XLA_TSL_PLATFORM_WINDOWS_WINDOWS_FILE_SYSTEM_H_
 #define XLA_TSL_PLATFORM_WINDOWS_WINDOWS_FILE_SYSTEM_H_
 
-#include "absl/strings/string_view.h"
 #include "xla/tsl/platform/file_system.h"
 #include "tsl/platform/path.h"
 #include "tsl/platform/platform.h"
@@ -89,7 +88,7 @@ class WindowsFileSystem : public FileSystem {
 class LocalWinFileSystem : public WindowsFileSystem {
  public:
   string TranslateName(const string& name) const override {
-    absl::string_view scheme, host, path;
+    StringPiece scheme, host, path;
     io::ParseURI(name, &scheme, &host, &path);
     return string(path);
   }

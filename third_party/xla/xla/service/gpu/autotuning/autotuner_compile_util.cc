@@ -20,12 +20,10 @@ limitations under the License.
 #include <vector>
 
 #include "absl/log/check.h"
-#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
-#include "xla/backends/gpu/autotuner/gpu_codegen_backend.h"
 #include "xla/executable_run_options.h"
 #include "xla/hlo/ir/hlo_clone_context.h"
 #include "xla/hlo/ir/hlo_computation.h"
@@ -33,7 +31,6 @@ limitations under the License.
 #include "xla/hlo/ir/hlo_module.h"
 #include "xla/service/compiler.h"
 #include "xla/service/executable.h"
-#include "xla/service/gpu/autotuning/autotuner_util.h"
 #include "xla/service/gpu/gpu_executable_run_options.h"
 #include "xla/service/gpu/ir_emission_utils.h"
 #include "xla/service/maybe_owning_device_memory.h"
@@ -41,6 +38,7 @@ limitations under the License.
 #include "xla/shape.h"
 #include "xla/shape_util.h"
 #include "xla/stream_executor/device_memory.h"
+#include "xla/stream_executor/gpu/redzone_allocator.h"
 #include "xla/stream_executor/stream.h"
 #include "xla/tsl/platform/errors.h"
 #include "xla/tsl/platform/statusor.h"
@@ -80,9 +78,21 @@ AutotunerCompileUtil::AutotunerCompileUtil(std::unique_ptr<Compiler> compiler,
       stream_(stream),
       allocator_(allocator),
       opts_(opts) {
-  GpuCodegenBackend::AdjustDebugOptionsForAutotuning(
-      opts_,
-      /*force_allow_register_spills=*/false);
+  // Avoid dumping compilation steps.
+  opts_.set_xla_enable_dumping(false);
+  opts_.set_xla_gpu_dump_autotune_results_to("");
+  opts_.set_xla_gpu_load_autotune_results_from("");
+  opts_.set_xla_gpu_dump_llvmir(false);
+  opts_.set_xla_gpu_dump_autotune_logs_to("");
+  // Avoid using another thread pool.
+  opts_.set_xla_gpu_force_compilation_parallelism(1);
+  opts_.set_xla_gpu_enable_llvm_module_compilation_parallelism(false);
+  // Avoid using GPU graphs as we don't want to measure graph construction time.
+  opts_.clear_xla_gpu_enable_command_buffer();
+  // Avoid using async dot as we don't want to measure event overheads.
+  opts_.set_xla_gpu_async_dot(false);
+  opts_.set_xla_embed_ir_in_executable(false);
+  opts_.set_xla_gpu_kernel_cache_file("");
 }
 
 absl::StatusOr<AutotunerCompileUtil::ProfilingOutput>
@@ -120,23 +130,20 @@ absl::StatusOr<std::unique_ptr<Executable>> AutotunerCompileUtil::Compile(
   absl::StatusOr<std::unique_ptr<HloModule>> new_hlo_module = extractor(opts_);
   if (new_hlo_module.status().GetPayload(kUncompilableFusion).has_value()) {
     // Incompatible value of split-k is an example of an expected failure.
-    VLOG(5) << "Module with uncompilable fusion";
     return std::unique_ptr<Executable>();
-  }
-  if (!new_hlo_module.status().ok()) {
+  } else if (!new_hlo_module.status().ok()) {
     return new_hlo_module.status();
   }
-  Compiler::CompileOptions compile_options;
-  compile_options.device_allocator = &allocator_;
-  compile_options.embed_hlo_module = false;
+
   absl::StatusOr<std::unique_ptr<Executable>> out = compiler_->RunBackend(
-      std::move(*new_hlo_module), &stream_executor_, compile_options);
+      std::move(*new_hlo_module), &stream_executor_,
+      Compiler::CompileOptions{&allocator_, /*thread_pool=*/nullptr,
+                               /*layout_canonicalization_callback=*/{},
+                               /*is_autotuning_compilation=*/true});
   if (out.status().code() == absl::StatusCode::kResourceExhausted ||
       out.status().code() == absl::StatusCode::kCancelled) {
     // Being out of shared memory budget or registers is an expected failure.
     // Cancelling upon register spilling is also an expected failure.
-    VLOG(5) << "Compilation failed with status " << out.status()
-            << " that is ignored";
     return std::unique_ptr<Executable>();
   }
   return out;

@@ -18,18 +18,21 @@ limitations under the License.
 #include <cstddef>
 #include <memory>
 #include <utility>
+#include <vector>
 
+#include "oneapi/dnnl/dnnl_common.hpp"
+#include "oneapi/dnnl/dnnl_graph.hpp"
+#include "oneapi/dnnl/dnnl_threadpool.hpp"
+#include "absl/container/inlined_vector.h"
 #include "absl/functional/function_ref.h"
 #include "absl/log/check.h"
 #include "absl/memory/memory.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/types/span.h"
-#include "oneapi/dnnl/dnnl_common.hpp"
-#include "oneapi/dnnl/dnnl_graph.hpp"
-#include "oneapi/dnnl/dnnl_threadpool.hpp"
-#include "xla/backends/cpu/onednn_fusion.h"
+#include "xla/backends/cpu/onednn_fusion_graph.h"
 #include "xla/backends/cpu/runtime/onednn/onednn_threadpool.h"
+#include "xla/backends/cpu/runtime/parallel_loop_runner.h"
 #include "xla/backends/cpu/runtime/thunk.h"
 #include "xla/runtime/buffer_use.h"
 #include "xla/status_macros.h"
@@ -47,10 +50,9 @@ struct OneDnnFusionThunk::OneDnnRuntime {
   OneDnnRuntime(OneDnnRuntime&&) = default;
   OneDnnRuntime& operator=(OneDnnRuntime&&) = default;
 
-  tsl::AsyncValueRef<OneDnnFusionThunk::ExecuteEvent> Invoke(
-      Eigen::ThreadPoolInterface* thread_pool,
-      absl::Span<se::DeviceMemoryBase> arguments,
-      absl::Span<se::DeviceMemoryBase> results);
+  absl::Status Invoke(Eigen::ThreadPoolInterface* thread_pool,
+                      absl::Span<se::DeviceMemoryBase> arguments,
+                      absl::Span<se::DeviceMemoryBase> results);
 
   OneDnnFusion fusion;
 
@@ -64,13 +66,11 @@ struct OneDnnFusionThunk::OneDnnRuntime {
 OneDnnFusionThunk::OneDnnRuntime::OneDnnRuntime(
     OneDnnFusion fusion, Eigen::ThreadPoolInterface* thread_pool)
     : fusion(std::move(fusion)),
-      threadpool(
-          std::make_unique<OneDnnThreadPool>(thread_pool, /*is_async=*/true)),
+      threadpool(std::make_unique<OneDnnThreadPool>(thread_pool)),
       engine(dnnl::engine::kind::cpu, 0),
       stream(dnnl::threadpool_interop::make_stream(engine, threadpool.get())) {}
 
-tsl::AsyncValueRef<OneDnnFusionThunk::ExecuteEvent>
-OneDnnFusionThunk::OneDnnRuntime::Invoke(
+absl::Status OneDnnFusionThunk::OneDnnRuntime::Invoke(
     Eigen::ThreadPoolInterface* thread_pool,
     absl::Span<se::DeviceMemoryBase> arguments,
     absl::Span<se::DeviceMemoryBase> results) {
@@ -104,7 +104,7 @@ OneDnnFusionThunk::OneDnnRuntime::Invoke(
     partition.execute(stream, argument_data, result_data);
   }
 
-  return threadpool->done_event();
+  return absl::OkStatus();
 }
 
 absl::StatusOr<OneDnnFusionThunk::OneDnnRuntime>
@@ -154,10 +154,10 @@ OneDnnFusionThunk::~OneDnnFusionThunk() = default;
 OneDnnFusionThunk::BufferUses OneDnnFusionThunk::buffer_uses() const {
   BufferUses buffer_uses;
   for (const Argument& argument : arguments_) {
-    buffer_uses.push_back(BufferUse::Read(argument.slice, argument.shape));
+    buffer_uses.push_back(BufferUse::Read(argument.slice));
   }
   for (const Result& result : results_) {
-    buffer_uses.push_back(BufferUse::Write(result.slice, result.shape));
+    buffer_uses.push_back(BufferUse::Write(result.slice));
   }
   return buffer_uses;
 }
@@ -209,13 +209,11 @@ tsl::AsyncValueRef<OneDnnFusionThunk::ExecuteEvent> OneDnnFusionThunk::Execute(
   // Borrow oneDNN runtime from the pool.
   TF_ASSIGN_OR_RETURN(auto runtime,
                       onednn_runtime_pool_.GetOrCreate(thread_pool));
-  auto executed =
-      runtime->Invoke(thread_pool, absl::MakeSpan(arguments_buffers),
-                      absl::MakeSpan(results_buffers));
-  // Destroy the runtime after the task is done.
-  executed.AndThen([runtime = std::move(runtime)] {});
+  TF_RETURN_IF_ERROR(runtime->Invoke(thread_pool,
+                                     absl::MakeSpan(arguments_buffers),
+                                     absl::MakeSpan(results_buffers)));
 
-  return executed;
+  return OkExecuteEvent();
 }
 
 }  // namespace xla::cpu

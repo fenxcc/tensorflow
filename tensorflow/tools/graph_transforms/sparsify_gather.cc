@@ -358,21 +358,19 @@ absl::Status SparsifyGatherInternal(
           DataType key_dtype = DT_INT64;
           NodeDef indices_node;
           CreateConstNode(indices_tensor,
-                          absl::StrCat(weights_node.name(), "/indices"),
+                          StrCat(weights_node.name(), "/indices"),
                           &indices_node);
           SetNodeAttr("dtype", key_dtype, &indices_node);
 
           NodeDef values_node;
-          CreateConstNode(values_tensor,
-                          absl::StrCat(weights_node.name(), "/values"),
+          CreateConstNode(values_tensor, StrCat(weights_node.name(), "/values"),
                           &values_node);
           SetNodeAttr("dtype", data_type, &values_node);
 
           // HashTable node
           NodeDef hashtable_node;
           hashtable_node.set_op("HashTable");
-          hashtable_node.set_name(
-              absl::StrCat(weights_node.name(), "/HashTable"));
+          hashtable_node.set_name(StrCat(weights_node.name(), "/HashTable"));
           SetNodeAttr("key_dtype", key_dtype, &hashtable_node);
           SetNodeAttr("value_dtype", data_type, &hashtable_node);
 
@@ -380,7 +378,7 @@ absl::Status SparsifyGatherInternal(
           NodeDef init_table_node;
           init_table_node.set_op("InitializeTable");
           init_table_node.set_name(
-              absl::StrCat(weights_node.name(), "/InitializeTable"));
+              StrCat(weights_node.name(), "/InitializeTable"));
           SetNodeAttr("Tkey", key_dtype, &init_table_node);
           SetNodeAttr("Tval", data_type, &init_table_node);
           init_table_node_names.push_back(init_table_node.name());
@@ -388,8 +386,7 @@ absl::Status SparsifyGatherInternal(
           // LookupTableFind node
           NodeDef lookup_node;
           lookup_node.set_op("LookupTableFind");
-          lookup_node.set_name(
-              absl::StrCat(gather_node.name(), "/LookupTableFind"));
+          lookup_node.set_name(StrCat(gather_node.name(), "/LookupTableFind"));
           SetNodeAttr("Tin", key_dtype, &lookup_node);
           SetNodeAttr("Tout", data_type, &lookup_node);
 
@@ -397,8 +394,7 @@ absl::Status SparsifyGatherInternal(
           Tensor zero_tensor(data_type, TensorShape({}));
           zero_tensor.flat<float>()(0) = 0.0;
           NodeDef default_value_node;
-          CreateConstNode(zero_tensor,
-                          absl::StrCat(gather_node.name(), "/Const"),
+          CreateConstNode(zero_tensor, StrCat(gather_node.name(), "/Const"),
                           &default_value_node);
           SetNodeAttr("dtype", data_type, &default_value_node);
 
@@ -408,7 +404,7 @@ absl::Status SparsifyGatherInternal(
           NodeDef dim_idx_node;
           dim_idx_node.set_op("Const");
           dim_idx_node.set_name(
-              absl::StrCat(gather_node.name(), "/ExpandDims/Const"));
+              StrCat(gather_node.name(), "/ExpandDims/Const"));
           SetNodeAttr("value", dim_idx, &dim_idx_node);
           SetNodeAttr("dtype", DT_INT32, &dim_idx_node);
 
@@ -470,7 +466,7 @@ absl::Status SparsifyGatherInternal(
     }
     for (const string& name : init_table_node_names) {
       // Add control dependence from init_table_node to group_deps_node
-      AddNodeInput(absl::StrCat("^", name), init_op);
+      AddNodeInput(StrCat("^", name), init_op);
       refs[name]++;
     }
 

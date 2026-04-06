@@ -27,7 +27,6 @@ limitations under the License.
 #include "absl/container/btree_set.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/log/check.h"
-#include "absl/log/log.h"
 #include "absl/types/span.h"
 #include "xla/hlo/experimental/auto_sharding/auto_sharding_device_mesh.h"
 #include "xla/hlo/experimental/auto_sharding/auto_sharding_strategy.h"
@@ -295,8 +294,8 @@ double ClusterEnvironment::ReshardingCost(const Shape& shape,
     return 0.0;
   }
 
-  if (src_spec.num_devices() > device_mesh_.num_elements() ||
-      dst_spec.num_devices() > device_mesh_.num_elements()) {
+  if (src_spec.tile_assignment().num_elements() > device_mesh_.num_elements() ||
+      dst_spec.tile_assignment().num_elements() > device_mesh_.num_elements()) {
     LOG(WARNING)
         << "Full device sharding found when solving for the partial mesh "
         << spmd::ToString(device_mesh_.dimensions())

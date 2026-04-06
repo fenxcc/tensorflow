@@ -19,13 +19,16 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include "absl/status/status.h"
-#include "absl/status/status_matchers.h"
 #include "xla/python/ifrt/serdes_version.h"
+#include "xla/tsl/platform/status_matchers.h"
 
 namespace xla {
 namespace ifrt {
 namespace proxy {
 namespace {
+
+using ::tsl::testing::IsOk;
+using ::tsl::testing::StatusIs;
 
 struct Param {
   int client_min_version;
@@ -41,7 +44,7 @@ TEST_P(CompatibleVersionTest, VerifyProtocolVersion) {
   EXPECT_THAT(
       ChooseProtocolVersion(param.client_min_version, param.client_max_version,
                             param.server_min_version, param.server_max_version),
-      absl_testing::IsOk());
+      IsOk());
 }
 
 TEST_P(CompatibleVersionTest, VerifyIfrtSerdesVersionNumber) {
@@ -51,7 +54,7 @@ TEST_P(CompatibleVersionTest, VerifyIfrtSerdesVersionNumber) {
                   SerDesVersionNumber(param.client_max_version),
                   SerDesVersionNumber(param.server_min_version),
                   SerDesVersionNumber(param.server_max_version)),
-              absl_testing::IsOk());
+              IsOk());
 }
 
 INSTANTIATE_TEST_SUITE_P(CompatibleVersionTest, CompatibleVersionTest,
@@ -66,7 +69,7 @@ TEST_P(IncompatibleVersionTest, VerifyProtocolVersion) {
   EXPECT_THAT(
       ChooseProtocolVersion(param.client_min_version, param.client_max_version,
                             param.server_min_version, param.server_max_version),
-      absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
+      StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST_P(IncompatibleVersionTest, VerifyIfrtSerdesVersionNumber) {
@@ -76,7 +79,7 @@ TEST_P(IncompatibleVersionTest, VerifyIfrtSerdesVersionNumber) {
                   SerDesVersionNumber(param.client_max_version),
                   SerDesVersionNumber(param.server_min_version),
                   SerDesVersionNumber(param.server_max_version)),
-              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
+              StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 INSTANTIATE_TEST_SUITE_P(IncompatibleVersionTest, IncompatibleVersionTest,

@@ -16,7 +16,7 @@ limitations under the License.
 #include <memory>
 #include <utility>
 
-#include <gtest/gtest.h>
+#include "absl/strings/str_replace.h"
 #include "xla/error_spec.h"
 #include "xla/hlo/ir/hlo_computation.h"
 #include "xla/hlo/ir/hlo_instruction.h"
@@ -25,7 +25,6 @@ limitations under the License.
 #include "xla/literal.h"
 #include "xla/literal_util.h"
 #include "xla/service/gpu/tests/gpu_codegen_test.h"
-#include "xla/xla.pb.h"
 #include "tsl/platform/statusor.h"
 #include "tsl/platform/test.h"
 
@@ -411,7 +410,8 @@ TEST_F(GpuCopyTest, UseDynamicMemcpyIntegrationTest) {
                                 .default_stream_executor()
                                 ->GetDeviceDescription()
                                 .gpu_compute_capability();
-  if (auto cc = compute_capability.cuda_compute_capability();
+  if (auto cc = std::get_if<stream_executor::CudaComputeCapability>(
+          &compute_capability);
       !cc || !cc->IsAtLeastAmpere()) {
     GTEST_SKIP() << "Test requires at least Ampere.";
   }

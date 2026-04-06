@@ -30,14 +30,10 @@ limitations under the License.
 #include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
-#include "absl/strings/str_split.h"
-#include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "xla/debug_options_flags.h"
 #include "xla/hlo/ir/hlo_casting_utils.h"
-#include "xla/hlo/ir/hlo_clone_context.h"
 #include "xla/hlo/ir/hlo_computation.h"
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/ir/hlo_instructions.h"
@@ -51,6 +47,7 @@ limitations under the License.
 #include "xla/shape_util.h"
 #include "xla/status_macros.h"
 #include "xla/tsl/platform/errors.h"
+#include "xla/tsl/platform/status.h"
 #include "xla/tsl/platform/statusor.h"
 #include "xla/util.h"
 
@@ -101,7 +98,7 @@ HloInstruction* CloneNestedTuples(HloInstruction* tuple) {
                                             /* accept_different_shape =*/true);
     } else {
       for (auto tuple_user : tuple_users) {
-        CHECK_OK(tuple->ReplaceUseWithDifferentShape(tuple_user, new_tuple));
+        TF_CHECK_OK(tuple->ReplaceUseWithDifferentShape(tuple_user, new_tuple));
       }
     }
     return new_tuple;
@@ -634,7 +631,7 @@ absl::StatusOr<bool> ConvertSpecialMove(HloInstruction* conditional,
     // The shape can vary since the operands to convert are now
     // being returned through the branches' root.
     cur_branch->set_root_instruction(new_branch_root, true /*new shape*/);
-    CHECK_OK(cur_branch->RemoveInstruction(old_root));
+    TF_CHECK_OK(cur_branch->RemoveInstruction(old_root));
 
     // Only one of the branches needs to change the conditional->parent().
     if (branch != 0) {
@@ -650,7 +647,7 @@ absl::StatusOr<bool> ConvertSpecialMove(HloInstruction* conditional,
     // Ensure that all the users of conditional refer to the new one.
     TF_RETURN_IF_ERROR(
         conditional->ReplaceAllUsesWithDifferentShape(newconditional));
-    CHECK_OK(conditional_parent->RemoveInstruction(conditional));
+    TF_CHECK_OK(conditional_parent->RemoveInstruction(conditional));
     conditional = newconditional;
     // Add the hoisted instructions in the parent.
     for (HloInstruction* hoist : to_hoist_set) {
@@ -670,7 +667,7 @@ absl::StatusOr<bool> ConvertSpecialMove(HloInstruction* conditional,
           hoist->CloneWithNewOperands(hoist->shape(), new_operands));
       VLOG(2) << "Hoisted instruction in parent:" << hoisted->ToString();
       TF_RETURN_IF_ERROR(gte_hoist->ReplaceAllUsesWith(hoisted));
-      CHECK_OK(conditional_parent->RemoveInstruction(gte_hoist));
+      TF_CHECK_OK(conditional_parent->RemoveInstruction(gte_hoist));
     }
     // No need to explicitly delete a hoisted instruction since if its dead
     // then the subsequent DCE will remove it.
@@ -1042,7 +1039,9 @@ class MoveOperandIntoBranch {
         VLOG(1) << "matching_tuple_indices: "
                 << matching_tuple_indices[matching_index][0] << "\n";
         if (matching_tuple_indices[matching_index].end() ==
-            absl::c_find(matching_tuple_indices[matching_index], tuple_index)) {
+            std::find(matching_tuple_indices[matching_index].begin(),
+                      matching_tuple_indices[matching_index].end(),
+                      tuple_index)) {
           continue;
         }
         for (HloInstruction* param_user : param_users) {
@@ -1062,7 +1061,7 @@ class MoveOperandIntoBranch {
           } else {
             VLOG(1) << "new_param_shape=" << new_param_shape->ToString();
             *param_user->mutable_shape() = *new_param_shape;
-            CHECK_OK(param_user->ReplaceAllUsesWith(branch_param));
+            TF_CHECK_OK(param_user->ReplaceAllUsesWith(branch_param));
           }
         }
       }
@@ -1112,7 +1111,8 @@ class MoveOperandIntoBranch {
       }
       while (repl_count < new_operands.size()) {
         HloInstruction* new_input = new_operands[repl_count++];
-        auto new_input_in_user = absl::c_find(user->operands(), new_input);
+        auto new_input_in_user = std::find(user->operands().begin(),
+                                           user->operands().end(), new_input);
         int64_t opd_index = (new_input_in_user == user->operands().end())
                                 ? user->operand_count()
                                 : new_input_in_user - user->operands().begin();
@@ -1939,15 +1939,16 @@ ConditionalCodeMotion::Decision ConditionalCodeMotion::ConsiderCodeMotion(
                           ? Decision::Direction::kMoveOutOfBranch
                           : Decision::Direction::kMoveIntoBranch,
                       benefit);
+    } else {
+      connect.clear_recently_visited();
     }
-    connect.clear_recently_visited();
   } else {
     connect.AddNewBoundaries(new_boundaries);
   }
   return Decision(Decision::Direction::kNoChange, 0);
 }
 
-absl::StatusOr<bool> ConditionalCodeMotion::RunImpl(
+absl::StatusOr<bool> ConditionalCodeMotion::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   VLOG(2) << "Begin a new pass of conditional code motion optimization.\n";

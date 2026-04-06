@@ -17,8 +17,6 @@ limitations under the License.
 
 #include <memory>
 
-#include <gmock/gmock.h>
-#include <gtest/gtest.h>
 #include "absl/log/log.h"
 #include "xla/hlo/ir/hlo_print_options.h"
 #include "xla/hlo/testlib/filecheck.h"
@@ -56,8 +54,8 @@ ENTRY main {
   RaggedAllToAllDecomposer decomposer;
   TF_ASSERT_OK_AND_ASSIGN(bool changed, decomposer.Run(module.get(), {}));
   EXPECT_TRUE(changed);
-  EXPECT_OK(VerifyHloModule(module.get(), true, true));
-  EXPECT_OK(HloCSE(true).Run(module.get()));
+  TF_EXPECT_OK(VerifyHloModule(module.get(), true, true));
+  TF_EXPECT_OK(HloCSE(true).Run(module.get()));
 
   EXPECT_TRUE(*RunFileCheck(module->ToString(), R"(
     // CHECK: s64[2,1]{1,0} all-to-all
@@ -96,8 +94,8 @@ ENTRY main {
   RaggedAllToAllDecomposer decomposer;
   TF_ASSERT_OK_AND_ASSIGN(bool changed, decomposer.Run(module.get(), {}));
   EXPECT_TRUE(changed);
-  EXPECT_OK(VerifyHloModule(module.get(), true, true));
-  EXPECT_OK(HloCSE(true).Run(module.get()));
+  TF_EXPECT_OK(VerifyHloModule(module.get(), true, true));
+  TF_EXPECT_OK(HloCSE(true).Run(module.get()));
 
   EXPECT_TRUE(*RunFileCheck(module->ToString(), R"(
     // CHECK: s64[2,1]{1,0} all-to-all
@@ -136,8 +134,8 @@ ENTRY main {
   RaggedAllToAllDecomposer decomposer;
   TF_ASSERT_OK_AND_ASSIGN(bool changed, decomposer.Run(module.get(), {}));
   EXPECT_TRUE(changed);
-  EXPECT_OK(VerifyHloModule(module.get(), true, true));
-  EXPECT_OK(HloCSE(true).Run(module.get()));
+  TF_EXPECT_OK(VerifyHloModule(module.get(), true, true));
+  TF_EXPECT_OK(HloCSE(true).Run(module.get()));
 
   EXPECT_TRUE(*RunFileCheck(module->ToString(), R"(
     // CHECK: dynamic-slice
@@ -175,8 +173,8 @@ ENTRY main {
   RaggedAllToAllDecomposer decomposer;
   TF_ASSERT_OK_AND_ASSIGN(bool changed, decomposer.Run(module.get(), {}));
   EXPECT_TRUE(changed);
-  EXPECT_OK(VerifyHloModule(module.get(), true, true));
-  EXPECT_OK(HloCSE(true).Run(module.get()));
+  TF_EXPECT_OK(VerifyHloModule(module.get(), true, true));
+  TF_EXPECT_OK(HloCSE(true).Run(module.get()));
 
   EXPECT_TRUE(
       *RunFileCheck(module->ToString(HloPrintOptions::ShortParsable()), R"(

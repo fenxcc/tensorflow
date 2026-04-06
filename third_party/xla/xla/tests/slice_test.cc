@@ -37,15 +37,13 @@ limitations under the License.
 #include "xla/literal_util.h"
 #include "xla/reference_util.h"
 #include "xla/tests/client_library_test_runner_mixin.h"
-#include "xla/tests/hlo_pjrt_interpreter_reference_mixin.h"
-#include "xla/tests/hlo_pjrt_test_base.h"
+#include "xla/tests/hlo_test_base.h"
 #include "xla/tsl/platform/test.h"
 
 namespace xla {
 namespace {
 
-using SliceTest = ClientLibraryTestRunnerMixin<
-    HloPjRtInterpreterReferenceMixin<HloPjRtTestBase>>;
+using SliceTest = ClientLibraryTestRunnerMixin<HloTestBase>;
 
 TEST_F(SliceTest, Slice3x3x3_To_3x3x1_F32) {
   Array3D<float> values(3, 3, 3);
@@ -218,8 +216,7 @@ struct R1Spec {
 
 // Parameterized test that generates R1 values, slices them according
 // to the R1Spec, and compares the result with a computed version.
-class SliceR1Test : public ClientLibraryTestRunnerMixin<
-                        HloPjRtInterpreterReferenceMixin<HloPjRtTestBase>>,
+class SliceR1Test : public ClientLibraryTestRunnerMixin<HloTestBase>,
                     public ::testing::WithParamInterface<R1Spec> {
  protected:
   template <typename NativeT>
@@ -388,7 +385,9 @@ INSTANTIATE_TEST_CASE_P(
         R1Spec{2047, 1, 2046, 3 * 128},
         R1Spec{4096, 1024 + 3, 4095, 500},
         R1Spec{8192, 0, 8192, 1024 * 3 + 400},
+        #ifndef XLA_TEST_BACKEND_GRM
         R1Spec{1024 * 1024, 0, 1024 * 1024, 2},
+        #endif
         R1Spec{1024 * 1024, 0, 1024 * 1024, 8},
         R1Spec{1024 * 1024, 0, 1024 * 1024, 7},
         R1Spec{1024 * 1024, 0, 1024 * 1024, 125},
@@ -424,8 +423,7 @@ struct R2Spec {
 
 // Parameterized test that generates patterned R2 values, slices them according
 // to the R2Spec, and compares the results with the ReferenceUtil version.
-class SliceR2Test : public ClientLibraryTestRunnerMixin<
-                        HloPjRtInterpreterReferenceMixin<HloPjRtTestBase>>,
+class SliceR2Test : public ClientLibraryTestRunnerMixin<HloTestBase>,
                     public ::testing::WithParamInterface<R2Spec> {};
 
 TEST_P(SliceR2Test, DoIt) {
@@ -514,8 +512,7 @@ std::string R4SpecToString(const ::testing::TestParamInfo<R4Spec>& data) {
                       "__strides_", absl::StrJoin(spec.slice_strides, "x"));
 }
 
-class SliceR4Test : public ClientLibraryTestRunnerMixin<
-                        HloPjRtInterpreterReferenceMixin<HloPjRtTestBase>>,
+class SliceR4Test : public ClientLibraryTestRunnerMixin<HloTestBase>,
                     public ::testing::WithParamInterface<R4Spec> {
  protected:
   void Run(const R4Spec& spec) {

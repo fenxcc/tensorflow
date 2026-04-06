@@ -465,7 +465,6 @@ absl::StatusOr<bool> ConditionalSimplifier::TryRemoveConditional(
 
   if (conditional->branch_count() == 1) {
     HloInstruction* call_op = create_call(0);
-    call_op->set_original_value(conditional->original_value());
     TF_RETURN_IF_ERROR(computation->ReplaceInstruction(conditional, call_op));
     TF_RETURN_IF_ERROR(CallInliner::Inline(call_op).status());
     return true;
@@ -482,7 +481,6 @@ absl::StatusOr<bool> ConditionalSimplifier::TryRemoveConditional(
       }
     }
     HloInstruction* call_op = create_call(branch_index);
-    call_op->set_original_value(conditional->original_value());
     TF_RETURN_IF_ERROR(computation->ReplaceInstruction(conditional, call_op));
     TF_RETURN_IF_ERROR(CallInliner::Inline(call_op).status());
 
@@ -529,9 +527,7 @@ absl::StatusOr<bool> ConditionalSimplifier::TryRemoveConditional(
   }
 
   HloInstruction* true_call_op = create_call(0);
-  true_call_op->set_original_value(conditional->original_value());
   HloInstruction* false_call_op = create_call(1);
-  false_call_op->set_original_value(conditional->original_value());
   auto condition_broadcast = [&](const Shape& shape) {
     if (ShapeUtil::IsScalar(shape)) {
       return conditional->mutable_operand(0);
@@ -606,11 +602,11 @@ static bool InstructionCallsChannelInstructions(
   return false;
 }
 
-absl::StatusOr<bool> ConditionalSimplifier::RunImpl(
+absl::StatusOr<bool> ConditionalSimplifier::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   XLA_VLOG_LINES(
-      3, "ConditionalSimplifier::RunImpl(), before:\n" + module->ToString());
+      3, "ConditionalSimplifier::Run(), before:\n" + module->ToString());
   bool changed = false;
 
   // Gather all the conditional ops in our module. We do this ahead of time so
@@ -674,8 +670,8 @@ absl::StatusOr<bool> ConditionalSimplifier::RunImpl(
     changed |= result;
   }
 
-  XLA_VLOG_LINES(
-      3, "ConditionalSimplifier::RunImpl(), after:\n" + module->ToString());
+  XLA_VLOG_LINES(3,
+                 "ConditionalSimplifier::Run(), after:\n" + module->ToString());
   return changed;
 }
 

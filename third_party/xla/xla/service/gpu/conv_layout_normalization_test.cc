@@ -34,11 +34,11 @@ class ConvolutionLayoutNormalizationTest : public HloTestBase {
         .cuda_compute_capability();
   }
   bool IsRocm() {
-    return backend()
-        .default_stream_executor()
-        ->GetDeviceDescription()
-        .gpu_compute_capability()
-        .IsRocm();
+    return std::holds_alternative<se::RocmComputeCapability>(
+        backend()
+            .default_stream_executor()
+            ->GetDeviceDescription()
+            .gpu_compute_capability());
   }
 };
 
@@ -118,8 +118,8 @@ ENTRY TestComputation {
 }
 
 TEST_F(ConvolutionLayoutNormalizationTest, GraphConvF8) {
-  if (IsRocm() || !GetCudaComputeCapability().IsAtLeast(
-                      se::CudaComputeCapability::kHopper)) {
+  if (!GetCudaComputeCapability().IsAtLeast(
+          se::CudaComputeCapability::kHopper)) {
     GTEST_SKIP() << "FP8 convolutions require Hopper or newer architecture.";
   }
   const char* hlo = R"(

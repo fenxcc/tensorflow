@@ -22,18 +22,15 @@ limitations under the License.
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include "absl/status/status.h"
-#include "absl/status/status_matchers.h"
 #include "absl/strings/string_view.h"
-#include "google/protobuf/text_format.h"
 #include "xla/hlo/ir/hlo_module.h"
 #include "xla/hlo/testlib/hlo_hardware_independent_test_base.h"
 #include "xla/service/gpu/gpu_latency_hiding_scheduler.h"
 #include "xla/service/latency_hiding_scheduler.h"
 #include "xla/service/profile_guided_latency_estimator.h"
-#include "xla/tsl/platform/statusor.h"
-#include "xla/xla.pb.h"
 #include "tsl/platform/protobuf.h"
-#include "tsl/profiler/protobuf/profiled_instructions.pb.h"
+#include "tsl/platform/status_matchers.h"
+#include "tsl/platform/statusor.h"
 
 namespace xla::gpu {
 namespace {
@@ -41,6 +38,7 @@ namespace {
 using PGLEAccuracyCheckerTest = HloHardwareIndependentTestBase;
 using ::tensorflow::profiler::ProfiledInstructionsProto;
 using ::tsl::protobuf::TextFormat;
+using ::tsl::testing::StatusIs;
 
 // Constructs PGLE estimator for a given `profile`.
 std::unique_ptr<ProfileGuidedLatencyEstimator> GetProfileGuidedLatencyEstimator(
@@ -158,7 +156,7 @@ TEST_F(PGLEAccuracyCheckerTest,
   auto pgle_estimator = GetProfileGuidedLatencyEstimator(profile);
   PGLEAccuracyChecker pgle_accuracy_checker(*pgle_estimator);
   EXPECT_THAT(pgle_accuracy_checker.Run(module.get()),
-              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
+              StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 }  // namespace

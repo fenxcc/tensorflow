@@ -37,6 +37,7 @@
 #include "xla/python/ifrt/array_spec.h"
 #include "xla/python/ifrt/client.h"
 #include "xla/python/ifrt/dtype.h"
+#include "xla/python/ifrt/future.h"
 #include "xla/python/ifrt/remap_plan.h"
 #include "xla/python/ifrt/shape.h"
 #include "xla/python/ifrt/sharding.h"
@@ -45,7 +46,6 @@
 #include "xla/python/ifrt/value.h"
 #include "xla/python/ifrt_proxy/client/rpc_helper.h"
 #include "xla/python/ifrt_proxy/common/types.h"
-#include "xla/tsl/concurrency/future.h"
 #include "xla/tsl/concurrency/ref_count.h"
 
 namespace xla {
@@ -72,11 +72,13 @@ class Array final : public llvm::RTTIExtends<Array, xla::ifrt::Array> {
   MakeArraysFromHostBufferShards(
       xla::ifrt::Client* client, std::shared_ptr<RpcHelper> rpc_helper,
       absl::Span<xla::ifrt::Client::MakeArraysFromHostBufferShardsSpec> specs,
-      xla::ifrt::Client::HostBufferSemantics semantics);
+      xla::ifrt::Client::HostBufferSemantics semantics,
+      tsl::RCReference<xla::ifrt::UserContext> user_context);
 
   static absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> MakeErrorArrays(
       xla::ifrt::Client* client, std::shared_ptr<RpcHelper> rpc_helper,
-      const absl::Status& error, absl::Span<const ArraySpec> array_specs);
+      const absl::Status& error, absl::Span<const ArraySpec> array_specs,
+      tsl::RCReference<UserContext> user_context);
 
   // `Array::AssembleArrayFromSingleDeviceArrays()` implements
   // `Client::AssembleArrayFromSingleDeviceArrays()`.
@@ -108,14 +110,13 @@ class Array final : public llvm::RTTIExtends<Array, xla::ifrt::Array> {
         dtype_(dtype),
         shape_(std::move(shape)),
         sharding_(std::move(sharding)),
-        layout_(std::move(layout)),
-        user_context_(UserContextScope::current()),
+        custom_layout_(std::move(layout)),
         handle_(arr_handle) {}
 
   ~Array() override { Destruct(rpc_helper_.get(), handle_); }
 
   absl::StatusOr<ArrayHandle> GetHandle(ArrayCopySemantics semantics) {
-    absl::MutexLock l(mu_);
+    absl::MutexLock l(&mu_);
     if (deleted_ == DeletionState::kDeleted) {
       return absl::InvalidArgumentError("Array already deleted.");
     }
@@ -132,7 +133,7 @@ class Array final : public llvm::RTTIExtends<Array, xla::ifrt::Array> {
   // synchronous RPC to the proxy-server. To avoid such performance overhead,
   // prefer using `GetHandle(semantics)` whenever the semantics are known.
   absl::StatusOr<ArrayHandle> GetHandleUnknownIfBeingDonated() {
-    absl::MutexLock l(mu_);
+    absl::MutexLock l(&mu_);
     if (deleted_ == DeletionState::kDeleted) {
       return absl::InvalidArgumentError("Array already deleted.");
     }
@@ -140,9 +141,13 @@ class Array final : public llvm::RTTIExtends<Array, xla::ifrt::Array> {
     return handle_;
   }
 
+  std::shared_ptr<const xla::PjRtLayout> custom_layout() const {
+    return custom_layout_;
+  }
+
   xla::ifrt::Client* client() const override;
-  tsl::Future<> GetReadyFuture() const override;
-  tsl::Future<> Delete() override;
+  Future<> GetReadyFuture() const override;
+  Future<> Delete() override;
   bool IsDeleted() const override;
   std::string DebugString() const override;
 
@@ -152,7 +157,6 @@ class Array final : public llvm::RTTIExtends<Array, xla::ifrt::Array> {
   ShardingRef shared_ptr_sharding() const override { return sharding_; }
   absl::StatusOr<std::shared_ptr<const PjRtLayout>> pjrt_layout()
       const override;
-  UserContextRef user_context() const override { return user_context_; }
 
   absl::StatusOr<std::vector<xla::ifrt::ArrayRef>>
   DisassembleIntoSingleDeviceArrays(
@@ -163,7 +167,7 @@ class Array final : public llvm::RTTIExtends<Array, xla::ifrt::Array> {
       xla::ifrt::ArrayCopySemantics semantics) override;
 
   ABSL_MUST_USE_RESULT
-  tsl::Future<> CopyToHostBuffer(
+  Future<> CopyToHostBuffer(
       void* data, std::optional<absl::Span<const int64_t>> byte_strides,
       ArrayCopySemantics semantics) override;
 
@@ -173,7 +177,7 @@ class Array final : public llvm::RTTIExtends<Array, xla::ifrt::Array> {
   template <typename T, typename... Args>
   friend tsl::RCReference<T> tsl::MakeRef(Args&&... args);
 
-  tsl::Future<> CopyToStringHostBuffer(
+  Future<> CopyToStringHostBuffer(
       void* data, std::optional<absl::Span<const int64_t>> byte_strides,
       ArrayCopySemantics semantics);
 
@@ -187,9 +191,11 @@ class Array final : public llvm::RTTIExtends<Array, xla::ifrt::Array> {
   const DType dtype_;
   const Shape shape_;
   const ShardingRef sharding_;
-  const std::shared_ptr<const xla::PjRtLayout> layout_;
 
-  const UserContextRef user_context_;
+  // This is layout explicitly supplied at creation time. we explicitly
+  // distinguish it from default layouts since some functions
+  // behaves differently depending on where the layout came from.
+  const std::shared_ptr<const xla::PjRtLayout> custom_layout_;
 
   const ArrayHandle handle_
       ABSL_DEPRECATED("Use GetHandle() function instead.");
@@ -202,7 +208,7 @@ class Array final : public llvm::RTTIExtends<Array, xla::ifrt::Array> {
   };
   mutable DeletionState deleted_ ABSL_GUARDED_BY(mu_) = DeletionState::kAlive;
 
-  mutable tsl::Future<> ready_future_ ABSL_GUARDED_BY(mu_);
+  mutable Future<> ready_future_ ABSL_GUARDED_BY(mu_);
 };
 
 }  // namespace proxy

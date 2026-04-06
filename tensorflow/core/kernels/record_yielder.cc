@@ -15,7 +15,6 @@ limitations under the License.
 
 #include "tensorflow/core/kernels/record_yielder.h"
 
-#include "absl/synchronization/notification.h"
 #include "tensorflow/core/lib/io/record_reader.h"
 #include "tensorflow/core/lib/strings/str_util.h"
 #include "tensorflow/core/platform/env.h"
@@ -72,7 +71,7 @@ absl::Status RecordYielder::YieldOne(tstring* value) {
 struct RecordYielder::Shard {
   int index;                      // Shard index.
   std::vector<tstring> filenames;  // File names given to this shard.
-  absl::Notification done;         // Notified when this shard is done.
+  Notification done;              // Notified when this shard is done.
   absl::Status status;            // Shard status.
 };
 

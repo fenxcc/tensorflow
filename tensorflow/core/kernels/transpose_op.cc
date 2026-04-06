@@ -50,11 +50,10 @@ class InvertPermutationOp : public OpKernel {
         context, TensorShapeUtils::IsVector(input.shape()),
         errors::InvalidArgument("invert_permutation expects a 1D vector."));
     auto Tin = input.vec<T>();
-    OP_REQUIRES(
-        context,
-        FastBoundsCheck(Tin.size(), std::numeric_limits<int32_t>::max()),
-        errors::InvalidArgument("permutation of nonnegative int32s "
-                                "must have <= int32 max elements"));
+    OP_REQUIRES(context,
+                FastBoundsCheck(Tin.size(), std::numeric_limits<int32>::max()),
+                errors::InvalidArgument("permutation of nonnegative int32s "
+                                        "must have <= int32 max elements"));
     const T N = static_cast<T>(Tin.size());  // Safe: bounds-checked above.
     Tensor* output = nullptr;
     OP_REQUIRES_OK(context,
@@ -73,18 +72,18 @@ class InvertPermutationOp : public OpKernel {
 };
 
 REGISTER_KERNEL_BUILDER(
-    Name("InvertPermutation").Device(DEVICE_CPU).TypeConstraint<int32_t>("T"),
-    InvertPermutationOp<int32_t>);
+    Name("InvertPermutation").Device(DEVICE_CPU).TypeConstraint<int32>("T"),
+    InvertPermutationOp<int32>);
 REGISTER_KERNEL_BUILDER(
     Name("InvertPermutation").Device(DEVICE_CPU).TypeConstraint<int64_t>("T"),
     InvertPermutationOp<int64_t>);
 
 REGISTER_KERNEL_BUILDER(Name("InvertPermutation")
                             .Device(DEVICE_DEFAULT)
-                            .TypeConstraint<int32_t>("T")
+                            .TypeConstraint<int32>("T")
                             .HostMemory("x")
                             .HostMemory("y"),
-                        InvertPermutationOp<int32_t>);
+                        InvertPermutationOp<int32>);
 REGISTER_KERNEL_BUILDER(Name("InvertPermutation")
                             .Device(DEVICE_DEFAULT)
                             .TypeConstraint<int64_t>("T")
@@ -95,7 +94,7 @@ REGISTER_KERNEL_BUILDER(Name("InvertPermutation")
 namespace {
 template <typename Tperm>
 absl::Status PermutationHelper(const Tensor& perm, const int dims,
-                               std::vector<int32_t>* permutation) {
+                               std::vector<int32>* permutation) {
   auto Vperm = perm.vec<Tperm>();
   if (dims != Vperm.size()) {
     return errors::InvalidArgument("transpose expects a vector of size ", dims,
@@ -106,7 +105,7 @@ absl::Status PermutationHelper(const Tensor& perm, const int dims,
   // asynchrony boundary is permutation.
   const volatile Tperm* perm_begin =
       reinterpret_cast<const volatile Tperm*>(Vperm.data());
-  *permutation = std::vector<int32_t>(perm_begin, perm_begin + dims);
+  *permutation = std::vector<int32>(perm_begin, perm_begin + dims);
 
   return absl::OkStatus();
 }
@@ -137,10 +136,10 @@ void TransposeOp::Compute(OpKernelContext* ctx) {
 
   // Although Tperm may be an int64 type, an int32 is sufficient to hold
   // dimension range values, so the narrowing here should be safe.
-  std::vector<int32_t> permutation;
+  std::vector<int32> permutation;
   const int dims = input.dims();
   if (perm.dtype() == DT_INT32) {
-    OP_REQUIRES_OK(ctx, PermutationHelper<int32_t>(perm, dims, &permutation));
+    OP_REQUIRES_OK(ctx, PermutationHelper<int32>(perm, dims, &permutation));
   } else {
     OP_REQUIRES_OK(ctx, PermutationHelper<int64_t>(perm, dims, &permutation));
   }
@@ -192,16 +191,17 @@ void TransposeOp::Compute(OpKernelContext* ctx) {
 }
 
 absl::Status TransposeCpuOp::DoTranspose(OpKernelContext* ctx, const Tensor& in,
-                                         absl::Span<const int32_t> perm,
+                                         absl::Span<const int32> perm,
                                          Tensor* out) {
   typedef Eigen::ThreadPoolDevice CPUDevice;
   return ::tensorflow::DoTranspose(ctx->eigen_device<CPUDevice>(), in, perm,
                                    out);
 }
 
-absl::Status ConjugateTransposeCpuOp::DoTranspose(
-    OpKernelContext* ctx, const Tensor& in, absl::Span<const int32_t> perm,
-    Tensor* out) {
+absl::Status ConjugateTransposeCpuOp::DoTranspose(OpKernelContext* ctx,
+                                                  const Tensor& in,
+                                                  absl::Span<const int32> perm,
+                                                  Tensor* out) {
   typedef Eigen::ThreadPoolDevice CPUDevice;
   return ::tensorflow::DoConjugateTranspose(ctx->eigen_device<CPUDevice>(), in,
                                             perm, out);

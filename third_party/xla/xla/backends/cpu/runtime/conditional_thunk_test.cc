@@ -25,8 +25,6 @@ limitations under the License.
 #include "xla/runtime/buffer_use.h"
 #include "xla/runtime/resource_use.h"
 #include "xla/service/buffer_assignment.h"
-#include "xla/shape.h"
-#include "xla/shape_util.h"
 #include "xla/tsl/platform/statusor.h"
 #include "xla/tsl/platform/test.h"
 
@@ -35,24 +33,20 @@ namespace {
 
 TEST(ConditionalThunkTest, BufferUses) {
   BufferAllocation alloc(0, 1024, 0);
-  Shape branch_index_slice_shape = ShapeUtil::MakeShape(S32, {1});
   BufferAllocation::Slice branch_index_slice(&alloc, 0, sizeof(int32_t));
-  Shape read_slice_shape = ShapeUtil::MakeShape(F32, {4});
-  BufferAllocation::Slice read_slice(&alloc, 10, 12);
+  BufferAllocation::Slice read_slice(&alloc, 10, 10);
 
   std::vector<ThunkSequence> branch_sequences(1);
-  branch_sequences[0].push_back(std::make_unique<BufferUseThunk>(
-      BufferUse::Read(read_slice, read_slice_shape)));
+  branch_sequences[0].push_back(
+      std::make_unique<BufferUseThunk>(BufferUse::Read(read_slice)));
 
   TF_ASSERT_OK_AND_ASSIGN(
       auto thunk, ConditionalThunk::Create({"conditional"}, branch_index_slice,
                                            std::move(branch_sequences)));
 
   EXPECT_EQ(thunk->buffer_uses().size(), 2);
-  EXPECT_EQ(thunk->buffer_uses()[0],
-            BufferUse::Read(branch_index_slice, branch_index_slice_shape));
-  EXPECT_EQ(thunk->buffer_uses()[1],
-            BufferUse::Read(read_slice, read_slice_shape));
+  EXPECT_EQ(thunk->buffer_uses()[0], BufferUse::Read(branch_index_slice));
+  EXPECT_EQ(thunk->buffer_uses()[1], BufferUse::Read(read_slice));
 }
 
 TEST(ConditionalThunkTest, ResourceUses) {

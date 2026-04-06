@@ -156,7 +156,7 @@ TEST_F(TimestampTest, DeterminismError) {
   tsl::test::DeterministicOpsScope det_scope;
   TF_ASSERT_OK(Init());
   EXPECT_THAT(RunOpKernel(),
-              absl_testing::StatusIs(
+              testing::StatusIs(
                   error::FAILED_PRECONDITION,
                   "Timestamp cannot be called when determinism is enabled"));
 }

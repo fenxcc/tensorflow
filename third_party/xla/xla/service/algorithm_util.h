@@ -87,9 +87,8 @@ bool IsSupportedByElementalIrEmitter(PrecisionConfig::Algorithm algorithm);
 // input/output storage types.
 bool IsSupportedDotAlgorithmOnGpu(
     PrecisionConfig::Algorithm algorithm,
-    const stream_executor::GpuComputeCapability& gpu_compute_capability,
-    PrimitiveType lhs_storage_type, PrimitiveType rhs_storage_type,
-    PrimitiveType output_storage_type);
+    stream_executor::GpuComputeCapability gpu_compute_capability,
+    PrimitiveType input_storage_type, PrimitiveType output_storage_type);
 
 }  // namespace algorithm_util
 }  // namespace xla

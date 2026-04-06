@@ -15,6 +15,7 @@ limitations under the License.
 
 #include "xla/hlo/ir/hlo_instructions.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <deque>
 #include <functional>
@@ -37,6 +38,8 @@ limitations under the License.
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "xla/comparison_util.h"
+#include "xla/hlo/ir/collective_device_list.h"
+#include "xla/hlo/ir/collective_op_group_mode.h"
 #include "xla/hlo/ir/dfs_hlo_visitor.h"
 #include "xla/hlo/ir/hlo_casting_utils.h"
 #include "xla/hlo/ir/hlo_clone_context.h"
@@ -45,11 +48,9 @@ limitations under the License.
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/ir/hlo_module.h"
 #include "xla/hlo/ir/hlo_opcode.h"
-#include "xla/hlo/ir/hlo_original_value.h"
 #include "xla/hlo/ir/hlo_print_options.h"
 #include "xla/hlo/ir/hlo_sharding.h"
 #include "xla/hlo/ir/hlo_sharding_metadata.h"
-#include "xla/hlo/ir/replica_group.h"
 #include "xla/layout.h"
 #include "xla/layout_util.h"
 #include "xla/literal.h"
@@ -63,9 +64,11 @@ limitations under the License.
 #include "xla/tsl/lib/gtl/iterator_range.h"
 #include "xla/tsl/platform/errors.h"
 #include "xla/tsl/platform/logging.h"  // IWYU pragma: keep
+#include "xla/tsl/platform/status.h"
 #include "xla/util.h"
 #include "xla/window_util.h"
 #include "xla/xla_data.pb.h"
+#include "tsl/platform/protobuf.h"
 
 namespace xla {
 namespace {
@@ -109,18 +112,48 @@ void PrintPrecisionConfig(HloInstruction::AttributePrinter& printer,
   }
 }
 
+void PrintSparsityDescriptor(HloInstruction::AttributePrinter& printer,
+                             absl::Span<const SparsityDescriptor> sparsity) {
+  printer.Next([&sparsity](Printer* printer) {
+    printer->Append("sparsity=");
+    for (int i = 0; i < sparsity.size(); ++i) {
+      if (i != 0) {
+        printer->Append("_");
+      }
+      const SparsityDescriptor& cur = sparsity[i];
+      printer->Append(cur.index() == 0 ? "L." : "R.");
+      printer->Append(cur.dimension());
+      printer->Append("@");
+      switch (cur.type()) {
+        case SPARSITY_STRUCTURED_N_M:
+          printer->Append(cur.n());
+          printer->Append(":");
+          printer->Append(cur.m());
+          break;
+        default:
+          LOG(FATAL) << "Unknown sparsity type: " << cur.type();
+      }
+    }
+  });
+}
+
 void SetThreadName(HloComputation* called_computation,
-                   absl::string_view execution_thread) {
+                   absl::string_view execution_thread,
+                   bool skip_async_execution_thread_overwrite) {
   called_computation->SetExecutionThread(execution_thread);
   for (HloInstruction* instr : called_computation->instructions()) {
     if (instr->IsAsynchronous()) {
-      // Set async instruction thread name and also recursively set async
-      // computations.
-      instr->set_async_execution_thread(execution_thread);
+      if (!skip_async_execution_thread_overwrite) {
+        // Set async instruction thread name and also recursively set async
+        // computations.
+        instr->set_async_execution_thread(execution_thread);
+      }
+      continue;
     }
     for (HloComputation* nested_called_computation :
          instr->called_computations()) {
-      SetThreadName(nested_called_computation, execution_thread);
+      SetThreadName(nested_called_computation, execution_thread,
+                    skip_async_execution_thread_overwrite);
     }
   }
 }
@@ -416,7 +449,8 @@ HloInstruction* HloAsyncStartInstruction::AddCallOperand(
 void HloAsyncStartInstruction::set_async_execution_thread(
     absl::string_view async_execution_thread) {
   async_execution_thread_ = std::string(async_execution_thread);
-  SetThreadName(async_wrapped_computation(), async_execution_thread);
+  SetThreadName(async_wrapped_computation(), async_execution_thread,
+                /*skip_async_execution_thread_overwrite=*/false);
 }
 
 HloInstructionProto HloAsyncStartInstruction::ToProto() const {
@@ -705,17 +739,12 @@ HloInstructionProto HloChannelInstruction::ToProto() const {
 }
 
 void HloChannelInstruction::PrintExtraAttributesImpl(
-    AttributePrinter& printer, const HloPrintOptions& options) const {
+    AttributePrinter& printer, const HloPrintOptions& /*options*/) const {
   if (!channel_id_) {
     return;
   }
-  printer.Next([this, &options](Printer* printer) {
-    printer->Append("channel_id=");
-    if (options.print_channel_id()) {
-      printer->Append(*channel_id_);
-    } else {
-      printer->Append("_");
-    }
+  printer.Next([this](Printer* printer) {
+    AppendCat(printer, "channel_id=", *channel_id_);
   });
 }
 
@@ -792,16 +821,8 @@ bool HloSendRecvInstruction::IdenticalSlowPathIgnoringChannelIdValues(
     const HloInstruction& other,
     absl::FunctionRef<bool(const HloComputation*, const HloComputation*)>
         eq_computations) const {
-  const auto& casted_other = static_cast<const HloSendRecvInstruction&>(other);
-  if (is_host_transfer_ != casted_other.is_host_transfer()) {
-    return false;
-  }
-  // TODO(b/436212814): In theory, frontend_attributes() are a hint, can be
-  // dropped by the optimizer, and aren't check by the top-level
-  // HloInstruction::Identical(). In practice, they are load-bearing for
-  // host-transfer Send/Recv, even if they shouldn't be.
-  return ::google::protobuf::util::MessageDifferencer::Equivalent(
-      frontend_attributes(), casted_other.frontend_attributes());
+  // Not yet supported.
+  return false;
 }
 
 // Send instruction produces a tuple of {aliased operand, U32 context}.
@@ -847,7 +868,7 @@ HloSendDoneInstruction::CloneWithNewOperandsImpl(
     const Shape& shape, absl::Span<HloInstruction* const> new_operands,
     HloCloneContext* context) const {
   CHECK_EQ(new_operands.size(), 1);
-  HloSendInstruction* send = DynCast<HloSendInstruction>(new_operands[0]);
+  HloSendInstruction* send = dynamic_cast<HloSendInstruction*>(new_operands[0]);
   if (send != nullptr) {
     return std::make_unique<HloSendDoneInstruction>(send, is_host_transfer());
   }
@@ -906,7 +927,7 @@ HloRecvDoneInstruction::CloneWithNewOperandsImpl(
     const Shape& shape, absl::Span<HloInstruction* const> new_operands,
     HloCloneContext* context) const {
   CHECK_EQ(new_operands.size(), 1);
-  HloRecvInstruction* recv = DynCast<HloRecvInstruction>(new_operands[0]);
+  HloRecvInstruction* recv = dynamic_cast<HloRecvInstruction*>(new_operands[0]);
   if (recv != nullptr) {
     return std::make_unique<HloRecvDoneInstruction>(recv, is_host_transfer());
   }
@@ -1026,26 +1047,46 @@ bool HloAllGatherInstruction::IdenticalSlowPathIgnoringChannelIdValues(
          use_global_device_ids() == casted_other.use_global_device_ids();
 }
 
+static CollectiveOpGroupMode GetModeIfNotPresent(
+    std::optional<CollectiveOpGroupMode> mode,
+    const std::optional<int64_t>& channel_id, bool use_global_device_ids) {
+  if (mode.has_value()) {
+    return mode.value();
+  }
+  auto mode_or_status =
+      GetCollectiveOpGroupMode(channel_id.has_value(), use_global_device_ids);
+  TF_CHECK_OK(mode_or_status.status());
+  return mode_or_status.value();
+}
+
 HloAllReduceInstructionBase::HloAllReduceInstructionBase(
     HloOpcode opcode, const Shape& shape,
     absl::Span<HloInstruction* const> operands,
     HloComputation* reduce_computation, const CollectiveDeviceList& device_list,
     bool constrain_layout, const std::optional<int64_t>& channel_id,
-    bool use_global_device_ids)
+    bool use_global_device_ids, std::optional<CollectiveOpGroupMode> mode)
     : HloCollectiveInstruction(opcode, shape, operands, device_list,
                                constrain_layout, channel_id),
-      use_global_device_ids_(use_global_device_ids) {
+      use_global_device_ids_(use_global_device_ids),
+      collective_op_group_mode_(
+          GetModeIfNotPresent(mode, channel_id, use_global_device_ids)) {
   AppendComputation(reduce_computation);
 }
 
 HloInstructionProto HloAllReduceInstructionBase::ToProto() const {
   HloInstructionProto proto = HloCollectiveInstruction::ToProto();
   proto.set_use_global_device_ids(use_global_device_ids_);
+  proto.set_collective_op_group_mode(
+      CollectiveOpGroupModeToProto(collective_op_group_mode_));
   return proto;
 }
 
 void HloAllReduceInstructionBase::PrintExtraAttributesImpl(
     AttributePrinter& printer, const HloPrintOptions& options) const {
+  printer.Next([this](Printer* printer) {
+    AppendCat(printer, "mode=",
+              CollectiveOpGroupModeToString(collective_op_group_mode_));
+  });
   HloCollectiveInstruction::PrintExtraAttributesImpl(printer, options);
   if (use_global_device_ids_) {
     printer.Next([](Printer* printer) {
@@ -1067,6 +1108,8 @@ bool HloAllReduceInstructionBase::IdenticalSlowPathIgnoringChannelIdValues(
              other, eq_computations) &&
          constrain_layout() == casted_other.constrain_layout() &&
          use_global_device_ids() == casted_other.use_global_device_ids() &&
+         collective_op_group_mode() ==
+             casted_other.collective_op_group_mode() &&
          eq_computations(to_apply(), casted_other.to_apply());
 }
 
@@ -1085,17 +1128,20 @@ HloAllReduceInstruction::CloneWithNewOperandsImpl(
     HloCloneContext* /*context*/) const {
   return std::make_unique<HloAllReduceInstruction>(
       opcode(), shape, new_operands, to_apply(), device_list(),
-      constrain_layout(), channel_id(), use_global_device_ids());
+      constrain_layout(), channel_id(), use_global_device_ids(),
+      collective_op_group_mode());
 }
 
 HloReduceScatterInstruction::HloReduceScatterInstruction(
     const Shape& shape, absl::Span<HloInstruction* const> operands,
     HloComputation* reduce_computation, const CollectiveDeviceList& device_list,
     bool constrain_layout, const std::optional<int64_t>& channel_id,
-    bool use_global_device_ids, int64_t scatter_dimension)
-    : HloAllReduceInstructionBase(
-          HloOpcode::kReduceScatter, shape, operands, reduce_computation,
-          device_list, constrain_layout, channel_id, use_global_device_ids),
+    bool use_global_device_ids, int64_t scatter_dimension,
+    std::optional<CollectiveOpGroupMode> mode)
+    : HloAllReduceInstructionBase(HloOpcode::kReduceScatter, shape, operands,
+                                  reduce_computation, device_list,
+                                  constrain_layout, channel_id,
+                                  use_global_device_ids, mode),
       scatter_dimension_(scatter_dimension) {}
 
 HloReduceScatterInstruction::HloReduceScatterInstruction(
@@ -1140,7 +1186,8 @@ HloReduceScatterInstruction::CloneWithNewOperandsImpl(
     HloCloneContext* /*context*/) const {
   return std::make_unique<HloReduceScatterInstruction>(
       shape, new_operands, to_apply(), device_list(), constrain_layout(),
-      channel_id(), use_global_device_ids(), scatter_dimension());
+      channel_id(), use_global_device_ids(), scatter_dimension(),
+      collective_op_group_mode());
 }
 
 HloAllToAllInstruction::HloAllToAllInstruction(
@@ -1361,7 +1408,9 @@ HloCollectivePermuteInstruction::CloneWithNewOperandsImpl(
     HloCloneContext* /*context*/) const {
   if (dynamic_slice_sizes_list().empty()) {
     return std::make_unique<HloCollectivePermuteInstruction>(
-        opcode(), shape, new_operands, source_target_pairs(), channel_id());
+        opcode(), shape,
+        absl::Span<HloInstruction* const>(new_operands.subspan(0, 1)),
+        source_target_pairs(), channel_id());
   }
   return std::make_unique<HloCollectivePermuteInstruction>(
       opcode(), shape, new_operands[0], new_operands[1], new_operands[2],
@@ -2009,11 +2058,11 @@ HloCallableInstruction::CloneAndAppendInstructionIntoCalledComputation(
         // the clone.
         HloInstruction* called_computation_parameter =
             called_computation_parameters[operand_num];
-        CHECK_OK(called_computation_parameter->ReplaceAllUsesWith(clone));
+        TF_CHECK_OK(called_computation_parameter->ReplaceAllUsesWith(clone));
 
         // Remove the corresponding called computation parameter and operand
         // from their respective vectors.
-        CHECK_OK(called_computation()->RemoveParameter(operand_num));
+        TF_CHECK_OK(called_computation()->RemoveParameter(operand_num));
         RemoveOperandAt(operand_num);
         break;
       }
@@ -2060,7 +2109,7 @@ HloCallableInstruction::CloneAndAppendInstructionIntoCalledComputation(
       // original value is saved in the corresponding argument.
       called_computation_parameter = AddCallOperand(operand);
     }
-    CHECK_OK(
+    TF_CHECK_OK(
         clone->ReplaceOperandWith(operand_num, called_computation_parameter));
   }
 
@@ -2081,7 +2130,7 @@ HloCallableInstruction::CloneAndAppendInstructionIntoCalledComputation(
         if (root->operand(i) == clone) {
           HloInstruction* new_gte = AddInstruction(
               HloInstruction::CreateGetTupleElement(clone->shape(), this, i));
-          CHECK_OK(instruction_to_append->ReplaceAllUsesWith(new_gte));
+          TF_CHECK_OK(instruction_to_append->ReplaceAllUsesWith(new_gte));
           return clone;
         }
       }
@@ -2105,26 +2154,18 @@ HloCallableInstruction::CloneAndAppendInstructionIntoCalledComputation(
     }
     HloInstruction* new_root = called_computation()->AddInstruction(
         HloInstruction::CreateTuple(tuple_elements));
-    new_root->set_original_value(
-        xla::OriginalValue::CreateFromInstruction(new_root));
 
     // No need to create an original value for a new root with added outputs
     // as the original value is saved in the get-tuple-element instructions
     // that use it.
     called_computation()->set_root_instruction(new_root,
                                                /*accept_different_shape=*/true);
-
-    // Update the shape of the fusion instruction to the shape of the new root.
     *mutable_shape() = new_root->shape();
-    // Update the original value of the fusion instruction to the original value
-    // of the new root.
-    set_original_value(new_root->original_value());
-
     // The instruction might have an existing sharding, which will no longer
     // be valid after we change the shape. So clear the sharding.
     clear_sharding();
     if (root->opcode() == HloOpcode::kTuple) {
-      CHECK_OK(called_computation()->RemoveInstruction(root));
+      TF_CHECK_OK(called_computation()->RemoveInstruction(root));
     }
 
     // If this is a newly created multioutput instruction, we need to update
@@ -2132,7 +2173,7 @@ HloCallableInstruction::CloneAndAppendInstructionIntoCalledComputation(
     if (newly_created_tuple_instr) {
       HloInstruction* new_instr = AddInstruction(
           HloInstruction::CreateGetTupleElement(root->shape(), this, 0));
-      CHECK_OK(ReplaceAllUsesWithDifferentShape(new_instr));
+      TF_CHECK_OK(ReplaceAllUsesWithDifferentShape(new_instr));
     }
     int64_t index = tuple_elements.size();
     if (do_not_clone) {
@@ -2147,17 +2188,17 @@ HloCallableInstruction::CloneAndAppendInstructionIntoCalledComputation(
         HloInstruction* new_gte =
             AddInstruction(HloInstruction::CreateGetTupleElement(
                 old_gte->shape(), this, index + old_tuple_index));
-        CHECK_OK(old_gte->ReplaceAllUsesWith(new_gte));
+        TF_CHECK_OK(old_gte->ReplaceAllUsesWith(new_gte));
         to_be_removed.push_back(old_gte);
       }
       for (auto old_gte : to_be_removed) {
-        CHECK_OK(parent()->RemoveInstruction(old_gte));
+        TF_CHECK_OK(parent()->RemoveInstruction(old_gte));
       }
     } else {
       HloInstruction* new_gte =
           AddInstruction(HloInstruction::CreateGetTupleElement(
               clone->shape(), this, index - 1));
-      CHECK_OK(instruction_to_append->ReplaceAllUsesWith(new_gte));
+      TF_CHECK_OK(instruction_to_append->ReplaceAllUsesWith(new_gte));
     }
   }
 
@@ -2184,9 +2225,11 @@ HloCallableInstruction::GetOrCloneCalledComputations(
 }
 
 void HloCallableInstruction::RecursivelySetComputationsThreadName(
-    absl::string_view execution_thread) {
+    absl::string_view execution_thread,
+    bool skip_async_execution_thread_overwrite) {
   for (HloComputation* comp : called_computations()) {
-    SetThreadName(comp, execution_thread);
+    SetThreadName(comp, execution_thread,
+                  skip_async_execution_thread_overwrite);
   }
 }
 
@@ -2338,7 +2381,7 @@ void HloFusionInstruction::MergeFusionInstruction(
        fused_it != fused_instructions.rend(); ++fused_it) {
     auto fused_instruction = *fused_it;
     if (fused_instruction->opcode() == HloOpcode::kParameter) {
-      CHECK_OK(
+      TF_CHECK_OK(
           fused_instruction->ReplaceAllUsesWith(cloned_fusion->mutable_operand(
               fused_instruction->parameter_number())));
     } else {
@@ -2359,7 +2402,7 @@ void HloFusionInstruction::MergeFusionInstruction(
   CHECK(unfused_root == cloned_fusion->fused_expression_root() ||
         unfused_instructions.empty());
   // Replace instruction_to_merge use of 'this' with unfused_root.
-  CHECK_OK(instruction_to_merge->ReplaceUseWith(this, unfused_root));
+  TF_CHECK_OK(instruction_to_merge->ReplaceUseWith(this, unfused_root));
 
   // Build a dummy root for the cloned fusion as we may remove the original
   // root in the fusion process.
@@ -2377,11 +2420,11 @@ void HloFusionInstruction::MergeFusionInstruction(
   // decide if a side-effectful instruction is fusible).
   for (auto& instruction : unfused_instructions) {
     auto* fused = FuseInstruction(instruction);
-    CHECK_OK(instruction->ReplaceAllUsesWith(fused));
-    CHECK_OK(instruction->parent()->RemoveInstruction(instruction));
+    TF_CHECK_OK(instruction->ReplaceAllUsesWith(fused));
+    TF_CHECK_OK(instruction->parent()->RemoveInstruction(instruction));
   }
   CHECK_EQ(0, cloned_fusion->user_count());
-  CHECK_OK(GetModule()->RemoveEmbeddedComputation(
+  TF_CHECK_OK(GetModule()->RemoveEmbeddedComputation(
       cloned_fusion->fused_instructions_computation()));
 }
 
@@ -2455,8 +2498,8 @@ void HloFusionInstruction::MergeFusionInstructionIntoMultiOutput(
       for (HloInstruction* gte : instruction_to_merge->users()) {
         if (gte->opcode() == HloOpcode::kGetTupleElement &&
             gte->tuple_index() == tuple_index) {
-          CHECK_OK(gte->ReplaceAllUsesWith(new_root));
-          CHECK_OK(gte->parent()->RemoveInstruction(gte));
+          TF_CHECK_OK(gte->ReplaceAllUsesWith(new_root));
+          TF_CHECK_OK(gte->parent()->RemoveInstruction(gte));
         }
       }
     }
@@ -2472,12 +2515,12 @@ void HloFusionInstruction::MergeFusionInstructionIntoMultiOutput(
                       ->parameter_number())
             : unfused_instructions.back();
     new_roots.insert(unfused_root);
-    CHECK_OK(instruction_to_merge->ReplaceAllUsesWith(unfused_root));
+    TF_CHECK_OK(instruction_to_merge->ReplaceAllUsesWith(unfused_root));
   }
-  CHECK_OK(
+  TF_CHECK_OK(
       instruction_to_merge->parent()->RemoveInstruction(instruction_to_merge));
   if (GetModule()) {
-    CHECK_OK(GetModule()->RemoveEmbeddedComputation(computation_to_merge));
+    TF_CHECK_OK(GetModule()->RemoveEmbeddedComputation(computation_to_merge));
   }
   for (int64_t i = unfused_instructions.size() - 1; i >= 0; --i) {
     HloInstruction* instruction = unfused_instructions[i];
@@ -2486,7 +2529,7 @@ void HloFusionInstruction::MergeFusionInstructionIntoMultiOutput(
     } else {
       FuseInstruction(instruction);
     }
-    CHECK_OK(instruction->parent()->RemoveInstruction(instruction));
+    TF_CHECK_OK(instruction->parent()->RemoveInstruction(instruction));
   }
 }
 
@@ -3856,18 +3899,34 @@ std::unique_ptr<HloInstruction> HloIotaInstruction::CloneWithNewOperandsImpl(
 HloDotInstruction::HloDotInstruction(
     const Shape& shape, HloInstruction* lhs, HloInstruction* rhs,
     const DotDimensionNumbers& dimension_numbers,
-    const PrecisionConfig& precision_config)
+    const PrecisionConfig& precision_config,
+    std::vector<SparsityDescriptor> sparsity,
+    absl::Span<HloInstruction* const> sparse_meta)
     : HloInstruction(HloOpcode::kDot, shape),
       dot_dimension_numbers_(dimension_numbers),
-      precision_config_(precision_config) {
+      precision_config_(precision_config),
+      sparsity_(std::move(sparsity)) {
   AppendOperand(lhs);
   AppendOperand(rhs);
+  CHECK_LE(sparsity_.size(), kOperands);
+  CHECK_EQ(sparsity_.size(), sparse_meta.size());
+  for (HloInstruction* meta : sparse_meta) {
+    AppendOperand(meta);
+  }
+  if (sparsity_.size() == kOperands &&
+      sparsity_[0].index() > sparsity_[1].index()) {
+    std::swap(sparsity_[0], sparsity_[1]);  // Keep descriptors ordered.
+    std::swap(mutable_operands()[2], mutable_operands()[3]);
+  }
 }
 
 HloInstructionProto HloDotInstruction::ToProto() const {
   HloInstructionProto proto = HloInstruction::ToProto();
   *proto.mutable_dot_dimension_numbers() = dot_dimension_numbers_;
   *proto.mutable_precision_config() = precision_config_;
+  for (const SparsityDescriptor& descriptor : sparsity_) {
+    *proto.add_dot_sparsity() = descriptor;
+  }
   return proto;
 }
 
@@ -3877,6 +3936,9 @@ void HloDotInstruction::PrintExtraAttributesImpl(
     printer->Append(DotDimensionNumbersToString(dot_dimension_numbers_));
   });
   PrintPrecisionConfig(printer, precision_config_);
+  if (!sparsity_.empty()) {
+    PrintSparsityDescriptor(printer, absl::MakeSpan(sparsity_));
+  }
 }
 
 bool HloDotInstruction::IdenticalSlowPath(
@@ -3886,17 +3948,19 @@ bool HloDotInstruction::IdenticalSlowPath(
   const auto& casted_other = static_cast<const HloDotInstruction&>(other);
   return protobuf_util::HaveSameSerialization(
              dot_dimension_numbers(), casted_other.dot_dimension_numbers()) &&
-         protobuf_util::HaveSameSerialization(precision_config(),
-                                              casted_other.precision_config());
+         protobuf_util::HaveSameSerialization(
+             precision_config(), casted_other.precision_config()) &&
+         absl::c_equal(sparsity_, casted_other.sparsity_,
+                       protobuf_util::HaveSameSerialization);
 }
 
 std::unique_ptr<HloInstruction> HloDotInstruction::CloneWithNewOperandsImpl(
     const Shape& shape, absl::Span<HloInstruction* const> new_operands,
     HloCloneContext* context) const {
-  CHECK_EQ(new_operands.size(), 2);
+  CHECK_EQ(new_operands.size(), kOperands + sparse_operands());
   return std::make_unique<HloDotInstruction>(
       shape, new_operands[0], new_operands[1], dot_dimension_numbers_,
-      precision_config_);
+      precision_config_, sparsity_, new_operands.subspan(kOperands));
 }
 
 HloRaggedDotInstruction::HloRaggedDotInstruction(
@@ -3948,56 +4012,6 @@ HloRaggedDotInstruction::CloneWithNewOperandsImpl(
   return std::make_unique<HloRaggedDotInstruction>(
       shape, new_operands[0], new_operands[1], new_operands[2],
       ragged_dot_dimension_numbers_, precision_config_);
-}
-
-HloScaledDotInstruction::HloScaledDotInstruction(
-    const Shape& shape, HloInstruction* lhs, HloInstruction* rhs,
-    HloInstruction* lhs_scale, HloInstruction* rhs_scale,
-    const DotDimensionNumbers& dimension_numbers,
-    const PrecisionConfig& precision_config)
-    : HloInstruction(HloOpcode::kScaledDot, shape),
-      dot_dimension_numbers_(dimension_numbers),
-      precision_config_(precision_config) {
-  AppendOperand(lhs);
-  AppendOperand(rhs);
-  AppendOperand(lhs_scale);
-  AppendOperand(rhs_scale);
-}
-
-HloInstructionProto HloScaledDotInstruction::ToProto() const {
-  HloInstructionProto proto = HloInstruction::ToProto();
-  *proto.mutable_dot_dimension_numbers() = dot_dimension_numbers_;
-  *proto.mutable_precision_config() = precision_config_;
-  return proto;
-}
-
-void HloScaledDotInstruction::PrintExtraAttributesImpl(
-    AttributePrinter& printer, const HloPrintOptions& options) const {
-  printer.Next([this](Printer* printer) {
-    printer->Append(DotDimensionNumbersToString(dot_dimension_numbers_));
-  });
-  PrintPrecisionConfig(printer, precision_config_);
-}
-
-bool HloScaledDotInstruction::IdenticalSlowPath(
-    const HloInstruction& other,
-    absl::FunctionRef<bool(const HloComputation*, const HloComputation*)>
-        eq_computations) const {
-  const auto& casted_other = static_cast<const HloScaledDotInstruction&>(other);
-  return protobuf_util::HaveSameSerialization(
-             dot_dimension_numbers(), casted_other.dot_dimension_numbers()) &&
-         protobuf_util::HaveSameSerialization(precision_config(),
-                                              casted_other.precision_config());
-}
-
-std::unique_ptr<HloInstruction>
-HloScaledDotInstruction::CloneWithNewOperandsImpl(
-    const Shape& shape, absl::Span<HloInstruction* const> new_operands,
-    HloCloneContext* context) const {
-  CHECK_EQ(new_operands.size(), kOperands);
-  return std::make_unique<HloScaledDotInstruction>(
-      shape, new_operands[0], new_operands[1], new_operands[2], new_operands[3],
-      dot_dimension_numbers_, precision_config_);
 }
 
 HloDomainInstruction::HloDomainInstruction(

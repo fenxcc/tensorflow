@@ -99,18 +99,18 @@ absl::Status ResourceHandle::FromProto(const ResourceHandleProto& proto) {
   return absl::OkStatus();
 }
 
-std::string ResourceHandle::SerializeAsString() const {
+string ResourceHandle::SerializeAsString() const {
   ResourceHandleProto proto;
   AsProto(&proto);
   return proto.SerializeAsString();
 }
 
-bool ResourceHandle::ParseFromString(const std::string& s) {
+bool ResourceHandle::ParseFromString(const string& s) {
   ResourceHandleProto proto;
   return proto.ParseFromString(s) && FromProto(proto).ok();
 }
 
-std::string ResourceHandle::DebugString() const {
+string ResourceHandle::DebugString() const {
   return absl::StrFormat(
       "device: %s container: %s name: %s hash_code: 0x%X maybe_type_name %s, "
       "dtype and shapes : %s",
@@ -118,7 +118,7 @@ std::string ResourceHandle::DebugString() const {
       port::Demangle(maybe_type_name()),
       DtypeAndShapesToString(dtypes_and_shapes()));
 }
-std::string ResourceHandle::SummarizeValue() const {
+string ResourceHandle::SummarizeValue() const {
   return absl::StrFormat(
       "ResourceHandle(name=\"%s\", device=\"%s\", container=\"%s\", "
       "type=\"%s\", dtype and shapes : \"%s\")",
@@ -127,7 +127,7 @@ std::string ResourceHandle::SummarizeValue() const {
 }
 
 ResourceHandle ResourceHandle::MakeRefCountingHandle(
-    ResourceBase* resource, const std::string& device_name,
+    ResourceBase* resource, const string& device_name,
     const TypeIndex& type_index,
     const std::vector<DtypeAndPartialTensorShape>& dtypes_and_shapes,
     const absl::optional<ManagedStackTrace>& definition_stack_trace) {
@@ -164,7 +164,7 @@ std::atomic<int64_t> ResourceHandle::current_id_;
 
 int64_t ResourceHandle::GenerateUniqueId() { return current_id_.fetch_add(1); }
 
-std::string ProtoDebugString(const ResourceHandle& handle) {
+string ProtoDebugString(const ResourceHandle& handle) {
   return handle.DebugString();
 }
 
@@ -180,13 +180,12 @@ void EncodeResourceHandleList(const ResourceHandle* p, int64_t n,
 
 bool DecodeResourceHandleList(std::unique_ptr<port::StringListDecoder> d,
                               ResourceHandle* ps, int64_t n) {
-  std::vector<uint32_t> sizes(n);
+  std::vector<uint32> sizes(n);
   if (!d->ReadSizes(&sizes)) return false;
 
   ResourceHandleProto proto;
   for (int i = 0; i < n; ++i) {
-    if (!proto.ParseFromString(
-            absl::string_view(d->Data(sizes[i]), sizes[i]))) {
+    if (!proto.ParseFromArray(d->Data(sizes[i]), sizes[i])) {
       return false;
     }
     if (!ps[i].FromProto(proto).ok()) {

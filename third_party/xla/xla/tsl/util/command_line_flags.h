@@ -16,13 +16,11 @@ limitations under the License.
 #ifndef XLA_TSL_UTIL_COMMAND_LINE_FLAGS_H_
 #define XLA_TSL_UTIL_COMMAND_LINE_FLAGS_H_
 
-#include <cstdint>
 #include <functional>
 #include <string>
 #include <vector>
 
-#include "absl/strings/string_view.h"
-#include "absl/types/span.h"
+#include "xla/tsl/platform/types.h"
 
 namespace tsl {
 
@@ -65,15 +63,15 @@ namespace tsl {
 // text, and a pointer to the corresponding variable.
 class Flag {
  public:
-  Flag(const char* name, int32_t* dst, absl::string_view usage_text,
+  Flag(const char* name, int32* dst, const string& usage_text,
        bool* dst_updated = nullptr);
-  Flag(const char* name, int64_t* dst, absl::string_view usage_text,
+  Flag(const char* name, int64_t* dst, const string& usage_text,
        bool* dst_updated = nullptr);
-  Flag(const char* name, bool* dst, absl::string_view usage_text,
+  Flag(const char* name, bool* dst, const string& usage_text,
        bool* dst_updated = nullptr);
-  Flag(const char* name, std::string* dst, absl::string_view usage_text,
+  Flag(const char* name, string* dst, const string& usage_text,
        bool* dst_updated = nullptr);
-  Flag(const char* name, float* dst, absl::string_view usage_text,
+  Flag(const char* name, float* dst, const string& usage_text,
        bool* dst_updated = nullptr);
 
   // These constructors invoke a hook on a match instead of writing to a
@@ -83,22 +81,22 @@ class Flag {
   // "default_value_for_display" is shown as the default value of this flag in
   // Flags::Usage().
   Flag(const char* name, std::function<bool(int32_t)> int32_hook,
-       int32_t default_value_for_display, absl::string_view usage_text);
+       int32_t default_value_for_display, const string& usage_text);
   Flag(const char* name, std::function<bool(int64_t)> int64_hook,
-       int64_t default_value_for_display, absl::string_view usage_text);
+       int64_t default_value_for_display, const string& usage_text);
   Flag(const char* name, std::function<bool(float)> float_hook,
-       float default_value_for_display, absl::string_view usage_text);
+       float default_value_for_display, const string& usage_text);
   Flag(const char* name, std::function<bool(bool)> bool_hook,
-       bool default_value_for_display, absl::string_view usage_text);
-  Flag(const char* name, std::function<bool(std::string)> string_hook,
-       std::string default_value_for_display, absl::string_view usage_text);
+       bool default_value_for_display, const string& usage_text);
+  Flag(const char* name, std::function<bool(string)> string_hook,
+       string default_value_for_display, const string& usage_text);
 
  private:
   friend class Flags;
 
-  bool Parse(absl::string_view arg, bool* value_parsing_ok) const;
+  bool Parse(string arg, bool* value_parsing_ok) const;
 
-  std::string name_;
+  string name_;
   enum {
     TYPE_INT32,
     TYPE_INT64,
@@ -108,7 +106,7 @@ class Flag {
   } type_;
 
   std::function<bool(int32_t)> int32_hook_;
-  int32_t int32_default_for_display_;
+  int32 int32_default_for_display_;
 
   std::function<bool(int64_t)> int64_hook_;
   int64_t int64_default_for_display_;
@@ -119,10 +117,10 @@ class Flag {
   std::function<bool(bool)> bool_hook_;
   bool bool_default_for_display_;
 
-  std::function<bool(std::string)> string_hook_;
-  std::string string_default_for_display_;
+  std::function<bool(string)> string_hook_;
+  string string_default_for_display_;
 
-  std::string usage_text_;
+  string usage_text_;
 };
 
 class Flags {
@@ -132,17 +130,17 @@ class Flags {
   // with matching flags, and remove the matching arguments from (*argc, argv).
   // Return true iff all recognized flag values were parsed correctly, and the
   // first remaining argument is not "--help".
-  static bool Parse(int* argc, char** argv, absl::Span<const Flag> flag_list);
+  static bool Parse(int* argc, char** argv, const std::vector<Flag>& flag_list);
 
   // Similar as above, but accepts a mutable vector of strings in place of
   // argc and argv. Doesn't ignore the first flag, and return the unknown flags
   // back in flags vector.
   static bool Parse(std::vector<std::string>& flags,
-                    absl::Span<const Flag> flag_list);
+                    const std::vector<Flag>& flag_list);
   // Return a usage message with command line cmdline, and the
   // usage_text strings in flag_list[].
-  static std::string Usage(absl::string_view cmdline,
-                           absl::Span<const Flag> flag_list);
+  static string Usage(const string& cmdline,
+                      const std::vector<Flag>& flag_list);
 };
 
 }  // namespace tsl

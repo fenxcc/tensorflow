@@ -51,18 +51,9 @@ class DeviceList : public tsl::ReferenceCounted<DeviceList>,
   static absl::StatusOr<RCReferenceWrapper<DeviceList>> FromProto(
       xla::ifrt::Client* client, const DeviceListProto& proto);
 
-  // Converts the device list to a protobuf.
-  void ToProto(
-      DeviceListProto& proto,
-      SerDesVersion version = SerDesDefaultVersionAccessor::Get()) const;
-
   // Returns a `DeviceListProto` representation.
   DeviceListProto ToProto(
-      SerDesVersion version = SerDesDefaultVersionAccessor::Get()) const {
-    DeviceListProto proto;
-    ToProto(proto, version);
-    return proto;
-  }
+      SerDesVersion version = SerDesDefaultVersionAccessor::Get()) const;
 
   // Returns the number of devices.
   // TODO(hyeontaek): Make this a virtual method and make it possible for a
@@ -102,10 +93,6 @@ class DeviceList : public tsl::ReferenceCounted<DeviceList>,
 
   // Returns the hash of devices. This hash is stable only within the process.
   virtual uint64_t hash() const = 0;
-
-  // Returns the fingerprint of devices. This fingerprint is stable within the
-  // process and across processes.
-  virtual uint64_t fingerprint() const;
 
   // TODO(hyeontaek): Remove this method in favor of AbslStringify.
   std::string DebugString() const { return ToString(); }

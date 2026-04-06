@@ -102,9 +102,9 @@ ENTRY entry {
 
   EXPECT_THAT(
       graph->AllComputationProps(),
-      UnorderedElementsAre(
-          Pair(Pointee(Property(&HloComputation::name, "entry")),
-               Field(&CallGraphNodeProps::fingerprint, 3120016136002281788U))));
+      UnorderedElementsAre(Pair(
+          Pointee(Property(&HloComputation::name, "entry")),
+          Field(&CallGraphNodeProps::fingerprint, 10150663182810228731U))));
 }
 
 TEST_F(HloGumgraphTest, CreateHloModuleWithFusionInstructionWorks) {
@@ -199,7 +199,7 @@ ENTRY entry {
       graph->AllComputationProps(),
       UnorderedElementsAre(
           Pair(Pointee(Property(&HloComputation::name, "entry")),
-               Field(&CallGraphNodeProps::fingerprint, 829319826030692921U)),
+               Field(&CallGraphNodeProps::fingerprint, 9646443073508437215U)),
           Pair(Pointee(Property(&HloComputation::name, "Identity")),
                Field(&CallGraphNodeProps::fingerprint, 7593821242743477274U)),
           Pair(
@@ -233,33 +233,33 @@ ENTRY entry {
   EXPECT_THAT(entry->props,
               FieldsAre(
                   /*generation=*/1,
-                  /*height=*/3, /*subgraph_fingerprint=*/10174981490612213786U,
+                  /*height=*/3, /*subgraph_fingerprint=*/8543065396480500811U,
                   /*fingerprint=*/7968662072287666665U,
-                  /*canonical_fingerprint=*/7968662072287666665U));
+                  /*canonical_fingerprint=*/962574172336760684U));
   EXPECT_THAT(entry->children[0]->props,
               FieldsAre(
                   /*generation=*/2,
-                  /*height=*/2, /*subgraph_fingerprint=*/12866517545790127195U,
+                  /*height=*/2, /*subgraph_fingerprint=*/12467718903949982030U,
                   /*fingerprint=*/7968662072287666665U,
-                  /*canonical_fingerprint=*/7968662072287666665U));
+                  /*canonical_fingerprint=*/962574172336760684U));
   EXPECT_THAT(entry->children[1]->props,
               FieldsAre(
                   /*generation=*/3,
-                  /*height=*/1, /*subgraph_fingerprint=*/3741348072536313129U,
-                  /*fingerprint=*/3741348072536313129U,
-                  /*canonical_fingerprint=*/3741348072536313129U));
+                  /*height=*/1, /*subgraph_fingerprint=*/3183718271480206887U,
+                  /*fingerprint=*/3183718271480206887U,
+                  /*canonical_fingerprint=*/1545292564424961499U));
   EXPECT_THAT(entry->children[0]->children[0]->props,
               FieldsAre(
                   /*generation=*/3,
                   /*height=*/1, /*subgraph_fingerprint=*/856105463456541506U,
                   /*fingerprint=*/856105463456541506U,
-                  /*canonical_fingerprint=*/856105463456541506U));
+                  /*canonical_fingerprint=*/1668459129586447343U));
 
   EXPECT_THAT(
       graph->AllComputationProps(),
-      UnorderedElementsAre(Pair(
-          Pointee(Property(&HloComputation::name, "entry")),
-          Field(&CallGraphNodeProps::fingerprint, 10174981490612213786U))));
+      UnorderedElementsAre(
+          Pair(Pointee(Property(&HloComputation::name, "entry")),
+               Field(&CallGraphNodeProps::fingerprint, 8543065396480500811U))));
 }
 
 TEST_F(HloGumgraphTest, PreComputationsWorksWithShapeInFingerprint) {
@@ -288,28 +288,22 @@ ENTRY entry {
   EXPECT_THAT(entry->props,
               FieldsAre(
                   /*generation=*/1,
-                  /*height=*/3, /*subgraph_fingerprint=*/9049644343945734616U,
+                  /*height=*/3, /*subgraph_fingerprint=*/11491866794545709423U,
                   /*fingerprint=*/13023796333337170182U,
                   /*canonical_fingerprint=*/962574172336760684U));
 
   EXPECT_THAT(entry->children[0]->props,
               FieldsAre(
                   /*generation=*/2,
-                  /*height=*/2, /*subgraph_fingerprint=*/15554496862711682373U,
+                  /*height=*/2, /*subgraph_fingerprint=*/11413025457497517292U,
                   /*fingerprint=*/13023796333337170182U,
                   /*canonical_fingerprint=*/962574172336760684U));
   EXPECT_THAT(entry->children[1]->props,
               FieldsAre(
                   /*generation=*/3,
-                  /*height=*/1, /*subgraph_fingerprint=*/15638894998427861693U,
-                  /*fingerprint=*/15638894998427861693U,
-                  /*canonical_fingerprint=*/12841472793063608770U));
-  EXPECT_EQ(entry->children[0]->children[0]->props.subgraph_fingerprint,
-            7851455295828926644U);
-  EXPECT_EQ(entry->children[0]->children[0]->props.fingerprint,
-            7851455295828926644U);
-  EXPECT_EQ(entry->children[0]->children[0]->props.canonical_fingerprint,
-            1668459129586447343U);
+                  /*height=*/1, /*subgraph_fingerprint=*/18045659843081992748U,
+                  /*fingerprint=*/18045659843081992748U,
+                  /*canonical_fingerprint=*/1545292564424961499U));
   EXPECT_THAT(entry->children[0]->children[0]->props,
               FieldsAre(
                   /*generation=*/3,
@@ -319,9 +313,9 @@ ENTRY entry {
 
   EXPECT_THAT(
       graph->AllComputationProps(),
-      UnorderedElementsAre(
-          Pair(Pointee(Property(&HloComputation::name, "entry")),
-               Field(&CallGraphNodeProps::fingerprint, 9049644343945734616U))));
+      UnorderedElementsAre(Pair(
+          Pointee(Property(&HloComputation::name, "entry")),
+          Field(&CallGraphNodeProps::fingerprint, 11491866794545709423U))));
 }
 
 TEST_F(HloGumgraphTest, PreComputationsWorksMultiRoot) {

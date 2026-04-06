@@ -65,10 +65,10 @@ constexpr char kShardDirectorySuffix[] = ".shard";
 enum Mode { READER = 0, WRITER = 1, PASSTHROUGH = 2 };
 
 // Returns the name of the "hash" directory for the given base path and hash ID.
-std::string HashDirectory(const std::string& path, uint64_t hash);
+std::string HashDirectory(const std::string& path, uint64 hash);
 
 // Returns the name of the "run" directory for the given base path and run ID.
-std::string RunDirectory(const std::string& hash_directory, uint64_t run_id);
+std::string RunDirectory(const std::string& hash_directory, uint64 run_id);
 std::string RunDirectory(const std::string& hash_directory,
                          const std::string& run_id);
 
@@ -78,7 +78,7 @@ std::string ShardDirectory(const std::string& run_directory, int64_t shard_id);
 
 // Returns the checkpoint file name for the given directory and checkpoint ID.
 std::string GetCheckpointFileName(const std::string& shard_directory,
-                                  uint64_t checkpoint_id);
+                                  uint64 checkpoint_id);
 
 // This is a interface class that exposes snapshot writing functionality.
 class Writer {
@@ -132,7 +132,7 @@ class TFRecordWriter : public Writer {
 // Writes snapshot with a custom (legacy) file format.
 class CustomWriter : public Writer {
  public:
-  static constexpr const size_t kHeaderSize = sizeof(uint64_t);
+  static constexpr const size_t kHeaderSize = sizeof(uint64);
 
   static constexpr const char* const kClassName = "SnapshotWriter";
   static constexpr const char* const kWriteStringPiece = "WriteStringPiece";
@@ -210,7 +210,7 @@ class Reader {
   // the `version`, `compression_type`, and `dtypes` arguments passed into
   // `Writer` and `Reader` must be the same for the reading to succeed.
   static absl::Status Create(Env* env, const std::string& filename,
-                             const std::string& compression_type, int version,
+                             const string& compression_type, int version,
                              const DataTypeVector& dtypes,
                              std::unique_ptr<Reader>* out_reader);
 
@@ -221,8 +221,7 @@ class Reader {
   // contains all the elements written out to each individual snapshot file.
   static absl::Status MakeNestedDataset(
       Env* env, const std::vector<std::string>& shard_dirs,
-      const std::string& compression_type, int version,
-      const DataTypeVector& dtypes,
+      const string& compression_type, int version, const DataTypeVector& dtypes,
       const std::vector<PartialTensorShape>& shapes, int64_t start_index,
       DatasetBase** output);
 
@@ -254,8 +253,7 @@ class TFRecordReaderImpl {
   // tensorflow/compiler/xla/tsl/lib/io/compression.h.
   // `output_buffer_size` specifies the buffer size required by Snappy/Zlib
   // compression algorithms. Ignored if compression is not enabled.
-  TFRecordReaderImpl(const std::string& filename,
-                     const std::string& compression,
+  TFRecordReaderImpl(const std::string& filename, const string& compression,
                      std::optional<int64_t> output_buffer_size = std::nullopt);
 
   // Initializes the reader. Callers must initialize the reader before calling
@@ -281,14 +279,14 @@ class TFRecordReaderImpl {
   uint64_t offset_ = 0;
   uint64_t bytes_read_ = 0;
 
-  const std::string compression_;
+  const string compression_;
   const std::optional<int64_t> output_buffer_size_;
 };
 
 // Reads snapshots previously written with `TFRecordWriter`.
 class TFRecordReader : public Reader {
  public:
-  TFRecordReader(const std::string& filename, const std::string& compression,
+  TFRecordReader(const std::string& filename, const string& compression,
                  const DataTypeVector& dtypes,
                  std::optional<int64_t> output_buffer_size = std::nullopt)
       : reader_impl_(filename, compression, output_buffer_size),
@@ -323,14 +321,14 @@ class CustomReader : public Reader {
   // TODO(b/148804377): Set this in a smarter fashion.
   static constexpr const int64_t kSnappyReaderOutputBufferSizeBytes =
       32 << 20;  // 32 MiB
-  static constexpr const size_t kHeaderSize = sizeof(uint64_t);
+  static constexpr const size_t kHeaderSize = sizeof(uint64);
 
   static constexpr const char* const kClassName = "SnapshotReader";
   static constexpr const char* const kReadString = "ReadString";
   static constexpr const char* const kReadCord = "ReadCord";
   static constexpr const char* const kSeparator = "::";
 
-  CustomReader(const std::string& filename, const std::string& compression_type,
+  CustomReader(const std::string& filename, const string& compression_type,
                int version, const DataTypeVector& dtypes);
 
   absl::Status ReadTensors(std::vector<Tensor>* read_tensors) override;
@@ -358,7 +356,7 @@ class CustomReader : public Reader {
   std::string filename_;
   std::unique_ptr<RandomAccessFile> file_;
   std::unique_ptr<io::InputStreamInterface> input_stream_;
-  const std::string compression_type_;
+  const string compression_type_;
   const int version_;
   const DataTypeVector dtypes_;
   int num_simple_ = 0;
@@ -368,18 +366,18 @@ class CustomReader : public Reader {
 
 // Writes snapshot metadata to the given directory.
 absl::Status WriteMetadataFile(
-    Env* env, const std::string& dir,
+    Env* env, const string& dir,
     const experimental::SnapshotMetadataRecord* metadata);
 
 // Writes distributed snapshot metadata to the given directory. An error is
 // returned if `dir` is unable to be created or if `metadata` is unable to be
 // written.
 absl::Status WriteMetadataFile(
-    Env* env, const std::string& dir,
+    Env* env, const string& dir,
     const experimental::DistributedSnapshotMetadata* metadata);
 
 // Reads snapshot metadata from the given directory.
-absl::Status ReadMetadataFile(Env* env, const std::string& dir,
+absl::Status ReadMetadataFile(Env* env, const string& dir,
                               experimental::SnapshotMetadataRecord* metadata,
                               bool* file_exists);
 
@@ -388,17 +386,17 @@ absl::Status ReadMetadataFile(Env* env, const std::string& dir,
 // returned. If the file exists in `dir` but is unable to be opened, an error
 // is returned.
 absl::Status ReadMetadataFile(
-    Env* env, const std::string& dir,
+    Env* env, const string& dir,
     experimental::DistributedSnapshotMetadata* metadata, bool* file_exists);
 
 // Writes a dataset graph to the given directory.
-absl::Status DumpDatasetGraph(Env* env, const std::string& path, uint64_t hash,
+absl::Status DumpDatasetGraph(Env* env, const std::string& path, uint64 hash,
                               const GraphDef* graph);
 
 absl::Status DetermineOpState(
     const std::string& mode_string, bool file_exists,
     const experimental::SnapshotMetadataRecord* metadata,
-    uint64_t pending_snapshot_expiry_seconds, Mode* mode);
+    uint64 pending_snapshot_expiry_seconds, Mode* mode);
 
 // Represents a dataset element or EOF.
 struct ElementOrEOF {
@@ -422,9 +420,9 @@ struct ElementOrEOF {
 class AsyncWriter {
  public:
   explicit AsyncWriter(Env* env, int64_t file_index,
-                       const std::string& shard_directory,
-                       uint64_t checkpoint_id, const std::string& compression,
-                       int64_t version, const DataTypeVector& output_types,
+                       const std::string& shard_directory, uint64 checkpoint_id,
+                       const std::string& compression, int64_t version,
+                       const DataTypeVector& output_types,
                        std::function<void(absl::Status)> done);
 
   // Writes the given tensors. The method is non-blocking and returns without
@@ -439,7 +437,7 @@ class AsyncWriter {
   void Consume(ElementOrEOF* be) TF_LOCKS_EXCLUDED(mu_);
   bool ElementAvailable() TF_EXCLUSIVE_LOCKS_REQUIRED(mu_);
   absl::Status WriterThread(Env* env, const std::string& shard_directory,
-                            uint64_t checkpoint_id,
+                            uint64 checkpoint_id,
                             const std::string& compression, int64_t version,
                             DataTypeVector output_types);
 

@@ -44,10 +44,11 @@ limitations under the License.
 #include "xla/shape.h"
 #include "xla/shape_util.h"
 #include "xla/status_macros.h"
-#include "xla/tsl/platform/errors.h"
-#include "xla/tsl/platform/statusor.h"
+#include "xla/tsl/lib/gtl/value_or_die.h"
 #include "xla/util.h"
 #include "xla/xla_data.pb.h"
+#include "tsl/platform/errors.h"
+#include "tsl/platform/statusor.h"
 
 namespace xla {
 namespace {
@@ -123,6 +124,10 @@ struct HloProtoEvaluator {
   HloProtoEvaluator& WithComputation(
       std::unique_ptr<HloComputation> new_computation) {
     computation = new_computation.get();
+    computation->ClearUniqueIdInternal();
+    for (HloInstruction* inst : computation->instructions()) {
+      inst->ClearUniqueIdInternal();
+    }
     module.AddEmbeddedComputation(std::move(new_computation));
     return *this;
   }
@@ -162,10 +167,7 @@ struct HloProtoEvaluator {
       int64_t operand_handle = inst.operand_ids(i);
       std::unique_ptr<HloInstruction> operand =
           HloInstruction::CreateConstant(operands[i].Clone());
-      // FromProto uses local ids, so explicitly downcasts the unique id to
-      // a local id to avoid issues.
-      operand_map[HloInstruction::CalculateLocalId(operand_handle)] =
-          operand.get();
+      operand_map[operand_handle] = operand.get();
       builder.AddInstruction(std::move(operand));
     }
 
@@ -187,6 +189,7 @@ struct HloProtoEvaluator {
     TF_ASSIGN_OR_RETURN(
         auto new_instruction,
         HloInstruction::CreateFromProto(inst, operand_map, computation_map));
+    new_instruction->ClearUniqueIdInternal();
     builder.AddInstruction(std::move(new_instruction));
     auto computation = builder.Build();
     module.AddEntryComputation(std::move(computation));
@@ -396,10 +399,9 @@ struct PostorderDFSVisitor {
   // kGetDimensionSize or kSetDimensionSize doesn't need evaluation).
   bool IsInstructionOverLimit(const HloInstructionProto* proto,
                               const InferenceContext& context) {
-    auto shape = Shape::FromProto(proto->shape());
-    CHECK_OK(shape.status());
-    auto subshape = std::make_unique<Shape>(
-        ShapeUtil::GetSubshape(*shape, context.shape_index));
+    auto subshape = std::make_unique<Shape>(ShapeUtil::GetSubshape(
+        tsl::gtl::ValueOrDie(Shape::FromProto(proto->shape())),
+        context.shape_index));
 
     if (subshape->IsArray() &&
         ShapeUtil::ElementsIn(*subshape) > kLargeShapeElementLimit) {
@@ -409,8 +411,7 @@ struct PostorderDFSVisitor {
     for (int64_t operand_id : proto->operand_ids()) {
       const HloInstructionProto* operand =
           handle_to_instruction(operand_id).value();
-      auto operand_shape = Shape::FromProto(operand->shape());
-      CHECK_OK(operand_shape.status());
+      auto operand_shape = std::make_unique<Shape>(operand->shape());
 
       if (operand_shape->IsArray() &&
           ShapeUtil::ElementsIn(*operand_shape) > kLargeShapeElementLimit &&
@@ -1714,12 +1715,7 @@ absl::StatusOr<Literal> ValueInference::SimplifyOp(int64_t handle) {
   TF_ASSIGN_OR_RETURN(auto* inst, builder_->LookUpInstructionByHandle(handle));
   TF_ASSIGN_OR_RETURN(HloOpcode opcode, StringToHloOpcode(inst->opcode()));
   std::vector<Literal> operands;
-  std::unique_ptr<Shape> output_shape;
-  {
-    TF_ASSIGN_OR_RETURN(auto output_shape_stack,
-                        Shape::FromProto(inst->shape()));
-    output_shape = std::make_unique<Shape>(std::move(output_shape_stack));
-  }
+  auto output_shape = std::make_unique<const Shape>(inst->shape());
   switch (opcode) {
     case HloOpcode::kSlice:
     case HloOpcode::kConcatenate:

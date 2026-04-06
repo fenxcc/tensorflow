@@ -45,9 +45,8 @@ class Despecializer : public HloModulePass {
   void AddReduceWindowToReduceBroadcastDeconstruct();
   void AddAssumeGatherIndicesInBoundRewriteToCopy();
   absl::string_view name() const override { return "despecializer"; }
-
- protected:
-  absl::StatusOr<bool> RunImpl(
+  using HloPassInterface::Run;
+  absl::StatusOr<bool> Run(
       HloModule* module,
       const absl::flat_hash_set<absl::string_view>& execution_threads) override;
 
@@ -61,9 +60,8 @@ class AssumeGatherIndicesInBoundRewriteToCopy : public HloModulePass {
   absl::string_view name() const override {
     return "AssumeGatherIndicesInBoundRewriteToCopy";
   }
-
- protected:
-  absl::StatusOr<bool> RunImpl(
+  using HloPassInterface::Run;
+  absl::StatusOr<bool> Run(
       HloModule* module,
       const absl::flat_hash_set<absl::string_view>& execution_threads) override;
 };
@@ -74,9 +72,8 @@ class DeconstructReduceWindowToReduceBroadcast : public HloModulePass {
   absl::string_view name() const override {
     return "ReduceWindowToReduceAndBroadcast";
   }
-
- protected:
-  absl::StatusOr<bool> RunImpl(
+  using HloPassInterface::Run;
+  absl::StatusOr<bool> Run(
       HloModule* module,
       const absl::flat_hash_set<absl::string_view>& execution_threads) override;
 };
@@ -87,10 +84,10 @@ class ControlDepRemover : public HloModulePass {
   ControlDepRemover() = default;
   absl::string_view name() const override { return "control-dep-remover"; }
 
- protected:
-  absl::StatusOr<bool> RunImpl(HloModule* module,
-                               const absl::flat_hash_set<absl::string_view>&
-                                   execution_threads) override {
+  using HloPassInterface::Run;
+  absl::StatusOr<bool> Run(HloModule* module,
+                           const absl::flat_hash_set<absl::string_view>&
+                               execution_threads) override {
     bool changed = false;
     for (HloComputation* computation : module->computations()) {
       for (HloInstruction* instruction : computation->instructions()) {

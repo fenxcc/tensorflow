@@ -35,7 +35,7 @@ limitations under the License.
 namespace xla {
 namespace cpu {
 
-absl::StatusOr<bool> ConvCanonicalization::RunImpl(
+absl::StatusOr<bool> ConvCanonicalization::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   bool changed = false;

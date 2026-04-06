@@ -29,7 +29,6 @@ _TAGS_TO_DOCUMENTATION_MAP = {
     # Tags that Bazel recognizes
     "local": "https://bazel.build/reference/be/common-definitions",
     "manual": "https://bazel.build/reference/be/common-definitions",
-    "exclusive-if-local": "https://bazel.build/reference/be/common-definitions",
     "large": "Conventional tag for `test_suites` of large tests",
     "__PYTHON_RULES_MIGRATION_DO_NOT_USE_WILL_BREAK__": "Internal bazel tag",
     # Various disable tags (currently recognized by OpenXLA CI)
@@ -80,7 +79,6 @@ _TAGS_TO_DOCUMENTATION_MAP = {
     "xla_cpu": "Uses CPU backend.",
     "xla_amdgpu_any": "Uses ROCm backend.",
     "xla_nvgpu_any": "Uses NVIDIA GPU backend.",
-    "xla_intelgpu_any": "Uses Intel GPU backend.",
     # Below tags are emitted alongside `requires-gpu-x` tags, which is what the
     # CI actually follows. So we may not execute on an A100, and instead use an
     # L4. These tags are taken literally internally.
@@ -96,6 +94,9 @@ _TAGS_TO_DOCUMENTATION_MAP = {
         " additional targets."
     ),
     "multi_gpu": "Used by `xla_test` to signal that multiple GPUs are needed.",
+    "multi_gpu_h100": (
+        "Used by `xla_test` to signal that multiple H100s are needed."
+    ),
 }
 
 

@@ -19,6 +19,7 @@ limitations under the License.
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <optional>
 
 #include "absl/base/thread_annotations.h"
 #include "absl/functional/any_invocable.h"
@@ -35,6 +36,7 @@ limitations under the License.
 #include "xla/backends/cpu/codegen/execution_engine.h"
 #include "xla/backends/cpu/codegen/ir_compiler.h"
 #include "xla/backends/cpu/runtime/function_library.h"
+#include "tsl/platform/cpu_info.h"
 
 namespace xla::cpu {
 

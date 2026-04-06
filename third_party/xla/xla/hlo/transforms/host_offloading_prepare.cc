@@ -133,7 +133,7 @@ absl::StatusOr<bool> ConvertToCustomCall(HloModule* module) {
 
 }  // namespace
 
-absl::StatusOr<bool> HostOffloadingPrepare::RunImpl(
+absl::StatusOr<bool> HostOffloadingPrepare::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   switch (rewrite_) {

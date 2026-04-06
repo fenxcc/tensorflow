@@ -27,7 +27,6 @@ limitations under the License.
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
-#include "xla/hlo/analysis/alias_info.h"
 #include "xla/hlo/analysis/hlo_dataflow_analysis.h"
 #include "xla/hlo/analysis/hlo_operand_index.h"
 #include "xla/hlo/ir/hlo_computation.h"
@@ -51,9 +50,8 @@ limitations under the License.
 
 namespace xla {
 
-BFloat16Propagation::BFloat16Propagation(const FloatSupport* bfloat16_support,
-                                         const AliasInfo* alias_info)
-    : bfloat16_support_(bfloat16_support), alias_info_(alias_info) {
+BFloat16Propagation::BFloat16Propagation(const FloatSupport* bfloat16_support)
+    : bfloat16_support_(bfloat16_support) {
   DCHECK_EQ(bfloat16_support->LowPrecisionType(), BF16);
 }
 
@@ -547,10 +545,9 @@ void BFloat16Propagation::DetermineInstructionPrecision(HloInstruction* hlo,
 
   ShapeUtil::ForEachSubshape(
       hlo->shape(),
-      [hlo, this](const Shape& subshape, const ShapeIndex& index) {
+      [hlo, this](const Shape& /* subshape */, const ShapeIndex& index) {
         if (OutputTypeAfterChange(hlo, index) == F32 &&
-            AllUsersConsumeBF16(*hlo, index) && subshape.has_layout() &&
-            subshape.layout().memory_space() != Layout::kHostMemorySpace) {
+            AllUsersConsumeBF16(*hlo, index)) {
           AddToOrRemoveFromBF16ChangeSet(hlo, index, BF16);
           VLOG(2) << "HloInstruction output at shape index " << index
                   << " changed to BF16 precision: " << hlo->ToString();
@@ -573,15 +570,11 @@ bool BFloat16Propagation::InstructionIsCandidateForBF16Output(
       }
     }
   }
-  if (hlo->opcode() == HloOpcode::kDynamicSlice ||
-      hlo->opcode() == HloOpcode::kCopy) {
-    // These two instructions are not candidates for BF16 output if their
-    // source operand is in host memory space.
-    if (hlo->operand(0)->shape().has_layout() &&
-        hlo->operand(0)->shape().layout().memory_space() ==
-            Layout::kHostMemorySpace) {
-      return false;
-    }
+  if (hlo->opcode() == HloOpcode::kDynamicSlice &&
+      hlo->operand(0)->shape().has_layout() &&
+      hlo->operand(0)->shape().layout().memory_space() ==
+          Layout::kHostMemorySpace) {
+    return false;
   }
   return true;
 }
@@ -746,7 +739,7 @@ bool BFloat16Propagation::ResolveInconsistencyOfAliasingBuffersHelper(
         // HloAliasAnalysis (e.g., their computation graphs may not have been
         // flattened yet).
         for (const auto& operand_and_output_index :
-             alias_info_->GetInPlaceInputOutputPairs(hlo)) {
+             HloDataflowAnalysis::GetInPlaceInputOutputPairs(hlo)) {
           if (operand_and_output_index.second == index) {
             const HloOperandIndex& operand_index =
                 operand_and_output_index.first;
@@ -981,7 +974,7 @@ absl::Status BFloat16Propagation::SkipNoopConversions(HloModule* module) {
 // their users. During the backward pass, the potential changes are stored in
 // changes_to_bf16_ which are subject to further adjustments then applied to the
 // HLOs.
-absl::StatusOr<bool> BFloat16Propagation::RunImpl(
+absl::StatusOr<bool> BFloat16Propagation::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   consider_using_bfloat16_.clear();

@@ -130,16 +130,6 @@ class TPUEmbeddingForServing(tpu_embedding_base.TPUEmbeddingBase):
       raise RuntimeError("Serving on TPU is not yet supported.")
 
   @property
-  def variables(
-      self,
-  ) -> Dict[
-      tpu_embedding_v2_utils.TableConfig, Dict[str, tf_variables.Variable]
-  ]:
-    """Returns a dict of variables, keyed by `TableConfig`, then by slot name."""
-    self._maybe_build()
-    return self._variables
-
-  @property
   def embedding_tables(
       self,
   ) -> Dict[tpu_embedding_v2_utils.TableConfig, tf_variables.Variable]:
@@ -417,29 +407,26 @@ def cpu_embedding_lookup(
       None for no weights. If not None, structure must match that of inputs, but
       entries are allowed to be None.
     tables: a dict of mapping TableConfig objects to Variables.
-    feature_config: a nested structure of FeatureConfig objects. The keys of
-      feature_config is a superset of inputs.
+    feature_config: a nested structure of FeatureConfig objects with the same
+      structure as inputs.
 
   Returns:
     A nested structure of Tensors with the same structure as inputs.
   """
 
-  flat_inputs = nest.flatten_with_joined_string_paths(inputs)
+  nest.assert_same_structure(inputs, feature_config)
+
+  flat_inputs = nest.flatten(inputs)
   flat_weights = [None] * len(flat_inputs)
   if weights is not None:
     nest.assert_same_structure(inputs, weights)
     flat_weights = nest.flatten(weights)
-  flat_features = dict(nest.flatten_with_joined_string_paths(feature_config))
+  flat_features = nest.flatten_with_joined_string_paths(feature_config)
 
-  input_keys = {key for key, _ in flat_inputs}
-  if not input_keys.issubset(flat_features.keys()):
-    raise ValueError(
-        "Inputs are not a subset of feature_config. Inputs keys are {}, but"
-        " feature_config keys are {}".format(input_keys, flat_features.keys())
-    )
   outputs = []
-  for (path, inp), weight in zip(flat_inputs, flat_weights):
-    feature = flat_features[path]
+  for inp, weight, (path, feature) in zip(
+      flat_inputs, flat_weights, flat_features
+  ):
     table = tables[feature.table]
 
     if weight is not None:
@@ -480,7 +467,7 @@ def cpu_embedding_lookup(
           "Input {} is type {}. Tensor, SparseTensor or "
           "RaggedTensor expected.".format(path, type(inp))
       )
-  return nest.pack_sequence_as(inputs, outputs)
+  return nest.pack_sequence_as(feature_config, outputs)
 
 
 def _embedding_lookup_for_sparse_tensor(

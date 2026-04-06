@@ -16,11 +16,14 @@ limitations under the License.
 #include "xla/hlo/translate/mhlo_to_hlo/translate_registration.h"
 
 #include "llvm/Support/raw_ostream.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
+#include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/Support/LogicalResult.h"
 #include "mlir/Tools/mlir-translate/Translation.h"
 #include "xla/hlo/translate/mhlo_to_hlo/translate.h"
-#include "xla/hlo/translate/register.h"
+#include "xla/mlir_hlo/mhlo/IR/register.h"
 
 static mlir::LogicalResult MlirHloToHloTranslate(mlir::ModuleOp module,
                                                  llvm::raw_ostream& output) {
@@ -35,11 +38,18 @@ static mlir::LogicalResult MlirHloToHloTextTranslate(
       print_large_constants, print_sugar, via_builder, with_layouts);
 }
 
+static void RegisterInputDialects(mlir::DialectRegistry& registry) {
+  mlir::mhlo::registerAllMhloDialects(registry);
+  registry.insert<mlir::arith::ArithDialect, mlir::func::FuncDialect,
+                  mlir::tensor::TensorDialect>();
+}
+
 static mlir::TranslateFromMLIRRegistration MlirHloToHloTranslateRegistration(
     "mlir-hlo-to-hlo", "mlir-hlo-to-hlo", MlirHloToHloTranslate,
-    xla::RegisterMlirToHloDependentDialects);
+    RegisterInputDialects);
 
 static mlir::TranslateFromMLIRRegistration
-    MlirHloToHloTextTranslateRegistration(
-        "mlir-hlo-to-hlo-text", "mlir-hlo-to-hlo-text",
-        MlirHloToHloTextTranslate, xla::RegisterMlirToHloDependentDialects);
+    MlirHloToHloTextTranslateRegistration("mlir-hlo-to-hlo-text",
+                                          "mlir-hlo-to-hlo-text",
+                                          MlirHloToHloTextTranslate,
+                                          RegisterInputDialects);

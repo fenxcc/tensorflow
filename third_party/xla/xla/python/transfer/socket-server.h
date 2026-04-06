@@ -45,9 +45,6 @@ class SocketServer {
     pull_table_->AwaitPull(uuid, std::move(handler));
   }
 
-  // Clears outstanding buffers and buffer requests.
-  void Reset() { pull_table_->Reset(); }
-
   class SocketNetworkState;
 
   // Connection state.
@@ -64,12 +61,7 @@ class SocketServer {
     void Pull(uint64_t uuid, absl::Span<const int> buffer_ids,
               std::vector<tsl::RCReference<ChunkDestination>> dests);
 
-    enum FailureKind {
-      kPoison,
-      kProtocolFailure,
-    };
-
-    void InjectFailure(FailureKind kind = kProtocolFailure);
+    void InjectFailure();
 
    private:
     SocketNetworkState* local_;

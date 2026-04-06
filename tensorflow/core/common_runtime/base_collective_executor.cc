@@ -22,7 +22,6 @@ limitations under the License.
 #include "tensorflow/core/common_runtime/device_mgr.h"
 #include "tensorflow/core/common_runtime/dma_helper.h"
 #include "tensorflow/core/common_runtime/process_util.h"
-#include "tensorflow/core/config/flag_defs.h"
 #include "tensorflow/core/framework/allocator.h"
 #include "tensorflow/core/framework/cancellation.h"
 #include "tensorflow/core/framework/op_kernel.h"
@@ -230,9 +229,6 @@ CollectiveAdapter* MakeCollectiveAdapter(Tensor* output, int num_chunks,
 BaseCollectiveExecutor::~BaseCollectiveExecutor() {}
 
 void BaseCollectiveExecutor::StartAbort(const absl::Status& s) {
-  if (flags::Global().enable_fatal_error_on_collective_abort.value()) {
-    LOG(FATAL) << "BaseCollectiveExecutor::StartAbort: " << s;
-  }
   absl::Status status;
   {
     mutex_lock l(status_mu_);

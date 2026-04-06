@@ -23,55 +23,40 @@ GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(ExhaustiveF16BinaryTest);
 
 GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(ExhaustiveF32BinaryTest);
 
-GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(ExhaustiveF64BinaryTest);
-
-using FpValuesPair = std::tuple<FpValues, FpValues>;
+#if !defined(XLA_BACKEND_DOES_NOT_SUPPORT_FLOAT64)
 INSTANTIATE_TEST_SUITE_P(
     SpecialValues, ExhaustiveF64BinaryTest,
-    ::xla::test::BackendSupportsFloat64()
-        ? ::testing::Combine(
-              ::testing::ValuesIn(CreateFpValuesForBoundaryTest<double>()),
-              ::testing::ValuesIn(CreateFpValuesForBoundaryTest<double>()))
-        : ::xla::test::Empty<FpValuesPair>()
-
-);
+    ::testing::Combine(
+        ::testing::ValuesIn(CreateFpValuesForBoundaryTest<double>()),
+        ::testing::ValuesIn(CreateFpValuesForBoundaryTest<double>())));
 
 INSTANTIATE_TEST_SUITE_P(
     SpecialAndNormalValues, ExhaustiveF64BinaryTest,
-    ::xla::test::BackendSupportsFloat64()
-        ? ::testing::Combine(
-              ::testing::ValuesIn(CreateFpValuesForBoundaryTest<double>()),
-              ::testing::Values(GetNormals<double>(1000)))
-        : ::xla::test::Empty<FpValuesPair>()
-
-);
+    ::testing::Combine(
+        ::testing::ValuesIn(CreateFpValuesForBoundaryTest<double>()),
+        ::testing::Values(GetNormals<double>(1000))));
 
 INSTANTIATE_TEST_SUITE_P(
     NormalAndSpecialValues, ExhaustiveF64BinaryTest,
-    ::xla::test::BackendSupportsFloat64()
-        ? ::testing::Combine(
-              ::testing::Values(GetNormals<double>(1000)),
-              ::testing::ValuesIn(CreateFpValuesForBoundaryTest<double>()))
-        : ::xla::test::Empty<FpValuesPair>());
+    ::testing::Combine(
+        ::testing::Values(GetNormals<double>(1000)),
+        ::testing::ValuesIn(CreateFpValuesForBoundaryTest<double>())));
 
 INSTANTIATE_TEST_SUITE_P(
     NormalAndNormalValues, ExhaustiveF64BinaryTest,
-    ::xla::test::BackendSupportsFloat64()
-        ? ::testing::Combine(::testing::Values(GetNormals<double>(1000)),
-                             ::testing::Values(GetNormals<double>(1000)))
-        : ::xla::test::Empty<FpValuesPair>()
-
-);
+    ::testing::Combine(::testing::Values(GetNormals<double>(1000)),
+                       ::testing::Values(GetNormals<double>(1000))));
 
 // Tests a total of 40000 ^ 2 inputs, with 2000 ^ 2 inputs in each sub-test.
 // Similar to ExhaustiveF64BinaryTest, we use a smaller set of inputs for each
 // for each sub-test comparing with the unary test to avoid timeout.
 INSTANTIATE_TEST_SUITE_P(
     LargeAndSmallMagnitudeNormalValues, ExhaustiveF64BinaryTest,
-    ::xla::test::BackendSupportsFloat64()
-        ? ::testing::Combine(
-              ::testing::ValuesIn(
-                  GetFpValuesForMagnitudeExtremeNormals<double>(40000, 2000)),
-              ::testing::ValuesIn(
-                  GetFpValuesForMagnitudeExtremeNormals<double>(40000, 2000)))
-        : ::xla::test::Empty<FpValuesPair>());
+    ::testing::Combine(
+        ::testing::ValuesIn(
+            GetFpValuesForMagnitudeExtremeNormals<double>(40000, 2000)),
+        ::testing::ValuesIn(
+            GetFpValuesForMagnitudeExtremeNormals<double>(40000, 2000))));
+#else
+GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(ExhaustiveF64BinaryTest);
+#endif  // !defined(XLA_BACKEND_DOES_NOT_SUPPORT_FLOAT64)

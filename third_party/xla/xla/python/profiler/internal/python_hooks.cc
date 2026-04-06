@@ -14,11 +14,10 @@ limitations under the License.
 ==============================================================================*/
 #include "xla/python/profiler/internal/python_hooks.h"
 
+#include <atomic>
 #include <cstdint>
 #include <string>
-#include <utility>
 
-#include "absl/log/check.h"
 #include "absl/log/log.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
@@ -30,10 +29,6 @@ limitations under the License.
 #include "xla/tsl/profiler/utils/xplane_utils.h"
 #include "tsl/platform/path.h"
 #include "tsl/profiler/protobuf/xplane.pb.h"
-
-#ifdef Py_GIL_DISABLED
-#include "absl/synchronization/mutex.h"
-#endif  // Py_GIL_DISABLED
 
 namespace xla {
 namespace profiler {
@@ -71,7 +66,11 @@ std::string GetEventName(absl::string_view method_name, PyObject* module) {
   // Use module name and function/method name instead.
   std::string filename;
   bool filename_ok;
+#if PY_MAJOR_VERSION < 3
+  filename_ok = (module != nullptr && PyString_Check(module));
+#else
   filename_ok = (module != nullptr && PyUnicode_Check(module));
+#endif
   if (filename_ok) {
     filename = py::reinterpret_borrow<py::str>(module);
   } else {
@@ -143,6 +142,17 @@ void PythonHookContext::Start(const PythonHooksOptions& options) {
     return;
   }
 
+#if PY_MAJOR_VERSION < 3 || (PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION < 7)
+  // Before Python 3.7, the GIL is created on demand by PyEval_InitThreads().
+  // When a thread was not started by Python (e.g., when starting profiling via
+  // RPC) there might be no GIL. Before Python 3.6, PyGILState_Ensure would
+  // crash. The crash was fixed in Python 3.6 but the fix introduced a race for
+  // GIL creation. Calling PyEval_InitThreads() prevents the race. This is a
+  // no-op when called for a second time so it is innocuous. See
+  // https://vstinner.github.io/python37-gil-change.html for details.
+  PyEval_InitThreads();
+#endif
+
   options_ = options;
   start_timestamp_ns_ = tsl::profiler::GetCurrentTimeNanos();
   if (options_.enable_python_traceme || options_.enable_trace_python_function) {
@@ -199,35 +209,29 @@ void PythonHookContext::CollectData(tensorflow::profiler::XPlane* raw_plane) {
     raw_plane = &*end_to_end_xplane_;
   }
   tsl::profiler::XPlaneBuilder plane(raw_plane);
-  for (auto& shard : entry_shards_) {
-#ifdef Py_GIL_DISABLED
-    absl::MutexLock lock(shard.mu);
-#else
-    DCHECK(PyGILState_Check());
-#endif  // Py_GIL_DISABLED
-    for (auto& it : shard.entries) {
-      int64_t thread_id = it.first;
-      auto& thread_events = it.second;
-      VLOG(1) << "Collecting " << thread_events.completed.size() << ":"
-              << thread_events.active.size() << " events on thread "
-              << thread_id;
-      auto line = plane.GetOrCreateLine(thread_id);
-      line.SetTimestampNs(start_timestamp_ns_);
-      for (const auto& event : thread_events.completed) {
+  for (auto& it : entries_) {
+    int64_t thread_id = it.first;
+    auto& thread_events = it.second;
+    VLOG(1) << "Collecting " << thread_events.completed.size() << ":"
+            << thread_events.active.size() << " events on thread " << thread_id;
+    auto line = plane.GetOrCreateLine(thread_id);
+    line.SetTimestampNs(start_timestamp_ns_);
+    for (const auto& event : thread_events.completed) {
+      AddEventToXLine(event, &line, &plane);
+    }
+    if (options_.include_incomplete_events) {
+      uint64_t now = tsl::profiler::GetCurrentTimeNanos();
+      while (!thread_events.active.empty()) {
+        auto& event = thread_events.active.top();
+        event.end_time_ns = now;
         AddEventToXLine(event, &line, &plane);
-      }
-      if (options_.include_incomplete_events) {
-        uint64_t now = tsl::profiler::GetCurrentTimeNanos();
-        while (!thread_events.active.empty()) {
-          auto& event = thread_events.active.top();
-          event.end_time_ns = now;
-          AddEventToXLine(event, &line, &plane);
-          thread_events.active.pop();
-        }
+        thread_events.active.pop();
       }
     }
-    shard.entries.clear();
   }
+  PyGILState_STATE gil_state = PyGILState_Ensure();
+  entries_.clear();
+  PyGILState_Release(gil_state);
 }
 
 void PythonHookContext::Finalize(tensorflow::profiler::XSpace* space) {
@@ -289,14 +293,7 @@ void PythonHookContext::ProfileFast(PyFrameObject* frame, int what,
                                     PyObject* arg) {
   const int64_t thread_id = tsl::Env::Default()->GetCurrentThreadId();
   uint64_t now = tsl::profiler::GetCurrentTimeNanos();
-  int shard_id = thread_id % kNumEntryShards;
-  EntryShard& shard = entry_shards_[shard_id];
-#ifdef Py_GIL_DISABLED
-  absl::MutexLock lock(shard.mu);
-#else
-  DCHECK(PyGILState_Check());
-#endif  // Py_GIL_DISABLED
-  auto& thread_traces = shard.entries[thread_id];
+  auto& thread_traces = entries_[thread_id];
 
   switch (what) {
     case PyTrace_CALL: {
@@ -333,7 +330,7 @@ void PythonHookContext::ProfileFast(PyFrameObject* frame, int what,
       if (PyCFunction_Check(arg)) {
         // Python stack does not have a filename/line_no for native calls.
         auto* func = reinterpret_cast<PyCFunctionObject*>(arg);
-        thread_traces.active_c.emplace(now, 0, func);
+        entries_[thread_id].active_c.emplace(now, 0, func);
       }
       break;
     }
@@ -349,7 +346,8 @@ void PythonHookContext::ProfileFast(PyFrameObject* frame, int what,
           // Only the end of the events is recorded, use profiler start as
           // start timestamp of the new event.
           auto* func = reinterpret_cast<PyCFunctionObject*>(arg);
-          thread_traces.completed.emplace_back(start_timestamp_ns_, now, func);
+          entries_[thread_id].completed.emplace_back(start_timestamp_ns_, now,
+                                                     func);
         }
       }
       break;
@@ -415,7 +413,7 @@ void PythonHookContext::ProfileFast(PyFrameObject* frame, int what,
     auto trace_module = py::module::import(kModuleName);
     trace_module.attr("enabled") = py::bool_(enable);
   } catch (const py::error_already_set& e) {
-    LOG(INFO) << "Can't import " << kModuleName;
+    LOG(ERROR) << "Can't import " << kModuleName;
   }
 }
 

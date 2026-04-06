@@ -161,7 +161,6 @@ inline bool IsOffDutyOp(absl::string_view category) {
           category == tsl::profiler::kHloHostSendDone ||
           category == tsl::profiler::kHloHostRecv ||
           category == tsl::profiler::kHloHostRecvDone ||
-          category == tsl::profiler::kHloAsyncDone ||
           category ==
               tsl::profiler::kHloMegacoreFusion  // Only self-time in megacore
                                                  // fusion is off-duty. The op

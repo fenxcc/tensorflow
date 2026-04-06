@@ -81,14 +81,9 @@ bool IsNopInstruction(const HloInstruction& hlo) {
   }
 }
 
-bool IsAsyncComputeStartOp(const HloInstruction& hlo) {
-  return hlo.opcode() == HloOpcode::kAsyncStart &&
-         !hlo_query::IsCollectiveCommunicationOp(hlo.async_wrapped_opcode()) &&
-         hlo.async_execution_thread() != hlo.parent()->execution_thread();
-}
-
-bool IsAsyncComputeDoneOp(const HloInstruction& hlo) {
-  return hlo.opcode() == HloOpcode::kAsyncDone &&
+bool IsAsyncComputeOp(const HloInstruction& hlo) {
+  return (hlo.opcode() == HloOpcode::kAsyncStart ||
+          hlo.opcode() == HloOpcode::kAsyncDone) &&
          !hlo_query::IsCollectiveCommunicationOp(hlo.async_wrapped_opcode()) &&
          hlo.async_execution_thread() != hlo.parent()->execution_thread();
 }
@@ -139,21 +134,13 @@ bool IsSlicingMemcpy(const HloInstruction& hlo) {
   return false;
 }
 
-bool IsMemcpyAsyncStartOp(const HloInstruction& hlo) {
-  if (hlo.opcode() == HloOpcode::kCopyStart) {
+bool IsMemcpyAsyncOp(const HloInstruction& hlo) {
+  if (hlo.opcode() == HloOpcode::kCopyStart ||
+      hlo.opcode() == HloOpcode::kCopyDone) {
     return true;
   }
-  if (hlo.opcode() != HloOpcode::kAsyncStart) {
-    return false;
-  }
-  return IsSlicingMemcpy(*hlo.async_wrapped_instruction());
-}
-
-bool IsMemcpyAsyncDoneOp(const HloInstruction& hlo) {
-  if (hlo.opcode() == HloOpcode::kCopyDone) {
-    return true;
-  }
-  if (hlo.opcode() != HloOpcode::kAsyncDone) {
+  if (hlo.opcode() != HloOpcode::kAsyncStart &&
+      hlo.opcode() != HloOpcode::kAsyncDone) {
     return false;
   }
   return IsSlicingMemcpy(*hlo.async_wrapped_instruction());
@@ -167,7 +154,7 @@ bool IsGpuAsyncStart(const HloInstruction& hlo) {
   return (hlo_query::IsAsyncCollectiveStartOp(&hlo,
                                               /*include_send_recv=*/true) &&
           !IsGPUSyncCollective(hlo)) ||
-         IsAsyncComputeStartOp(hlo) || IsMemcpyAsyncStartOp(hlo);
+         IsAsyncComputeOp(hlo) || IsMemcpyAsyncOp(hlo);
 }
 
 // Marks async done operations to be scheduled as late as possible.
@@ -175,7 +162,7 @@ bool IsGpuAsyncDone(const HloInstruction& hlo) {
   return (hlo_query::IsAsyncCollectiveDoneOp(&hlo,
                                              /*include_send_recv=*/true) &&
           !IsGPUSyncCollective(*hlo.operand(0))) ||
-         IsAsyncComputeDoneOp(hlo) || IsMemcpyAsyncDoneOp(hlo);
+         IsAsyncComputeOp(hlo) || IsMemcpyAsyncOp(hlo);
 }
 
 bool IsAsyncPair(const HloInstruction& from, const HloInstruction& target) {

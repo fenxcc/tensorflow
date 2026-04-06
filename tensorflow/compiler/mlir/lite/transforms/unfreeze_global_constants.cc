@@ -101,8 +101,8 @@ SessionInitializerOp GetOrCreateSessionInitializerOp(ModuleOp module_op) {
   if (!session_init_op) {
     OpBuilder builder(&module_op.getBodyRegion());
 
-    session_init_op = SessionInitializerOp::create(
-        builder, module_op.getLoc(), /*initializers=*/builder.getArrayAttr({}));
+    session_init_op = builder.create<SessionInitializerOp>(
+        module_op.getLoc(), /*initializers=*/builder.getArrayAttr({}));
   }
 
   return session_init_op;
@@ -128,8 +128,7 @@ func::FuncOp CreateInitializerFunc(ModuleOp module_op) {
   const Location loc = builder.getUnknownLoc();
   const auto func_type = builder.getFunctionType(/*inputs=*/{}, /*results=*/{});
 
-  init_func =
-      func::FuncOp::create(builder, loc, /*sym_name=*/"NoOp", func_type);
+  init_func = builder.create<func::FuncOp>(loc, /*sym_name=*/"NoOp", func_type);
   builder.createBlock(&init_func.getBody(), /*insertPt=*/init_func.begin(),
                       /*arg_types=*/{}, /*arg_locs=*/{});
 
@@ -140,7 +139,7 @@ func::FuncOp CreateInitializerFunc(ModuleOp module_op) {
                      builder.getStringAttr(kTfSavedModelInitializerInitType));
 
   builder.setInsertionPointToStart(&init_func.front());
-  func::ReturnOp::create(builder, loc, /*operands=*/ValueRange());
+  builder.create<func::ReturnOp>(loc, /*operands=*/ValueRange());
 
   SymbolTable symbol_table(module_op);
   symbol_table.insert(init_func);
@@ -197,18 +196,18 @@ void CreateAssignVariableOps(
     const auto ranked_tensor_type = RankedTensorType::get(
         /*shape=*/{}, /*elementType=*/element_type);
     auto var_handle_op =
-        TF::VarHandleOp::create(builder, global_tensor.getLoc(),
-                                /*resource=*/ranked_tensor_type,
-                                /*container=*/"", shared_name);
+        builder.create<TF::VarHandleOp>(global_tensor.getLoc(),
+                                        /*resource=*/ranked_tensor_type,
+                                        /*container=*/"", shared_name);
 
     // Assign the ConstOp to each VarHandleOp. These will be used to save the
     // variable values to the checkpoint.
-    auto const_op_copy = TF::ConstOp::create(builder, global_tensor.getLoc(),
-                                             *global_tensor.getValue());
+    auto const_op_copy = builder.create<TF::ConstOp>(global_tensor.getLoc(),
+                                                     *global_tensor.getValue());
 
-    TF::AssignVariableOp::create(builder, global_tensor.getLoc(),
-                                 /*resource=*/var_handle_op,
-                                 /*value=*/const_op_copy.getOutput());
+    builder.create<TF::AssignVariableOp>(global_tensor.getLoc(),
+                                         /*resource=*/var_handle_op,
+                                         /*value=*/const_op_copy.getOutput());
   }
 }
 
@@ -250,9 +249,9 @@ void UnfreezeMutableGlobalTensorsPass::runOnOperation() {
           /*shape=*/{}, /*elementType=*/element_type);
 
       auto var_handle_op =
-          TF::VarHandleOp::create(builder, global_tensor.getLoc(),
-                                  /*resource=*/ranked_tensor_type,
-                                  /*container=*/"", shared_name);
+          builder.create<TF::VarHandleOp>(global_tensor.getLoc(),
+                                          /*resource=*/ranked_tensor_type,
+                                          /*container=*/"", shared_name);
 
       auto arg = func.getArguments()[arg_idx];
       arg.replaceAllUsesWith(var_handle_op->getResults()[0]);

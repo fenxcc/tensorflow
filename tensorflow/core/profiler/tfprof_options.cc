@@ -32,8 +32,8 @@ limitations under the License.
 namespace tensorflow {
 namespace tfprof {
 namespace {
-std::string KeyValueToStr(const std::map<std::string, std::string>& kv_map) {
-  std::vector<std::string> kv_vec;
+string KeyValueToStr(const std::map<string, string>& kv_map) {
+  std::vector<string> kv_vec;
   kv_vec.reserve(kv_map.size());
   for (const auto& pair : kv_map) {
     kv_vec.push_back(absl::StrCat(pair.first, "=", pair.second));
@@ -42,19 +42,18 @@ std::string KeyValueToStr(const std::map<std::string, std::string>& kv_map) {
 }
 }  // namespace
 
-absl::Status ParseOutput(const std::string& output_opt,
-                         std::string* output_type,
-                         std::map<std::string, std::string>* output_options) {
+absl::Status ParseOutput(const string& output_opt, string* output_type,
+                         std::map<string, string>* output_options) {
   // The default is to use stdout.
   if (output_opt.empty()) {
     *output_type = kOutput[1];
     return absl::OkStatus();
   }
 
-  std::set<std::string> output_types(
-      kOutput, kOutput + sizeof(kOutput) / sizeof(*kOutput));
+  std::set<string> output_types(kOutput,
+                                kOutput + sizeof(kOutput) / sizeof(*kOutput));
   auto opt_split = output_opt.find(':');
-  std::vector<std::string> kv_split;
+  std::vector<string> kv_split;
   if (opt_split == output_opt.npos) {
     if (output_types.find(output_opt) == output_types.end()) {
       return absl::Status(
@@ -75,8 +74,8 @@ absl::Status ParseOutput(const std::string& output_opt,
                               absl::SkipEmpty());
   }
 
-  std::set<std::string> valid_options;
-  std::set<std::string> required_options;
+  std::set<string> valid_options;
+  std::set<string> required_options;
   if (*output_type == kOutput[0]) {
     valid_options.insert(
         kTimelineOpts,
@@ -100,8 +99,8 @@ absl::Status ParseOutput(const std::string& output_opt,
             sizeof(kPprofRequiredOpts) / sizeof(*kPprofRequiredOpts));
   }
 
-  for (const std::string& kv_str : kv_split) {
-    const std::vector<std::string> kv =
+  for (const string& kv_str : kv_split) {
+    const std::vector<string> kv =
         absl::StrSplit(kv_str, '=', absl::SkipEmpty());
     if (kv.size() < 2) {
       return absl::Status(
@@ -114,11 +113,11 @@ absl::Status ParseOutput(const std::string& output_opt,
           absl::StrFormat("Unrecognized options %s for output_type: %s\n",
                           kv[0], *output_type));
     }
-    const std::vector<std::string> kv_without_key(kv.begin() + 1, kv.end());
+    const std::vector<string> kv_without_key(kv.begin() + 1, kv.end());
     (*output_options)[kv[0]] = absl::StrJoin(kv_without_key, "=");
   }
 
-  for (const std::string& opt : required_options) {
+  for (const string& opt : required_options) {
     if (output_options->find(opt) == output_options->end()) {
       return absl::Status(
           absl::StatusCode::kInvalidArgument,
@@ -130,7 +129,7 @@ absl::Status ParseOutput(const std::string& output_opt,
   return absl::OkStatus();
 }
 
-absl::Status Options::FromProtoStr(const std::string& opts_proto_str,
+absl::Status Options::FromProtoStr(const string& opts_proto_str,
                                    Options* opts) {
   OptionsProto opts_pb;
   if (!opts_pb.ParseFromString(opts_proto_str)) {
@@ -140,8 +139,8 @@ absl::Status Options::FromProtoStr(const std::string& opts_proto_str,
                      opts_proto_str));
   }
 
-  std::string output_type;
-  std::map<std::string, std::string> output_options;
+  string output_type;
+  std::map<string, string> output_options;
   absl::Status s = ParseOutput(opts_pb.output(), &output_type, &output_options);
   if (!s.ok()) return s;
 
@@ -163,19 +162,18 @@ absl::Status Options::FromProtoStr(const std::string& opts_proto_str,
       opts_pb.min_micros(), opts_pb.min_accelerator_micros(),
       opts_pb.min_cpu_micros(), opts_pb.min_params(), opts_pb.min_float_ops(),
       opts_pb.min_occurrence(), opts_pb.step(), opts_pb.order_by(),
-      std::vector<std::string>(opts_pb.account_type_regexes().begin(),
-                               opts_pb.account_type_regexes().end()),
-      std::vector<std::string>(opts_pb.start_name_regexes().begin(),
-                               opts_pb.start_name_regexes().end()),
-      std::vector<std::string>(opts_pb.trim_name_regexes().begin(),
-                               opts_pb.trim_name_regexes().end()),
-      std::vector<std::string>(opts_pb.show_name_regexes().begin(),
-                               opts_pb.show_name_regexes().end()),
-      std::vector<std::string>(opts_pb.hide_name_regexes().begin(),
-                               opts_pb.hide_name_regexes().end()),
+      std::vector<string>(opts_pb.account_type_regexes().begin(),
+                          opts_pb.account_type_regexes().end()),
+      std::vector<string>(opts_pb.start_name_regexes().begin(),
+                          opts_pb.start_name_regexes().end()),
+      std::vector<string>(opts_pb.trim_name_regexes().begin(),
+                          opts_pb.trim_name_regexes().end()),
+      std::vector<string>(opts_pb.show_name_regexes().begin(),
+                          opts_pb.show_name_regexes().end()),
+      std::vector<string>(opts_pb.hide_name_regexes().begin(),
+                          opts_pb.hide_name_regexes().end()),
       opts_pb.account_displayed_op_only(),
-      std::vector<std::string>(opts_pb.select().begin(),
-                               opts_pb.select().end()),
+      std::vector<string>(opts_pb.select().begin(), opts_pb.select().end()),
       output_type, output_options);
   return absl::OkStatus();
 }

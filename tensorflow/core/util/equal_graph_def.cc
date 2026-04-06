@@ -33,22 +33,20 @@ limitations under the License.
 namespace tensorflow {
 
 bool EqualGraphDef(const GraphDef& actual, const GraphDef& expected,
-                   std::string* diff, const EqualGraphDefOptions& options) {
+                   string* diff, const EqualGraphDefOptions& options) {
   // Intentionally do not check that versions match so that this routine can
   // be used for less brittle golden file tests.
   return EqualRepeatedNodeDef(actual.node(), expected.node(), diff, options);
 }
 
-uint64_t GraphDefHash(const GraphDef& gdef,
-                      const EqualGraphDefOptions& options) {
+uint64 GraphDefHash(const GraphDef& gdef, const EqualGraphDefOptions& options) {
   return RepeatedNodeDefHash(gdef.node(), options);
 }
 
 bool EqualRepeatedNodeDef(const protobuf::RepeatedPtrField<NodeDef>& actual,
                           const protobuf::RepeatedPtrField<NodeDef>& expected,
-                          std::string* diff,
-                          const EqualGraphDefOptions& options) {
-  std::unordered_map<std::string, const NodeDef*> actual_index;
+                          string* diff, const EqualGraphDefOptions& options) {
+  std::unordered_map<string, const NodeDef*> actual_index;
   for (const NodeDef& node : actual) {
     actual_index[node.name()] = &node;
   }
@@ -57,8 +55,8 @@ bool EqualRepeatedNodeDef(const protobuf::RepeatedPtrField<NodeDef>& actual,
     auto actual_iter = actual_index.find(expected_node.name());
     if (actual_iter == actual_index.end()) {
       if (diff != nullptr) {
-        *diff = absl::StrCat("Did not find expected node '",
-                             SummarizeNodeDef(expected_node), "'");
+        *diff = strings::StrCat("Did not find expected node '",
+                                SummarizeNodeDef(expected_node), "'");
       }
       return false;
     }
@@ -73,8 +71,8 @@ bool EqualRepeatedNodeDef(const protobuf::RepeatedPtrField<NodeDef>& actual,
   if (!actual_index.empty()) {
     if (diff != nullptr) {
       *diff =
-          absl::StrCat("Found unexpected node '",
-                       SummarizeNodeDef(*actual_index.begin()->second), "'");
+          strings::StrCat("Found unexpected node '",
+                          SummarizeNodeDef(*actual_index.begin()->second), "'");
     }
     return false;
   }
@@ -82,11 +80,11 @@ bool EqualRepeatedNodeDef(const protobuf::RepeatedPtrField<NodeDef>& actual,
   return true;
 }
 
-uint64_t RepeatedNodeDefHash(const protobuf::RepeatedPtrField<NodeDef>& ndefs,
-                             const EqualGraphDefOptions& options) {
-  uint64_t h = 0xDECAFCAFFE;
+uint64 RepeatedNodeDefHash(const protobuf::RepeatedPtrField<NodeDef>& ndefs,
+                           const EqualGraphDefOptions& options) {
+  uint64 h = 0xDECAFCAFFE;
   // Insert NodeDefs into map to deterministically sort by name
-  std::map<std::string, const NodeDef*> nodes;
+  std::map<string, const NodeDef*> nodes;
   for (const NodeDef& node : ndefs) {
     nodes[node.name()] = &node;
   }
@@ -99,19 +97,19 @@ uint64_t RepeatedNodeDefHash(const protobuf::RepeatedPtrField<NodeDef>& ndefs,
 
 namespace {
 
-std::string JoinStringField(const protobuf::RepeatedPtrField<std::string>& f) {
-  std::string ret;
+string JoinStringField(const protobuf::RepeatedPtrField<string>& f) {
+  string ret;
   for (int i = 0; i < f.size(); ++i) {
-    if (i > 0) absl::StrAppend(&ret, ", ");
-    absl::StrAppend(&ret, f.Get(i));
+    if (i > 0) strings::StrAppend(&ret, ", ");
+    strings::StrAppend(&ret, f.Get(i));
   }
   return ret;
 }
 
 }  // namespace
 
-bool EqualNodeDef(const NodeDef& actual, const NodeDef& expected,
-                  std::string* diff, const EqualGraphDefOptions& options) {
+bool EqualNodeDef(const NodeDef& actual, const NodeDef& expected, string* diff,
+                  const EqualGraphDefOptions& options) {
   if (actual.name() != expected.name()) {
     if (diff != nullptr) {
       *diff = strings::StrCat("Actual node name '", actual.name(),
@@ -156,8 +154,8 @@ bool EqualNodeDef(const NodeDef& actual, const NodeDef& expected,
     }
     // Special case for inputs: "tensor" is equivalent to "tensor:0"
     if (actual.input(i) != expected.input(i) &&
-        actual.input(i) != absl::StrCat(expected.input(i), ":0") &&
-        absl::StrCat(actual.input(i), ":0") != expected.input(i)) {
+        actual.input(i) != strings::StrCat(expected.input(i), ":0") &&
+        strings::StrCat(actual.input(i), ":0") != expected.input(i)) {
       if (diff != nullptr) {
         *diff = strings::StrCat("Node named '", actual.name(), "' has input ",
                                 i, " '", actual.input(i),
@@ -168,8 +166,8 @@ bool EqualNodeDef(const NodeDef& actual, const NodeDef& expected,
     }
   }
 
-  std::unordered_set<std::string> actual_control;
-  std::unordered_set<std::string> expected_control;
+  std::unordered_set<string> actual_control;
+  std::unordered_set<string> expected_control;
   for (int i = first_control_input; i < actual.input_size(); ++i) {
     actual_control.insert(actual.input(i));
     expected_control.insert(expected.input(i));
@@ -192,7 +190,7 @@ bool EqualNodeDef(const NodeDef& actual, const NodeDef& expected,
     return false;
   }
 
-  std::unordered_set<std::string> actual_attr;
+  std::unordered_set<string> actual_attr;
   for (const auto& a : actual.attr()) {
     if (options.ignore_internal_attrs && !a.first.empty() &&
         a.first[0] == '_') {
@@ -238,8 +236,8 @@ bool EqualNodeDef(const NodeDef& actual, const NodeDef& expected,
   return true;
 }
 
-uint64_t NodeDefHash(const NodeDef& ndef, const EqualGraphDefOptions& options) {
-  uint64_t h = Hash64(ndef.name());
+uint64 NodeDefHash(const NodeDef& ndef, const EqualGraphDefOptions& options) {
+  uint64 h = Hash64(ndef.name());
   h = Hash64(ndef.op().data(), ndef.op().size(), h);
   h = Hash64(ndef.device().data(), ndef.device().size(), h);
 
@@ -254,16 +252,16 @@ uint64_t NodeDefHash(const NodeDef& ndef, const EqualGraphDefOptions& options) {
   }
 
   // Control inputs. Order irrelevant.
-  std::set<std::string> ndef_control;
+  std::set<string> ndef_control;
   for (int i = first_control_input; i < ndef.input_size(); ++i) {
     ndef_control.insert(ndef.input(i));
   }
-  for (const std::string& s : ndef_control) {
+  for (const string& s : ndef_control) {
     h = Hash64(s.data(), s.size(), h);
   }
 
   // Attributes
-  std::map<std::string, AttrValue> ndef_attr;
+  std::map<string, AttrValue> ndef_attr;
   for (const auto& a : ndef.attr()) {
     if (options.ignore_internal_attrs && !a.first.empty() &&
         a.first[0] == '_') {

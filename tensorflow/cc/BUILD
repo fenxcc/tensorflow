@@ -992,7 +992,6 @@ tf_cc_test(
         "//tensorflow/core:test",
         "//tensorflow/core:test_main",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/synchronization",
         "@local_xla//xla/tsl/protobuf:error_codes_proto_impl_cc",
     ],
 )
@@ -1023,7 +1022,6 @@ tf_cc_test(
         "//tensorflow/core:test",
         "//tensorflow/core:test_main",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/synchronization",
         "@local_xla//xla/tsl/protobuf:error_codes_proto_impl_cc",
     ],
 )

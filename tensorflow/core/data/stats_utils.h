@@ -33,33 +33,33 @@ extern const char kFeatureValuesCount[];
 extern const char kExamplesCount[];
 
 // Name for tf.data function execution time (in ns) histogram metrics.
-std::string ExecutionTimeHistogramName(const std::string& prefix);
+string ExecutionTimeHistogramName(const string& prefix);
 
 // Name for thread utilization (ratio of threads being used and maximum number
 // of threads allocated) scalar metrics.
-std::string ThreadUtilizationScalarName(const std::string& prefix);
+string ThreadUtilizationScalarName(const string& prefix);
 
 // Name for buffer size scalar metrics.
-std::string BufferSizeScalarName(const std::string& prefix);
+string BufferSizeScalarName(const string& prefix);
 
 // Name for buffer capacity (maximum allocated buffer size) scalar metrics.
-std::string BufferCapacityScalarName(const std::string& prefix);
+string BufferCapacityScalarName(const string& prefix);
 
 // Name for buffer utilization (ratio of buffer size and maximum allocated
 // buffer size.) histogram metrics.
-std::string BufferUtilizationHistogramName(const std::string& prefix);
+string BufferUtilizationHistogramName(const string& prefix);
 
 // Name for filtered elements scalar metrics.
-std::string FilterdElementsScalarName(const std::string& prefix);
+string FilterdElementsScalarName(const string& prefix);
 
 // Name for dropped elements scalar mereics.
-std::string DroppedElementsScalarName(const std::string& prefix);
+string DroppedElementsScalarName(const string& prefix);
 
 // Name for features count histogram metrics.
-std::string FeatureHistogramName(const std::string& prefix);
+string FeatureHistogramName(const string& prefix);
 
 // Name for feature-values count histogram metrics.
-std::string FeatureValueHistogramName(const std::string& prefix);
+string FeatureValueHistogramName(const string& prefix);
 
 }  // namespace stats_utils
 }  // namespace data

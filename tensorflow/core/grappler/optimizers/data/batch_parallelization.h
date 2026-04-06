@@ -30,7 +30,7 @@ class BatchParallelization : public TFDataOptimizerBase {
   BatchParallelization() = default;
   ~BatchParallelization() override = default;
 
-  std::string name() const override { return "batch_parallelization"; };
+  string name() const override { return "batch_parallelization"; };
 
   bool UsesFunctionLibrary() const override { return false; }
 
@@ -38,7 +38,7 @@ class BatchParallelization : public TFDataOptimizerBase {
       const tensorflow::RewriterConfig_CustomGraphOptimizer* config) override {
     if (!config) return absl::OkStatus();
 
-    const std::string& autotune = config->parameter_map().at(kAutotune).s();
+    const string& autotune = config->parameter_map().at(kAutotune).s();
     if (autotune == "true") {
       autotune_ = true;
     } else if (autotune == "false") {

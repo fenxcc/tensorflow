@@ -64,7 +64,7 @@ absl::StatusOr<HloInstructionProfileList> CollectProfiles(
 
 }  // namespace
 
-absl::StatusOr<bool> CollectivePerfTableStatsCollection::RunImpl(
+absl::StatusOr<bool> CollectivePerfTableStatsCollection::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   TF_ASSIGN_OR_RETURN(HloInstructionProfileList profiles,
@@ -93,13 +93,13 @@ absl::StatusOr<bool> CollectivePerfTableStatsCollection::RunImpl(
 
         // Set it in the `CollectiveBackendConfig`.
         auto gpu_config = instr->backend_config<GpuBackendConfig>();
-        CHECK_OK(gpu_config.status())
+        TF_CHECK_OK(gpu_config.status())
             << "Cannot parse backend config: " << instr->ToString();
         auto reification_cost = gpu_config->add_reification_cost();
         reification_cost->set_exec_time_us(
             absl::ToDoubleMicroseconds(exec_time));
         *reification_cost->mutable_name() = name();
-        CHECK_OK(instr->set_backend_config(*gpu_config));
+        TF_CHECK_OK(instr->set_backend_config(*gpu_config));
       });
 
   return false;

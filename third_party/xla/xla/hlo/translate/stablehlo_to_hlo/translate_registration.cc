@@ -23,7 +23,6 @@ limitations under the License.
 #include "mlir/Support/LogicalResult.h"
 #include "mlir/Tools/mlir-translate/Translation.h"
 #include "stablehlo/dialect/Register.h"
-#include "xla/hlo/translate/register.h"
 #include "xla/hlo/translate/stablehlo_to_hlo/translate.h"
 
 // The following symbols are defined in
@@ -49,11 +48,18 @@ static mlir::LogicalResult StablehloToHloTextTranslate(
       print_large_constants, print_sugar, via_builder, with_layouts);
 }
 
+static void RegisterInputDialects(mlir::DialectRegistry& registry) {
+  mlir::stablehlo::registerAllDialects(registry);
+  registry.insert<mlir::arith::ArithDialect, mlir::func::FuncDialect,
+                  mlir::tensor::TensorDialect>();
+}
+
 static mlir::TranslateFromMLIRRegistration StablehloToHloTranslateRegistration(
     "stablehlo-to-hlo", "stablehlo-to-hlo", StablehloToHloTranslate,
-    xla::RegisterMlirToHloDependentDialects);
+    RegisterInputDialects);
 
 static mlir::TranslateFromMLIRRegistration
-    StablehloToHloTextTranslateRegistration(
-        "stablehlo-to-hlo-text", "stablehlo-to-hlo-text",
-        StablehloToHloTextTranslate, xla::RegisterMlirToHloDependentDialects);
+    StablehloToHloTextTranslateRegistration("stablehlo-to-hlo-text",
+                                            "stablehlo-to-hlo-text",
+                                            StablehloToHloTextTranslate,
+                                            RegisterInputDialects);

@@ -38,7 +38,6 @@ limitations under the License.
 #include "mlir/Transforms/DialectConversion.h"  // from @llvm-project
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"  // from @llvm-project
 #include "tensorflow/compiler/mlir/lite/ir/tfl_ops.h"  // IWYU pragma: keep
-#include "tensorflow/compiler/mlir/lite/stablehlo/transforms/legalize_hlo_conversions/case.h"
 #include "tensorflow/compiler/mlir/lite/stablehlo/transforms/legalize_hlo_conversions/conv.h"  // IWYU pragma: keep
 #include "tensorflow/compiler/mlir/lite/stablehlo/transforms/legalize_hlo_conversions/custom_call.h"
 #include "tensorflow/compiler/mlir/lite/stablehlo/transforms/legalize_hlo_conversions/dot_general.h"  // IWYU pragma: keep
@@ -480,7 +479,6 @@ void LegalizeHloToTfLitePass::runOnOperation() {
   PopulateWhilePatterns(context, patterns, target);
   PopulateGetDimensionSizePatterns(context, patterns, target);
   PopulateIfPatterns(context, patterns, target);
-  PopulateCasePatterns(context, patterns, target);
   PopulateLegalizeFftPatterns(context, patterns, target);
   PopulateCustomCallPatterns(context, patterns, target);
 
@@ -494,6 +492,7 @@ void LegalizeHloToTfLitePass::runOnOperation() {
 }
 
 }  // namespace
+
 
 // Creates an instance of the pass.
 std::unique_ptr<OperationPass<ModuleOp>> CreateLegalizeHloToTfLitePass() {

@@ -30,14 +30,12 @@ limitations under the License.
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
-#include "absl/synchronization/mutex.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "llvm/Support/Casting.h"
 #include "xla/layout.h"
 #include "xla/pjrt/distributed/key_value_store_interface.h"
 #include "xla/pjrt/pjrt_client.h"
-#include "xla/pjrt/pjrt_layout.h"
 #include "xla/python/ifrt/array.h"
 #include "xla/python/ifrt/device.h"
 #include "xla/python/ifrt/device_list.h"
@@ -57,7 +55,6 @@ limitations under the License.
 #include "xla/tsl/platform/errors.h"
 #include "xla/tsl/platform/statusor.h"
 #include "xla/util.h"
-#include "xla/xla_data.pb.h"
 #include "tsl/platform/casts.h"
 
 namespace xla {
@@ -208,19 +205,6 @@ absl::Status PjRtTransferServer::CrossHostAwaitPull(
   return absl::OkStatus();
 }
 
-absl::StatusOr<tsl::RCReference<aux::SocketServer::Connection>>
-PjRtTransferServer::GetConnection(int remote_pid) {
-  if (!connections_.contains(remote_pid)) {
-    TF_ASSIGN_OR_RETURN(
-        std::string address,
-        kv_store_->Get(absl::StrCat(kKeyPrefixSocketAddress, remote_pid),
-                       cross_host_transfer_timeout_));
-    TF_ASSIGN_OR_RETURN(auto addr, aux::SocketAddress::Parse(address));
-    connections_[remote_pid] = (*socket_server_)->Connect(addr);
-  }
-  return connections_[remote_pid];
-}
-
 absl::Status PjRtTransferServer::CrossHostPull(
     int64_t uuid, absl::Span<xla::ifrt::ArrayRef> arrays,
     std::vector<int>& dst_device_idxs, xla::ifrt::DeviceListRef dst_devices,
@@ -229,11 +213,12 @@ absl::Status PjRtTransferServer::CrossHostPull(
   if (!socket_server_.has_value()) {
     return absl::InternalError("Socket server is not initialized.");
   }
-  tsl::RCReference<aux::SocketServer::Connection> connection;
-  {
-    absl::MutexLock lock(connections_mu_);
-    TF_ASSIGN_OR_RETURN(connection, GetConnection(remote_pid));
-  }
+  TF_ASSIGN_OR_RETURN(
+      std::string address_str,
+      kv_store_->Get(absl::StrCat(kKeyPrefixSocketAddress, remote_pid),
+                     cross_host_transfer_timeout_));
+  TF_ASSIGN_OR_RETURN(auto addr, aux::SocketAddress::Parse(address_str));
+  auto connection = (*socket_server_)->Connect(addr);
 
   std::vector<xla::PjRtClient::ShapeSpec> shape_specs;
   std::vector<std::optional<xla::Layout>> layouts;
@@ -249,19 +234,8 @@ absl::Status PjRtTransferServer::CrossHostPull(
         xla::DimensionVector(shape.dims().begin(), shape.dims().end())};
     shape_specs.push_back(shape_spec);
 
-    absl::StatusOr<std::shared_ptr<const xla::PjRtLayout>> pjrt_layout =
-        arrays[i]->pjrt_layout();
+    auto pjrt_layout = arrays[i]->layout();
     std::optional<xla::Layout> layout;
-    if (pjrt_layout.ok() && *pjrt_layout == nullptr) {
-      TF_ASSIGN_OR_RETURN(
-          xla::ifrt::Shape shard_shape,
-          arrays[i]->sharding().GetShardShape(arrays[i]->shape()));
-      TF_ASSIGN_OR_RETURN(
-          pjrt_layout, arrays[i]->client()->GetDefaultPjRtLayout(
-                           arrays[i]->dtype(), shard_shape.dims(),
-                           arrays[i]->sharding().devices()->devices().front(),
-                           arrays[i]->sharding().memory_kind()));
-    }
     if (pjrt_layout.ok()) {
       layout = (*pjrt_layout)->xla_layout();
     }
@@ -356,17 +330,7 @@ PjRtTransferServer::CopyArraysForCrossHost(
     TF_ASSIGN_OR_RETURN(auto new_sharding,
                         arrays[i]->shared_ptr_sharding()->WithDeviceAssignment(
                             dst_devices, memory_kind));
-    TF_ASSIGN_OR_RETURN(auto new_layout, arrays[i]->pjrt_layout());
-    if (new_layout == nullptr) {
-      TF_ASSIGN_OR_RETURN(
-          xla::ifrt::Shape shard_shape,
-          arrays[i]->sharding().GetShardShape(arrays[i]->shape()));
-      TF_ASSIGN_OR_RETURN(
-          new_layout, arrays[i]->client()->GetDefaultPjRtLayout(
-                          arrays[i]->dtype(), shard_shape.dims(),
-                          arrays[i]->sharding().devices()->devices().front(),
-                          arrays[i]->sharding().memory_kind()));
-    }
+    TF_ASSIGN_OR_RETURN(auto new_layout, arrays[i]->layout());
     PjRtArray::PjRtBuffers array_buffers;
     array_buffers.reserve(buffers_by_device.size());
     for (auto& [_, bufs] : buffers_by_device) {

@@ -24,17 +24,13 @@ limitations under the License.
 #include "absl/container/flat_hash_map.h"
 #include "absl/log/check.h"
 #include "absl/status/status.h"
-#include "xla/backends/cpu/codegen/target_machine_features.h"
 #include "xla/hlo/ir/hlo_casting_utils.h"
-#include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/ir/hlo_instructions.h"
-#include "xla/hlo/ir/hlo_opcode.h"
-#include "xla/layout_util.h"
+#include "xla/map_util.h"
 #include "xla/service/cpu/dot_op_emitter.h"
 #include "xla/service/cpu/ir_emission_utils.h"
-#include "xla/shape.h"
 #include "xla/shape_util.h"
-#include "xla/tsl/platform/errors.h"
+#include "tsl/platform/errors.h"
 
 namespace xla {
 namespace cpu {
@@ -107,7 +103,7 @@ static Shape RowMajorShape(Shape shape) {
 static Shape ColMajorShape(const Shape& old_shape) {
   Shape new_shape(old_shape);
   std::vector<int64_t> dimension_order(new_shape.dimensions().size());
-  absl::c_iota(dimension_order, 0);
+  std::iota(dimension_order.begin(), dimension_order.end(), 0);
   *new_shape.mutable_layout() = LayoutUtil::MakeLayout(dimension_order);
   return new_shape;
 }
@@ -118,12 +114,10 @@ static bool OperandsAndResultMustHaveRowMajorLayout(
   if (instr.opcode() == HloOpcode::kConvolution) {
     return PotentiallyImplementedAsEigenConvolution(instr,
                                                     target_machine_features);
-  }
-  if (instr.opcode() == HloOpcode::kDot) {
+  } else if (instr.opcode() == HloOpcode::kDot) {
     return DotOperandsAndResultMustHaveRowMajorLayout(
         instr, target_machine_features, /*allow_runtime_calls=*/true);
-  }
-  if (instr.opcode() == HloOpcode::kCustomCall) {
+  } else if (instr.opcode() == HloOpcode::kCustomCall) {
     return instr.custom_call_target() == "TopK";
   }
   return false;

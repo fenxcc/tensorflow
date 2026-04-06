@@ -28,7 +28,6 @@ limitations under the License.
 #include "xla/hlo/ir/hlo_computation.h"
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/utils/hlo_traversal.h"
-#include "xla/service/gpu/alias_info.h"
 #include "xla/service/gpu/hlo_fusion_analysis.h"
 #include "xla/service/gpu/launch_dimensions.h"
 #include "xla/service/instruction_fusion.h"
@@ -180,8 +179,7 @@ FusionDecision CanEmitInputFusedScatter(const HloInstruction& producer,
 // That is, the root tuple of the multi-output fusion will contain the results
 // of both, the producer and consumer.
 FusionDecision IsProducerMultiOutputFusible(
-    const HloInstruction& producer, const GpuAliasInfo* alias_info,
-    const se::DeviceDescription& device_info);
+    const HloInstruction& producer, const se::DeviceDescription& device_info);
 // Whether `instr` is a candidate for sibling fusion or as a consumer in
 // a producer-consumer multi-output fusion.
 bool IsFusibleAsMultiOutputFusionRoot(const HloInstruction& instr,
@@ -230,13 +228,12 @@ std::vector<const HloInstruction*> GetFusionRoots(
 // Whether the instruction is a generic Triton fusion.
 bool IsGenericTritonFusion(const HloInstruction& instr);
 
-// Whether there is an expected performance drop when unrolling due to the
-// instructions contained in the fusion, e.g. potential register spilling or not
-// enough parallelism.
-bool MayCausePerformanceDropIfUnrolled(const HloFusionAdaptor& fusion);
+// Whether the fusion will likely behave poorly with vectorization due to the
+// instructions it contains.
+bool MayPreventVectorization(const HloFusionAdaptor& fusion);
 
 // Returns the max loop unroll factor.
-int64_t MaxUnrollFactor(const HloFusionAnalysis* analysis = nullptr);
+inline constexpr int64_t MaxUnrollFactor() { return 4; }
 
 LaunchDimensionsConfig ComputeLoopFusionConfig(
     const HloFusionAnalysis& analysis);

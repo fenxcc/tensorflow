@@ -41,15 +41,15 @@ class StablehloTypeUtilsTest : public Test {
 
 TEST_F(StablehloTypeUtilsTest, IsStablehloOpSucceedsWithStablehloOp) {
   const OwningOpRef<mlir::stablehlo::ConstantOp> constant_op =
-      mlir::stablehlo::ConstantOp::create(builder_, builder_.getUnknownLoc(),
-                                          builder_.getI32IntegerAttr(0));
+      builder_.create<mlir::stablehlo::ConstantOp>(
+          builder_.getUnknownLoc(), builder_.getI32IntegerAttr(0));
   EXPECT_TRUE(IsStablehloOp(*constant_op));
 }
 
 TEST_F(StablehloTypeUtilsTest, IsStablehloOpFailsWithArithOp) {
   const OwningOpRef<mlir::arith::ConstantOp> constant_op =
-      mlir::arith::ConstantOp::create(builder_, builder_.getUnknownLoc(),
-                                      builder_.getI32IntegerAttr(0));
+      builder_.create<mlir::arith::ConstantOp>(builder_.getUnknownLoc(),
+                                               builder_.getI32IntegerAttr(0));
   EXPECT_FALSE(IsStablehloOp(*constant_op));
 }
 

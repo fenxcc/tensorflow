@@ -48,8 +48,7 @@ class QueryConnection {
   // The client must call `Close()` to release the connection resources, even
   // if `Open()` fails. `Close()` must be called before making another call
   // to `Open()`.
-  virtual absl::Status Open(const std::string& data_source_name,
-                            const std::string& query,
+  virtual absl::Status Open(const string& data_source_name, const string& query,
                             const DataTypeVector& output_types) = 0;
   // Closes an opened connection.
   virtual absl::Status Close() = 0;

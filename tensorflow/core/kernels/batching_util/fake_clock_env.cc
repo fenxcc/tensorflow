@@ -17,8 +17,6 @@ limitations under the License.
 
 #include <string>
 
-#include "absl/synchronization/notification.h"
-
 namespace tensorflow {
 namespace serving {
 namespace test_util {
@@ -40,7 +38,7 @@ void FakeClockEnv::AdvanceByMicroseconds(int micros) {
   }
 }
 
-void FakeClockEnv::BlockUntilSleepingThread(uint64_t wake_time) {
+void FakeClockEnv::BlockUntilSleepingThread(uint64 wake_time) {
   for (;;) {
     {
       mutex_lock l(mu_);
@@ -67,7 +65,7 @@ void FakeClockEnv::BlockUntilThreadsAsleep(int num_threads) {
   }
 }
 
-uint64_t FakeClockEnv::NowMicros() const {
+uint64 FakeClockEnv::NowMicros() const {
   {
     mutex_lock l(mu_);
     return current_time_;
@@ -79,7 +77,7 @@ void FakeClockEnv::SleepForMicroseconds(int64_t micros) {
     return;
   }
 
-  absl::Notification wake_notification;
+  Notification wake_notification;
   {
     mutex_lock l(mu_);
     sleeping_threads_.push_back({current_time_ + micros, &wake_notification});

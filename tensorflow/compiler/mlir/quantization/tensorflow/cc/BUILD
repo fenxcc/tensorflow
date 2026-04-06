@@ -1,4 +1,3 @@
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load(
     "//tensorflow:tensorflow.bzl",
     "tf_cc_test",
@@ -47,7 +46,6 @@ tf_cc_test(
         "//tensorflow/compiler/mlir/tensorflow",
         "//tensorflow/compiler/mlir/tensorflow:tensorflow_types",
         "//tensorflow/core:framework",
-        "//tensorflow/core:lib",
         "//tensorflow/core:protos_all_cc",
         "//tensorflow/core:test",
         "//tensorflow/core:test_main",
@@ -55,14 +53,15 @@ tf_cc_test(
         "//tensorflow/core/util/tensor_bundle",
         "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:status_matchers",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
         "@com_google_googletest//:gtest_main",
         "@llvm-project//mlir:FuncDialect",
         "@llvm-project//mlir:IR",
         "@llvm-project//mlir:Parser",
         "@local_xla//xla/tsl/platform:status",
+        "@local_xla//xla/tsl/platform:status_matchers",
     ],
 )
 

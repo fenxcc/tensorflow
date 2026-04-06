@@ -78,7 +78,7 @@ absl::Status RetryingUtils::CallWithRetries(
       // at a higher level.
       return absl::Status(
           absl::StatusCode::kAborted,
-          absl::StrCat(
+          strings::StrCat(
               "All ", config.max_retries,
               " retry attempts failed. The last failure: ", status.message()));
     }

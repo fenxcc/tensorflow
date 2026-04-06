@@ -271,7 +271,7 @@ static std::vector<bool> MakeDynamicDimensions(
 
 /* static */ absl::StatusOr<Shape> ShapeUtil::MakeValidatedBufferShape(
     Shape element_shape) {
-  TF_RET_CHECK(element_shape.IsArrayExcludingBuffer())
+  TF_RET_CHECK(element_shape.IsArray())
       << "element_shape must be an array shape to create a buffer shape.";
   Shape shape(BUFFER);
   *shape.buffer_state().buffer_shape = std::move(element_shape);
@@ -420,8 +420,9 @@ ShapeUtil::MakeValidatedShapeWithDescendingLayoutAndSamePhysicalLayout(
     }
     dims[i] = shape.dimensions(dim);
   }
-  TF_ASSIGN_OR_RETURN(Shape new_shape, MakeValidatedShapeWithDescendingLayout(
-                                           shape.element_type(), dims));
+  TF_ASSIGN_OR_RETURN(Shape new_shape,
+                      MakeValidatedShapeWithDescendingLayout(
+                          shape.array_or_buffer_element_type(), dims));
   if (shape.IsBuffer()) {
     TF_ASSIGN_OR_RETURN(new_shape, MakeValidatedBufferShape(new_shape));
   }
@@ -690,7 +691,8 @@ Shape ShapeUtil::PrependMajorDimension(int64_t bound, Shape shape) {
 
 /* static */ int64_t ShapeUtil::SubshapeCount(const Shape& shape) {
   int64_t n = 0;
-  ForEachSubshape(shape, [&](const Shape&, const ShapeIndex&) { ++n; });
+  ForEachSubshape(shape, [&](const Shape& literal_subshape,
+                             const ShapeIndex& index) { ++n; });
   return n;
 }
 
@@ -799,9 +801,7 @@ Shape ShapeUtil::PrependMajorDimension(int64_t bound, Shape shape) {
     return;
   }
   PrintHumanString(printer, shape);
-  if (!shape.IsArrayExcludingBuffer()) {
-    return;
-  }
+  if (!shape.IsArray()) return;
   if (!shape.has_layout()) return;
   if (IsScalar(shape)) {
     std::string layout_str = LayoutUtil::HumanString(shape.layout());
@@ -945,7 +945,7 @@ Shape ShapeUtil::PrependMajorDimension(int64_t bound, Shape shape) {
   if (shape.IsBuffer()) {
     return ByteSizeOfElements(shape.buffer_shape());
   }
-  if (shape.IsArrayExcludingBuffer()) {
+  if (shape.IsArray()) {
     return ByteSizeOfElements(shape);
   }
   if (shape.element_type() == TOKEN) {
@@ -1074,15 +1074,14 @@ absl::Status ValidateDimensions(const Shape& shape) {
 // Validates all of the non-layout properties of the shape -- this is a helper
 // used by both the layout-optional and layout-required public method.
 absl::Status ValidateNonLayoutProperties(const Shape& shape) {
-  PrimitiveType element_type = shape.element_type_including_buffer();
   // Make sure the element type is valid.
-  if (element_type == PRIMITIVE_TYPE_INVALID ||
-      !PrimitiveType_IsValid(element_type)) {
+  if (shape.element_type() == PRIMITIVE_TYPE_INVALID ||
+      !PrimitiveType_IsValid(shape.element_type())) {
     return ShapeError(shape, "Invalid element type.");
   }
 
   // Validate tuple shapes.
-  if (element_type == TUPLE) {
+  if (shape.element_type() == TUPLE) {
     if (!shape.if_tuple_state()) {
       return ShapeError(shape, "This type must have a tuple state.");
     }
@@ -1092,7 +1091,7 @@ absl::Status ValidateNonLayoutProperties(const Shape& shape) {
     return absl::OkStatus();
   }
 
-  if (element_type == BUFFER) {
+  if (shape.element_type() == BUFFER) {
     if (!shape.if_buffer_state()) {
       return ShapeError(shape, "This type must have a buffer state.");
     }
@@ -1100,7 +1099,7 @@ absl::Status ValidateNonLayoutProperties(const Shape& shape) {
   }
 
   // Validate token shapes.
-  if (element_type == TOKEN) {
+  if (shape.element_type() == TOKEN) {
     if (!shape.if_token_state()) {
       return ShapeError(shape, "This type must have a token state.");
     }
@@ -1108,7 +1107,7 @@ absl::Status ValidateNonLayoutProperties(const Shape& shape) {
   }
 
   // Validate opaque shapes.
-  if (element_type == OPAQUE_TYPE) {
+  if (shape.element_type() == OPAQUE_TYPE) {
     if (!shape.if_opaque_state()) {
       return ShapeError(shape, "This type must have an opaque state.");
     }
@@ -1116,7 +1115,7 @@ absl::Status ValidateNonLayoutProperties(const Shape& shape) {
   }
 
   // Validate array shapes.
-  if (primitive_util::IsArrayType(element_type)) {
+  if (primitive_util::IsArrayType(shape.element_type())) {
     if (!shape.if_array_state()) {
       return ShapeError(shape, "This type must have an array state.");
     }
@@ -1264,7 +1263,7 @@ ShapeUtil::PackedFactorFor1DInterleavedArray(const Shape& shape) {
       [&](int64_t dim) -> bool { return shape.dimensions()[dim] != 1; }, shape);
 }
 
-/* static */ Shape ShapeUtil::PermuteDimensionsIgnoringLayout(
+/* static */ Shape ShapeUtil::PermuteDimensions(
     absl::Span<const int64_t> permutation, const Shape& shape) {
   Shape new_shape = shape;
   new_shape.clear_dimensions();
@@ -1274,12 +1273,7 @@ ShapeUtil::PackedFactorFor1DInterleavedArray(const Shape& shape) {
   for (int i = 0; i < permuted_dims.size(); ++i) {
     new_shape.add_dimensions(permuted_dims[i], permuted_dynamic_dims[i]);
   }
-  return new_shape;
-}
 
-/* static */ Shape ShapeUtil::PermuteDimensions(
-    absl::Span<const int64_t> permutation, const Shape& shape) {
-  Shape new_shape = PermuteDimensionsIgnoringLayout(permutation, shape);
   // If `shape` has a layout, by contract we choose a new layout such that the
   // transpose defined by this permutation is a bitcast.
   //
@@ -1668,7 +1662,7 @@ ShapeUtil::DeduceTransposeDimensionsForBitcast(const Shape& input_shape,
       LayoutPerm(input_shape), InversePermutation(LayoutPerm(output_shape)));
 
   std::vector<int64_t> new_dims =
-      Permute(input_shape.dimensions(), transpose_perm);
+      ComposePermutations(input_shape.dimensions(), transpose_perm);
   if (!absl::c_equal(output_shape.dimensions(), new_dims)) {
     return std::nullopt;
   }
@@ -1696,18 +1690,11 @@ bool ShapeUtil::BitcastDecompositionTrt::IsTranspose2Identity() const {
   return absl::c_is_sorted(transpose2_dims);
 }
 
-bool ShapeUtil::IsDecomposableBitcast(const Shape& input_shape,
-                                      const Shape& output_shape) {
-  return input_shape.has_layout() && output_shape.has_layout() &&
-         ElementsIn(input_shape) == ElementsIn(output_shape);
-}
-
-/* static */ std::optional<ShapeUtil::BitcastDecompositionTrt>
+/* static */ ShapeUtil::BitcastDecompositionTrt
 ShapeUtil::DecomposeBitcastToTrt(const Shape& input_shape,
                                  const Shape& output_shape) {
-  if (!IsDecomposableBitcast(input_shape, output_shape)) {
-    return std::nullopt;
-  }
+  CHECK(input_shape.has_layout()) << input_shape.ToString();
+  CHECK(output_shape.has_layout()) << output_shape.ToString();
 
   BitcastDecompositionTrt decomposition;
   decomposition.transpose1_shape =
@@ -1744,9 +1731,8 @@ ShapeUtil::DecomposeBitcastToTrt(const Shape& input_shape,
 
 /* static */ ShapeUtil::BitcastDecomposition ShapeUtil::DecomposeBitcast(
     const Shape& input_shape, const Shape& output_shape) {
-  if (!IsDecomposableBitcast(input_shape, output_shape)) {
-    return std::nullopt;
-  }
+  CHECK(input_shape.has_layout()) << input_shape.ToString();
+  CHECK(output_shape.has_layout()) << output_shape.ToString();
 
   if (ShapeUtil::ReshapeIsBitcast(input_shape, output_shape,
                                   /*ignore_element_type=*/true)) {
@@ -2120,7 +2106,7 @@ struct ParallelState {
     while (n < s.rank) {
       absl::StatusOr<bool> result = visitor_function(s.indexes, thread_id);
       if (!result.ok()) {
-        absl::MutexLock lock(pstate.mu);
+        absl::MutexLock lock(&pstate.mu);
         if (pstate.status.ok()) {
           pstate.status = result.status();
         }
@@ -2164,32 +2150,15 @@ struct ParallelState {
   return shape;
 }
 
-bool ShapeUtil::DeviceShapeIsHostShape(const Shape& shape) {
-  bool is_host_shape = true;
-  ForEachSubshape(shape, [&](const Shape& subshape, const ShapeIndex&) {
-    if (subshape.IsArray() && subshape.has_layout()) {
-      const Layout& layout = subshape.layout();
-      is_host_shape &= layout.tiles().empty();
-      is_host_shape &= layout.memory_space() == Layout::kDefaultMemorySpace;
-      is_host_shape &= !layout.has_physical_shape();
-      is_host_shape &= layout.element_size_in_bits() == 0;
-      is_host_shape &= layout.tail_padding_alignment_in_elements() == 1;
-      is_host_shape &= layout.dynamic_shape_metadata_prefix_bytes() == 0;
-    }
-  });
-  return is_host_shape;
-}
-
 Shape ShapeUtil::DeviceShapeToHostShape(Shape s) {
   ForEachMutableSubshape(&s, [](Shape* subshape, const ShapeIndex& index) {
     if (subshape->IsArray() && subshape->has_layout()) {
-      Layout* layout = subshape->mutable_layout();
-      layout->clear_tiles();
-      layout->set_memory_space(Layout::kDefaultMemorySpace);
-      layout->clear_physical_shape();
-      layout->set_element_size_in_bits(0);
-      layout->set_tail_padding_alignment_in_elements(1);
-      layout->set_dynamic_shape_metadata_prefix_bytes(0);
+      subshape->mutable_layout()->clear_tiles();
+      subshape->mutable_layout()->set_memory_space(Layout::kDefaultMemorySpace);
+      subshape->mutable_layout()->clear_physical_shape();
+      subshape->mutable_layout()->set_element_size_in_bits(0);
+      subshape->mutable_layout()->set_tail_padding_alignment_in_elements(1);
+      subshape->mutable_layout()->set_dynamic_shape_metadata_prefix_bytes(0);
     }
   });
   return s;
@@ -2201,8 +2170,8 @@ Shape ShapeUtil::DeviceShapeToHostShape(Shape s) {
 }
 
 /*static*/
-absl::Status ShapeUtil::UnpackedByteStrides(const Shape& shape,
-                                            absl::Span<int64_t> strides) {
+absl::Status ShapeUtil::ByteStrides(const Shape& shape,
+                                    absl::Span<int64_t> strides) {
   TF_RET_CHECK(shape.IsArray());
   TF_RET_CHECK(shape.has_layout());
   TF_RET_CHECK(shape.dimensions().size() == strides.size());
@@ -2216,27 +2185,13 @@ absl::Status ShapeUtil::UnpackedByteStrides(const Shape& shape,
 }
 
 /*static*/
-absl::Status ShapeUtil::ByteStrides(const Shape& shape,
-                                    absl::Span<int64_t> strides) {
-  return UnpackedByteStrides(shape, strides);
-}
-
-/*static*/
-std::optional<absl::InlinedVector<int64_t, 4>> ShapeUtil::UnpackedByteStrides(
+std::optional<absl::InlinedVector<int64_t, 4>> ShapeUtil::ByteStrides(
     const Shape& shape) {
   absl::InlinedVector<int64_t, 4> strides(shape.dimensions().size());
-  if (!UnpackedByteStrides(shape, absl::MakeSpan(strides)).ok()) {
+  if (!ByteStrides(shape, absl::MakeSpan(strides)).ok()) {
     return std::nullopt;
   }
   return strides;
-}
-
-/*static*/ std::optional<absl::InlinedVector<int64_t, 4>>
-ShapeUtil::ByteStrides(const Shape& shape) {
-  if (shape.layout().element_size_in_bits() % CHAR_BIT != 0) {
-    return std::nullopt;
-  }
-  return UnpackedByteStrides(shape);
 }
 
 /*static*/ int64_t ShapeUtil::ElementSizeInBits(const Shape& shape) {

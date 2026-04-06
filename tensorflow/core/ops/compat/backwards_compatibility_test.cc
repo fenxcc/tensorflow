@@ -26,7 +26,7 @@ namespace {
 
 TEST(BackwardsCompatibilityTest, IsCompatible) {
   OpCompatibilityLib compatibility("tensorflow/core/ops",
-                                   absl::StrCat("v", TF_MAJOR_VERSION),
+                                   strings::StrCat("v", TF_MAJOR_VERSION),
                                    nullptr);
 
   Env* env = Env::Default();

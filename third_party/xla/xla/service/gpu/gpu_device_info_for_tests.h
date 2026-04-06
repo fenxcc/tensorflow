@@ -26,19 +26,13 @@ class TestGpuDeviceInfo {
  public:
   static stream_executor::DeviceDescription RTXA6000DeviceInfo(
       stream_executor::GpuComputeCapability cc =
-          stream_executor::GpuComputeCapability{
-              stream_executor::CudaComputeCapability(8, 9)});
+          stream_executor::CudaComputeCapability(8, 9));
   static stream_executor::DeviceDescription RTXH100SXMDeviceInfo(
       stream_executor::GpuComputeCapability cc =
-          stream_executor::GpuComputeCapability{
-              stream_executor::CudaComputeCapability(9, 0)});
-  static stream_executor::DeviceDescription RTXB200SXMDeviceInfo(
-      stream_executor::GpuComputeCapability cc =
-          stream_executor::GpuComputeCapability{
-              stream_executor::CudaComputeCapability(10, 0)});
+          stream_executor::CudaComputeCapability(9, 0));
   static stream_executor::DeviceDescription AMDMI210DeviceInfo();
   static stream_executor::DeviceDescription AMDRX7900DeviceInfo();
-  // Returns default RTXA6000 or AMDMI210 device info
+  // Returns deafult RTXA6000 or AMDMI210 device info
   static stream_executor::DeviceDescription CudaOrRocmDeviceInfo();
 };
 

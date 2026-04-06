@@ -61,10 +61,6 @@ enum class TokKind {
   kw_HloModule,
   kw_ENTRY,
   kw_ROOT,
-  kw_FileLocations,
-  kw_FileNames,
-  kw_FunctionNames,
-  kw_StackFrames,
   kw_true,
   kw_false,
   kw_maximal,
@@ -75,7 +71,6 @@ enum class TokKind {
   kw_shard_like,
   kw_unknown,
   kw_inf,
-  kw_unreduced,
 
   kNegInf,  // -inf
 
@@ -86,6 +81,7 @@ enum class TokKind {
   kDimLabels,      // [0-9bf?]{2,}_[0-9io?]{2,}->[0-9bf?]{2,}
   kDxD,            // [0-9]+(x[0-9]+)+
   kPad,            // [0-9]+_[0-9]+(_[0-9]+)?(x[0-9]+_[0-9]+(_[0-9]+)?)*
+  kSparsityDesc,   // ([LR]\.[0-9]+@[0-9]+:[0-9]+_?)+
   kIdent,          // other identifiers
   kString,         // "abcd\"\n"
   kInt,            // 42
@@ -123,6 +119,7 @@ class HloLexer {
       case TokKind::kDimLabels:
       case TokKind::kDxD:
       case TokKind::kPad:
+      case TokKind::kSparsityDesc:
       case TokKind::kString:
       case TokKind::kIdent:
         return token_state_.str_val;

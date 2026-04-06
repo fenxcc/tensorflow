@@ -18,15 +18,12 @@ limitations under the License.
 
 #include <optional>
 
-#include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/types/span.h"
-#include "xla/future.h"
 #include "xla/literal.h"
 #include "xla/pjrt/async_work_runner.h"
 #include "xla/pjrt/device_event.h"
+#include "xla/pjrt/pjrt_future.h"
 #include "xla/shape.h"
-#include "xla/tsl/concurrency/async_value.h"
 #include "xla/tsl/concurrency/ref_count.h"
 
 namespace xla {
@@ -61,8 +58,8 @@ class PjRtRawBuffer : public tsl::ReferenceCounted<PjRtRawBuffer> {
   // Note that the underlying driver may have requirements
   // on the alignment of `src` and `offset` as well. Look at implementations of
   // this method for specific alignment requirements.
-  virtual Future<> CopyRawHostToDevice(const void* src, int64_t offset,
-                                       int64_t transfer_size) = 0;
+  virtual PjRtFuture<> CopyRawHostToDevice(const void* src, int64_t offset,
+                                           int64_t transfer_size) = 0;
 
   // Transfers a sub-range of the on-device representation of the buffer.
   // offset+transfer_size must be less than GetOnDeviceSizeInBytes. The
@@ -72,8 +69,8 @@ class PjRtRawBuffer : public tsl::ReferenceCounted<PjRtRawBuffer> {
   // Note that the underlying driver may have requirements
   // on the alignment of `dst` and `offset` as well. Look at implementations of
   // this method for specific alignment requirements.
-  virtual Future<> CopyRawDeviceToHost(void* dst, int64_t offset,
-                                       int64_t transfer_size) = 0;
+  virtual PjRtFuture<> CopyRawDeviceToHost(void* dst, int64_t offset,
+                                           int64_t transfer_size) = 0;
 };
 
 // Adds methods common to all implementations of PjRtRawBuffer based on device
@@ -95,8 +92,8 @@ class CommonPjRtRawBuffer : public PjRtRawBuffer {
   CopyRawHostToDeviceAndReturnEvent(const void* src, int64_t offset,
                                     int64_t transfer_size) = 0;
 
-  Future<> CopyRawHostToDevice(const void* src, int64_t offset,
-                               int64_t transfer_size) override;
+  PjRtFuture<> CopyRawHostToDevice(const void* src, int64_t offset,
+                                   int64_t transfer_size) override;
 
   // Transfers a sub-range of the on-device representation of the buffer.
   // offset+transfer_size must be less than GetOnDeviceSizeInBytes. The
@@ -110,25 +107,8 @@ class CommonPjRtRawBuffer : public PjRtRawBuffer {
   CopyRawDeviceToHostAndReturnEvent(void* dst, int64_t offset,
                                     int64_t transfer_size) = 0;
 
-  Future<> CopyRawDeviceToHost(void* dst, int64_t offset,
-                               int64_t transfer_size) override;
-
-  // A sliced buffer is a view into the offset and range of this buffer.
-  //
-  // Note that the underlying driver may have requirements
-  // on the alignment of `offset`. Look at implementations of
-  // this method for specific alignment requirements.
-  absl::StatusOr<tsl::RCReference<CommonPjRtRawBuffer>> Slice(int64_t offset,
-                                                              int64_t size);
-
-  struct SliceInfo {
-    int64_t offset;
-    int64_t size;
-  };
-
-  // Batched version of Slice(). May be faster on some implementations.
-  virtual absl::StatusOr<std::vector<tsl::RCReference<CommonPjRtRawBuffer>>>
-  MultiSlice(absl::Span<const SliceInfo> slices);
+  PjRtFuture<> CopyRawDeviceToHost(void* dst, int64_t offset,
+                                   int64_t transfer_size) override;
 
   // Creates an event which signals when the allocation is complete.
   virtual absl::StatusOr<tsl::RCReference<PjRtDeviceEvent>>
@@ -146,7 +126,7 @@ class CommonPjRtRawBuffer : public PjRtRawBuffer {
   // Interprets buffer contents as having shape and linearizes these contents
   // async into the provided literal.
   virtual void CopyToLiteralAsync(
-      Promise<> promise,
+      PjRtFuture<>::Promise promise,
       tsl::RCReference<PjRtDeviceEventPromise> device_promise,
       MutableLiteralBase* literal, xla::Shape shape) = 0;
 
@@ -170,13 +150,6 @@ class CommonPjRtRawBuffer : public PjRtRawBuffer {
       tsl::RCReference<PjRtDeviceEventPromise> definition_event_promise,
       tsl::RCReference<PjRtDeviceEventPromise> src_usage_event_promise,
       ::tsl::AsyncValueRef<bool> allocation_event);
-
-  // Returns the async value associated with the buffer.
-  virtual absl::StatusOr<tsl::RCReference<tsl::AsyncValue>>
-  GetRawBufferAsyncValue() {
-    return absl::UnimplementedError(
-        "GetRawBufferAsyncValue is not implemented.");
-  }
 };
 
 class RegisterRawBufferFactory {

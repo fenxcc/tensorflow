@@ -15,7 +15,6 @@
 
 # C API for delegate plugins.
 
-load("@rules_cc//cc:cc_test.bzl", "cc_test")
 load("//tensorflow:tensorflow.default.bzl", "get_compatible_with_portable")
 load(
     "//tensorflow/core/platform:build_config_root.bzl",

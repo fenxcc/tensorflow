@@ -39,7 +39,7 @@ namespace {
 Env* env() { return Env::Default(); }
 
 void WriteSimpleValue(EventsWriter* writer, double wall_time, int64_t step,
-                      const std::string& tag, float simple_value) {
+                      const string& tag, float simple_value) {
   Event event;
   event.set_wall_time(wall_time);
   event.set_step(step);
@@ -54,7 +54,7 @@ void WriteFile(EventsWriter* writer) {
   WriteSimpleValue(writer, 2345, 35, "bar", -42);
 }
 
-static bool ReadEventProto(io::RecordReader* reader, uint64_t* offset,
+static bool ReadEventProto(io::RecordReader* reader, uint64* offset,
                            Event* proto) {
   tstring record;
   absl::Status s = reader->ReadRecord(offset, &record);
@@ -64,13 +64,13 @@ static bool ReadEventProto(io::RecordReader* reader, uint64_t* offset,
   return ParseProtoUnlimited(proto, record);
 }
 
-void VerifyFile(const std::string& filename) {
+void VerifyFile(const string& filename) {
   TF_CHECK_OK(env()->FileExists(filename));
   std::unique_ptr<RandomAccessFile> event_file;
   TF_CHECK_OK(env()->NewRandomAccessFile(filename, &event_file));
   io::RecordReader* reader = new io::RecordReader(event_file.get());
 
-  uint64_t offset = 0;
+  uint64 offset = 0;
 
   Event actual;
   CHECK(ReadEventProto(reader, &offset, &actual));
@@ -80,8 +80,9 @@ void VerifyFile(const std::string& filename) {
   double current_time = env()->NowMicros() / 1000000.0;
   EXPECT_LT(fabs(actual.wall_time() - current_time), 5);
   // Should have the current version number.
-  EXPECT_EQ(actual.file_version(), absl::StrCat(EventsWriter::kVersionPrefix,
-                                                EventsWriter::kCurrentVersion));
+  EXPECT_EQ(actual.file_version(),
+            strings::StrCat(EventsWriter::kVersionPrefix,
+                            EventsWriter::kCurrentVersion));
   // Should have the current source metadata.
   EXPECT_EQ(actual.source_metadata().writer(),
             EventsWriter::kWriterSourceMetadata);
@@ -109,41 +110,41 @@ void VerifyFile(const std::string& filename) {
   delete reader;
 }
 
-std::string GetDirName(const std::string& suffix) {
+string GetDirName(const string& suffix) {
   return io::JoinPath(testing::TmpDir(), suffix);
 }
 
 TEST(EventWriter, WriteFlush) {
-  std::string file_prefix = GetDirName("/writeflush_test");
+  string file_prefix = GetDirName("/writeflush_test");
   EventsWriter writer(file_prefix);
   WriteFile(&writer);
   TF_EXPECT_OK(writer.Flush());
-  std::string filename = writer.FileName();
+  string filename = writer.FileName();
   VerifyFile(filename);
 }
 
 TEST(EventWriter, WriteClose) {
-  std::string file_prefix = GetDirName("/writeclose_test");
+  string file_prefix = GetDirName("/writeclose_test");
   EventsWriter writer(file_prefix);
   WriteFile(&writer);
   TF_EXPECT_OK(writer.Close());
-  std::string filename = writer.FileName();
+  string filename = writer.FileName();
   VerifyFile(filename);
 }
 
 TEST(EventWriter, WriteDelete) {
-  std::string file_prefix = GetDirName("/writedelete_test");
+  string file_prefix = GetDirName("/writedelete_test");
   EventsWriter* writer = new EventsWriter(file_prefix);
   WriteFile(writer);
-  std::string filename = writer->FileName();
+  string filename = writer->FileName();
   delete writer;
   VerifyFile(filename);
 }
 
 TEST(EventWriter, FailFlush) {
-  std::string file_prefix = GetDirName("/failflush_test");
+  string file_prefix = GetDirName("/failflush_test");
   EventsWriter writer(file_prefix);
-  std::string filename = writer.FileName();
+  string filename = writer.FileName();
   WriteFile(&writer);
   TF_EXPECT_OK(env()->FileExists(filename));
   TF_ASSERT_OK(env()->DeleteFile(filename));
@@ -151,9 +152,9 @@ TEST(EventWriter, FailFlush) {
 }
 
 TEST(EventWriter, FailClose) {
-  std::string file_prefix = GetDirName("/failclose_test");
+  string file_prefix = GetDirName("/failclose_test");
   EventsWriter writer(file_prefix);
-  std::string filename = writer.FileName();
+  string filename = writer.FileName();
   WriteFile(&writer);
   TF_EXPECT_OK(env()->FileExists(filename));
   TF_ASSERT_OK(env()->DeleteFile(filename));
@@ -161,22 +162,22 @@ TEST(EventWriter, FailClose) {
 }
 
 TEST(EventWriter, InitWriteClose) {
-  std::string file_prefix = GetDirName("/initwriteclose_test");
+  string file_prefix = GetDirName("/initwriteclose_test");
   EventsWriter writer(file_prefix);
   TF_EXPECT_OK(writer.Init());
-  std::string filename0 = writer.FileName();
+  string filename0 = writer.FileName();
   TF_EXPECT_OK(env()->FileExists(filename0));
   WriteFile(&writer);
   TF_EXPECT_OK(writer.Close());
-  std::string filename1 = writer.FileName();
+  string filename1 = writer.FileName();
   EXPECT_EQ(filename0, filename1);
   VerifyFile(filename1);
 }
 
 TEST(EventWriter, NameWriteClose) {
-  std::string file_prefix = GetDirName("/namewriteclose_test");
+  string file_prefix = GetDirName("/namewriteclose_test");
   EventsWriter writer(file_prefix);
-  std::string filename = writer.FileName();
+  string filename = writer.FileName();
   TF_EXPECT_OK(env()->FileExists(filename));
   WriteFile(&writer);
   TF_EXPECT_OK(writer.Close());
@@ -184,18 +185,18 @@ TEST(EventWriter, NameWriteClose) {
 }
 
 TEST(EventWriter, NameClose) {
-  std::string file_prefix = GetDirName("/nameclose_test");
+  string file_prefix = GetDirName("/nameclose_test");
   EventsWriter writer(file_prefix);
-  std::string filename = writer.FileName();
+  string filename = writer.FileName();
   TF_EXPECT_OK(writer.Close());
   TF_EXPECT_OK(env()->FileExists(filename));
   TF_ASSERT_OK(env()->DeleteFile(filename));
 }
 
 TEST(EventWriter, FileDeletionBeforeWriting) {
-  std::string file_prefix = GetDirName("/fdbw_test");
+  string file_prefix = GetDirName("/fdbw_test");
   EventsWriter writer(file_prefix);
-  std::string filename0 = writer.FileName();
+  string filename0 = writer.FileName();
   TF_EXPECT_OK(env()->FileExists(filename0));
   env()->SleepForMicroseconds(
       2000000);  // To make sure timestamp part of filename will differ.
@@ -203,7 +204,7 @@ TEST(EventWriter, FileDeletionBeforeWriting) {
   TF_EXPECT_OK(writer.Init());  // Init should reopen file.
   WriteFile(&writer);
   TF_EXPECT_OK(writer.Flush());
-  std::string filename1 = writer.FileName();
+  string filename1 = writer.FileName();
   EXPECT_NE(filename0, filename1);
   VerifyFile(filename1);
 }

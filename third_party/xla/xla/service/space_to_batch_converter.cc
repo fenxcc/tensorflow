@@ -15,18 +15,19 @@ limitations under the License.
 #include "xla/service/space_to_batch_converter.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 #include <iterator>
 #include <map>
+#include <memory>
 #include <queue>
+#include <tuple>
 #include <utility>
 #include <vector>
 
 #include "absl/algorithm/container.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
-#include "absl/log/check.h"
 #include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -44,9 +45,11 @@ limitations under the License.
 #include "xla/service/shape_inference.h"
 #include "xla/shape_util.h"
 #include "xla/tsl/lib/core/bitmap.h"
-#include "xla/tsl/platform/statusor.h"
 #include "xla/util.h"
 #include "xla/xla_data.pb.h"
+#include "tsl/platform/logging.h"
+#include "tsl/platform/status.h"
+#include "tsl/platform/statusor.h"
 
 namespace xla {
 
@@ -909,7 +912,7 @@ absl::StatusOr<bool> ConvolutionVisitor::Run() {
       convs_to_visit_.erase(conv);
     }
     if (convs_to_visit_.count(conv) > 0) {
-      CHECK_OK(PerformSpaceToBatchOnConvolution(conv));
+      TF_CHECK_OK(PerformSpaceToBatchOnConvolution(conv));
       changed_ = true;
     }
   }
@@ -935,8 +938,8 @@ absl::StatusOr<bool> ConvolutionVisitor::Run() {
           bool needs_further_propagation;
           TF_ASSIGN_OR_RETURN(needs_further_propagation,
                               Propagate(instr, producer));
-          CHECK_OK(computation_->ReplaceInstruction(instr,
-                                                    old_to_new_instrs_[instr]));
+          TF_CHECK_OK(computation_->ReplaceInstruction(
+              instr, old_to_new_instrs_[instr]));
           continue;
         }
       }
@@ -950,7 +953,7 @@ absl::StatusOr<bool> ConvolutionVisitor::Run() {
       }
     }
     for (auto entry : operand_map) {
-      CHECK_OK(instr->ReplaceOperandWith(entry.first, entry.second));
+      TF_CHECK_OK(instr->ReplaceOperandWith(entry.first, entry.second));
     }
   }
   non_propagatable_instrs_.clear();
@@ -1898,7 +1901,7 @@ absl::StatusOr<bool> ConvolutionVisitor::Propagate(HloInstruction* consumer,
           }
         }
         CHECK_NE(new_broadcast, nullptr);
-        CHECK_OK(
+        TF_CHECK_OK(
             new_consumer->ReplaceOperandWithDifferentShape(i, new_broadcast));
       } else if (old_to_new_instrs_.contains(consumer->mutable_operand(i))) {
         HloInstruction* operand_to_use = nullptr;
@@ -1962,7 +1965,7 @@ absl::StatusOr<bool> ConvolutionVisitor::Propagate(HloInstruction* consumer,
         } else {
           operand_to_use = old_to_new_instrs_[consumer->mutable_operand(i)];
         }
-        CHECK_OK(
+        TF_CHECK_OK(
             new_consumer->ReplaceOperandWithDifferentShape(i, operand_to_use));
       } else if (consumer->IsElementwiseBinary() &&
                  consumer->mutable_operand(i)->opcode() ==
@@ -1970,13 +1973,13 @@ absl::StatusOr<bool> ConvolutionVisitor::Propagate(HloInstruction* consumer,
                  IsBroadcastTree(consumer->mutable_operand(i), producer,
                                  instructions_to_transform)) {
         RewriteBroadcastTree(producer, instructions_to_transform);
-        CHECK_OK(new_consumer->ReplaceOperandWithDifferentShape(
+        TF_CHECK_OK(new_consumer->ReplaceOperandWithDifferentShape(
             i, old_to_new_instrs_[consumer->mutable_operand(i)]));
       } else if (consumer->operand(i)->opcode() == HloOpcode::kConstant) {
         TF_ASSIGN_OR_RETURN(
             auto new_constant,
             PropagateOnConstant(consumer->mutable_operand(i), producer));
-        CHECK_OK(
+        TF_CHECK_OK(
             new_consumer->ReplaceOperandWithDifferentShape(i, new_constant));
       }
     }
@@ -2002,21 +2005,21 @@ absl::StatusOr<bool> ConvolutionVisitor::Propagate(HloInstruction* consumer,
 
   if (consumer->opcode() == HloOpcode::kConvolution) {
     if (IsConvSuitableForSpaceToBatch(consumer)) {
-      CHECK_OK(PropagateOnConv(consumer));
+      TF_CHECK_OK(PropagateOnConv(consumer));
       return true;
     } else {
-      CHECK_OK(PropagateOnBackpropFilterConv(consumer));
+      TF_CHECK_OK(PropagateOnBackpropFilterConv(consumer));
       return false;
     }
   }
 
   if (consumer->opcode() == HloOpcode::kConcatenate) {
-    CHECK_OK(PropagateOnConcat(consumer));
+    TF_CHECK_OK(PropagateOnConcat(consumer));
     return true;
   }
 
   if (consumer->opcode() == HloOpcode::kReverse) {
-    CHECK_OK(PropagateOnReverse(consumer));
+    TF_CHECK_OK(PropagateOnReverse(consumer));
     return true;
   }
 
@@ -2067,12 +2070,12 @@ absl::StatusOr<bool> ConvolutionVisitor::Propagate(HloInstruction* consumer,
   // TODO(b/189500737) : Consider a common way of propagation for
   // slice/pad/reduce-window.
   if (consumer->opcode() == HloOpcode::kPad) {
-    CHECK_OK(PropagateOnPad(consumer));
+    TF_CHECK_OK(PropagateOnPad(consumer));
     return true;
   }
 
   if (consumer->opcode() == HloOpcode::kSlice) {
-    CHECK_OK(PropagateOnSlice(consumer));
+    TF_CHECK_OK(PropagateOnSlice(consumer));
     return true;
   }
 
@@ -2201,7 +2204,8 @@ absl::StatusOr<bool> ConvolutionVisitor::Propagate(HloInstruction* consumer,
     }
     *(new_consumer->mutable_dimensions()) = changed_dims;
     // Replace operand 0.
-    CHECK_OK(new_consumer->ReplaceOperandWithDifferentShape(0, first_operand));
+    TF_CHECK_OK(
+        new_consumer->ReplaceOperandWithDifferentShape(0, first_operand));
     // We do not set instr_to_dim_permute_map_ here because no further
     // propagation is needed here.
     old_to_new_instrs_[consumer] = new_consumer;
@@ -2381,10 +2385,10 @@ absl::StatusOr<bool> ConvolutionVisitor::Propagate(HloInstruction* consumer,
               second_operand, init_val, scatter_comp),
           &consumer->metadata(), &consumer->frontend_attributes());
       // Replace operand 0.
-      CHECK_OK(
+      TF_CHECK_OK(
           new_consumer->ReplaceOperandWithDifferentShape(0, first_operand));
       // Replace operand 1.
-      CHECK_OK(
+      TF_CHECK_OK(
           new_consumer->ReplaceOperandWithDifferentShape(1, second_operand));
       VLOG(2) << "New select and scatter " << new_consumer->ToString();
 
@@ -2553,7 +2557,7 @@ absl::StatusOr<bool> ConvolutionVisitor::Propagate(HloInstruction* consumer,
                                              reduce_comp),
           &consumer->metadata(), &consumer->frontend_attributes());
       // Replace operand 0.
-      CHECK_OK(
+      TF_CHECK_OK(
           new_consumer->ReplaceOperandWithDifferentShape(0, first_operand));
       VLOG(1) << "New reduce window " << new_consumer->ToString();
     }
@@ -2746,7 +2750,7 @@ absl::Status ConvolutionVisitor::PropagateOnUsers(HloInstruction* old_conv) {
                         BatchToSpace(old_conv));
     VLOG(1) << "Replacing the root instruction to "
             << batch_to_space->ToString();
-    CHECK_OK(computation_->ReplaceInstruction(old_conv, batch_to_space));
+    TF_CHECK_OK(computation_->ReplaceInstruction(old_conv, batch_to_space));
     VLOG(1) << "Replacement successful";
     return absl::OkStatus();
   }
@@ -2779,7 +2783,7 @@ absl::Status ConvolutionVisitor::PropagateOnUsers(HloInstruction* old_conv) {
       if (!needs_further_propagation) {
         VLOG(1) << "Replacing the root instruction to "
                 << old_to_new_instrs_[node]->ToString();
-        CHECK_OK(
+        TF_CHECK_OK(
             computation_->ReplaceInstruction(node, old_to_new_instrs_[node]));
         continue;
       }
@@ -2787,10 +2791,10 @@ absl::Status ConvolutionVisitor::PropagateOnUsers(HloInstruction* old_conv) {
       TF_ASSIGN_OR_RETURN(HloInstruction * batch_to_space, BatchToSpace(node));
       VLOG(1) << "Replacing the root instruction to "
               << batch_to_space->ToString();
-      CHECK_OK(computation_->ReplaceInstruction(node, batch_to_space));
+      TF_CHECK_OK(computation_->ReplaceInstruction(node, batch_to_space));
     } else {
       if (!needs_further_propagation) {
-        CHECK_OK(
+        TF_CHECK_OK(
             computation_->ReplaceInstruction(node, old_to_new_instrs_[node]));
         continue;
       }
@@ -2821,7 +2825,7 @@ absl::Status ConvolutionVisitor::PropagateOnUsers(HloInstruction* old_conv) {
         for (auto user : unsupported_users) {
           for (int64_t i = 0; i < user->operand_count(); ++i) {
             if (user->operand(i) == node) {
-              CHECK_OK(user->ReplaceOperandWith(i, batch_to_space));
+              TF_CHECK_OK(user->ReplaceOperandWith(i, batch_to_space));
             }
           }
         }
@@ -4183,18 +4187,18 @@ absl::Status ConvolutionVisitor::PerformSpaceToBatchOnConvolution(
   if (non_propagatable_instrs_.count(convolution) > 0) {
     non_propagatable_instrs_.erase(convolution);
   }
-  CHECK_OK(PropagateOnUsers(original_conv));
+  TF_CHECK_OK(PropagateOnUsers(original_conv));
 
   return absl::OkStatus();
 }
 
 }  // namespace
 
-absl::StatusOr<bool> SpaceToBatchConverter::RunImpl(
+absl::StatusOr<bool> SpaceToBatchConverter::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   XLA_VLOG_LINES(
-      2, "SpaceToBatchConverter::RunImpl(), before:\n" + module->ToString());
+      2, "SpaceToBatchConverter::Run(), before:\n" + module->ToString());
   bool changed = false;
 
   for (auto* comp : module->MakeNonfusionComputations(execution_threads)) {
@@ -4204,8 +4208,8 @@ absl::StatusOr<bool> SpaceToBatchConverter::RunImpl(
     }
     VLOG(1) << "Done operating on computation";
   }
-  XLA_VLOG_LINES(
-      2, "SpaceToBatchConverter::RunImpl(), after:\n" + module->ToString());
+  XLA_VLOG_LINES(2,
+                 "SpaceToBatchConverter::Run(), after:\n" + module->ToString());
   return changed;
 }
 

@@ -964,6 +964,7 @@ inline void ResizeBilinear888Uint8(int32_t batches, int32_t input_height,
 
         // Main central body.
         int16 wdelta_c;
+        int16 wdelta_twice_c;
         int16 hwdelta_c;
         int16 hwdelta_twice_c;
 
@@ -990,6 +991,7 @@ inline void ResizeBilinear888Uint8(int32_t batches, int32_t input_height,
                            input_base_ptr[c_block + c + depth * (j + 1)] -
                            input_base_ptr[c_block + c + depth * j])
                        << 4;
+            wdelta_twice_c = wdelta_c << 1;
             hwdelta_c = static_cast<uint16>(
                 input_base_ptr[c_block + c + depth * (j + 1) +
                                input_row_stride] -

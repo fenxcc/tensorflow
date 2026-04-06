@@ -50,9 +50,8 @@ class LayoutNormalization : public HloModulePass {
       : custom_call_transformer_(custom_call_transformer) {}
 
   absl::string_view name() const override { return "layout_normalization"; }
-
- protected:
-  absl::StatusOr<bool> RunImpl(
+  using HloPassInterface::Run;
+  absl::StatusOr<bool> Run(
       HloModule* module,
       const absl::flat_hash_set<absl::string_view>& execution_threads) override;
 

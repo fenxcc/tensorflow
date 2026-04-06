@@ -45,7 +45,6 @@ limitations under the License.
 #include "xla/tsl/platform/errors.h"
 #include "xla/tsl/platform/statusor.h"
 #include "xla/util.h"
-#include "xla/xla_data.pb.h"
 
 namespace xla {
 namespace gpu {
@@ -401,7 +400,7 @@ absl::StatusOr<bool> DecomposeRaggedAllToAll(HloInstruction* hlo,
   return true;
 }
 
-absl::StatusOr<bool> RaggedAllToAllDecomposer::RunImpl(
+absl::StatusOr<bool> RaggedAllToAllDecomposer::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   bool changed = false;

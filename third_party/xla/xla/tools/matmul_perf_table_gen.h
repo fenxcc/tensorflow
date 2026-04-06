@@ -84,8 +84,6 @@ class MatmulPerfTableGen {
   absl::StatusOr<DeviceHloInstructionProfiles> Merge(
       absl::string_view filepath);
 
-  static GemmPerfTable Merge(std::vector<GemmPerfTable> tables);
-
   static absl::StatusOr<GemmPerfTable> Compact(
       const DeviceHloInstructionProfiles& profiles);
 

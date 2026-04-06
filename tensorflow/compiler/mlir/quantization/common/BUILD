@@ -1,5 +1,4 @@
 load("@llvm-project//mlir:tblgen.bzl", "td_library")
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//tensorflow:tensorflow.bzl", "tf_cc_test")
 load("//tensorflow:tensorflow.default.bzl", "get_compatible_with_portable")
 
@@ -69,7 +68,6 @@ tf_cc_test(
         "//tensorflow/compiler/mlir/tensorflow",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:status_matchers",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_googletest//:gtest_main",
@@ -78,6 +76,7 @@ tf_cc_test(
         "@llvm-project//mlir:IR",
         "@llvm-project//mlir:Support",
         "@local_tsl//tsl/platform:protobuf",
+        "@local_xla//xla/tsl/platform:status_matchers",
         "@stablehlo//:stablehlo_ops",
     ],
 )
@@ -87,7 +86,6 @@ cc_library(
     srcs = ["func.cc"],
     hdrs = ["func.h"],
     compatible_with = get_compatible_with_portable(),
-    visibility = ["//visibility:public"],
     deps = [
         "//tensorflow/cc/saved_model:signature_constants",
         "//tensorflow/compiler/mlir/tensorflow:import_model",
@@ -146,7 +144,6 @@ cc_library(
         "attrs_and_constraints.h",
     ],
     compatible_with = get_compatible_with_portable(),
-    visibility = ["//visibility:public"],
     deps = [
         ":tf_uniform_quantized_types",
         "//tensorflow/compiler/mlir/quantization/common/quantization_lib",
@@ -173,13 +170,13 @@ tf_cc_test(
         ":test_base",
         "//tensorflow/compiler/mlir/tensorflow",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:status_matchers",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_googletest//:gtest_main",
         "@llvm-project//llvm:Support",
         "@llvm-project//mlir:FuncDialect",
         "@llvm-project//mlir:IR",
         "@llvm-project//mlir:Support",
+        "@local_xla//xla/tsl/platform:status_matchers",
         "@stablehlo//:stablehlo_ops",
     ],
 )
@@ -216,7 +213,6 @@ cc_library(
     srcs = ["uniform_quantized_types.cc"],
     hdrs = ["uniform_quantized_types.h"],
     compatible_with = get_compatible_with_portable(),
-    visibility = ["//visibility:public"],
     deps = [
         "@llvm-project//llvm:Support",
         "@llvm-project//mlir:IR",

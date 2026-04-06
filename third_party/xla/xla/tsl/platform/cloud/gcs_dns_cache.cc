@@ -40,11 +40,10 @@ namespace tsl {
 
 namespace {
 
-const std::vector<std::string>& kCachedDomainNames =
-    *new std::vector<std::string>{"www.googleapis.com",
-                                  "storage.googleapis.com"};
+const std::vector<string>& kCachedDomainNames =
+    *new std::vector<string>{"www.googleapis.com", "storage.googleapis.com"};
 
-inline void print_getaddrinfo_error(const std::string& name,
+inline void print_getaddrinfo_error(const string& name,
                                     absl::Status return_status) {
   // Status doesn't map well to EAI type errors.
   LOG(ERROR) << "Error resolving " << name << ": " << return_status;
@@ -67,7 +66,7 @@ GcsDnsCache::GcsDnsCache(Env* env, int64_t refresh_rate_secs)
 
 void GcsDnsCache::AnnotateRequest(HttpRequest* request) {
   // TODO(saeta): Denylist failing IP addresses.
-  absl::MutexLock l(mu_);
+  absl::MutexLock l(&mu_);
   if (!started_) {
     VLOG(1) << "Starting GCS DNS cache.";
     DCHECK(!worker_) << "Worker thread already exists!";
@@ -82,10 +81,10 @@ void GcsDnsCache::AnnotateRequest(HttpRequest* request) {
 
   CHECK_EQ(kCachedDomainNames.size(), addresses_.size());
   for (size_t i = 0; i < kCachedDomainNames.size(); ++i) {
-    const std::string& name = kCachedDomainNames[i];
-    const std::vector<std::string>& addresses = addresses_[i];
+    const string& name = kCachedDomainNames[i];
+    const std::vector<string>& addresses = addresses_[i];
     if (!addresses.empty()) {
-      const std::string& chosen_address =
+      const string& chosen_address =
           SelectRandomItemUniform(&random_, addresses);
       request->AddResolveOverride(name, 443, chosen_address);
       VLOG(1) << "Annotated DNS mapping: " << name << " --> " << chosen_address;
@@ -95,8 +94,7 @@ void GcsDnsCache::AnnotateRequest(HttpRequest* request) {
   }
 }
 
-/* static */ std::vector<std::string> GcsDnsCache::ResolveName(
-    const std::string& name) {
+/* static */ std::vector<string> GcsDnsCache::ResolveName(const string& name) {
   VLOG(1) << "Resolving DNS name: " << name;
 
   addrinfo hints;
@@ -184,7 +182,7 @@ void GcsDnsCache::AnnotateRequest(HttpRequest* request) {
       },
       retryConfig);
 
-  std::vector<std::string> output;
+  std::vector<string> output;
   if (getaddrinfo_status.ok()) {
     for (const addrinfo* i = result; i != nullptr; i = i->ai_next) {
       if (i->ai_family != AF_INET || i->ai_addr->sa_family != AF_INET) {
@@ -223,11 +221,11 @@ void GcsDnsCache::AnnotateRequest(HttpRequest* request) {
 //
 // Ensures: names.size() == return_value.size()
 
-std::vector<std::vector<std::string>> GcsDnsCache::ResolveNames(
-    const std::vector<std::string>& names) {
-  std::vector<std::vector<std::string>> all_addresses;
+std::vector<std::vector<string>> GcsDnsCache::ResolveNames(
+    const std::vector<string>& names) {
+  std::vector<std::vector<string>> all_addresses;
   all_addresses.reserve(names.size());
-  for (const std::string& name : names) {
+  for (const string& name : names) {
     all_addresses.push_back(ResolveName(name));
   }
   return all_addresses;
@@ -237,7 +235,7 @@ void GcsDnsCache::WorkerThread() {
   while (true) {
     {
       // Don't immediately re-resolve the addresses.
-      absl::MutexLock l(mu_);
+      absl::MutexLock l(&mu_);
       if (cancelled_) return;
       cond_var_.WaitWithTimeout(&mu_, absl::Seconds(refresh_rate_secs_));
       if (cancelled_) return;
@@ -247,7 +245,7 @@ void GcsDnsCache::WorkerThread() {
     auto new_addresses = ResolveNames(kCachedDomainNames);
 
     {
-      absl::MutexLock l(mu_);
+      absl::MutexLock l(&mu_);
       // Update instance variables.
       addresses_.swap(new_addresses);
     }

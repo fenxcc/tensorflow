@@ -29,17 +29,16 @@ namespace ifrt {
 
 char Executable::ID = 0;
 char LoadedExecutable::ID = 0;
-[[maybe_unused]] char ExecutableVersion::ID = 0;
 
-absl::Status ExecuteOptions::ToProto(ExecuteOptionsProto& proto,
-                                     SerDesVersion version) const {
+absl::StatusOr<ExecuteOptionsProto> ExecuteOptions::ToProto(
+    SerDesVersion version) const {
   if (version.version_number() < SerDesVersionNumber(0)) {
     return absl::FailedPreconditionError(
         absl::StrCat("Unsupported ", version.version_number(),
                      " for ExecuteOptions serialization"));
   }
 
-  proto.Clear();
+  ExecuteOptionsProto proto;
   proto.set_version_number(SerDesVersionNumber(0).value());
 
   proto.set_launch_id(launch_id);
@@ -48,10 +47,10 @@ absl::Status ExecuteOptions::ToProto(ExecuteOptionsProto& proto,
   proto.set_fill_status(fill_status);
   proto.set_execution_stream_id(execution_stream_id);
   if (custom_options.has_value()) {
-    custom_options->ToProto(*proto.mutable_custom_options(), version);
+    *proto.mutable_custom_options() = custom_options->ToProto(version);
   }
 
-  return absl::OkStatus();
+  return proto;
 }
 
 absl::StatusOr<ExecuteOptions> ExecuteOptions::FromProto(

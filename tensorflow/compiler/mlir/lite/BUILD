@@ -2,7 +2,8 @@ load("@bazel_skylib//lib:selects.bzl", "selects")
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
 load("@llvm-project//mlir:tblgen.bzl", "gentbl_cc_library", "td_library")
-load("@rules_python//python:proto.bzl", "py_proto_library")
+
+# Placeholder: load py_proto_library
 load("//tensorflow:tensorflow.bzl", "if_google", "if_oss", "tf_cc_binary", "tf_cc_test", "tf_native_cc_binary")
 load("//tensorflow:tensorflow.default.bzl", "filegroup", "get_compatible_with_portable")
 load("//tensorflow/compiler/mlir/lite:build_def.bzl", "tflite_copts_warnings")
@@ -79,7 +80,6 @@ td_library(
         "transforms/optimize_patterns.td",
         "transforms/post_quantize_patterns.td",
         "transforms/prepare_patterns.td",
-        "transforms/quantization/strict_quantize_patterns.td",
         "transforms/quantize_by_converter_patterns.td",
         "transforms/quantize_patterns.td",
         "transforms/tensorlist_patterns.td",
@@ -234,15 +234,6 @@ gentbl_cc_library(
 )
 
 gentbl_cc_library(
-    name = "tensorflow_lite_strict_quantize_inc_gen",
-    compatible_with = get_compatible_with_portable(),
-    tbl_outs = {"transforms/quantization/generated_strict_quantize.inc": ["-gen-rewriters"]},
-    tblgen = "@llvm-project//mlir:mlir-tblgen",
-    td_file = "transforms/quantization/strict_quantize_patterns.td",
-    deps = [":tensorflow_lite_patterns_td_files"],
-)
-
-gentbl_cc_library(
     name = "tensorflow_lite_quantize_by_converter_inc_gen",
     compatible_with = get_compatible_with_portable(),
     tbl_outs = {"transforms/generated_quantize_by_converter.inc": ["-gen-rewriters"]},
@@ -349,8 +340,6 @@ cc_library(
         "@llvm-project//llvm:Support",
         "@llvm-project//mlir:AllPassesAndDialects",
         "@llvm-project//mlir:MlirOptLib",
-        "@llvm-project//mlir:RegisterAllDialects",
-        "@llvm-project//mlir:RegisterAllPasses",
     ],
 )
 
@@ -1365,10 +1354,6 @@ cc_library(
         "transforms/prepare_quantize.cc",
         "transforms/prepare_quantize_dynamic_range.cc",
         "transforms/prepare_quantize_helper.cc",
-        "transforms/quantization/bias_quantizer_pass.cc",
-        "transforms/quantization/fuse_qdq_pass.cc",
-        "transforms/quantization/propagate_qsv_pass.cc",
-        "transforms/quantization/quant_utils.cc",
         "transforms/quantize.cc",
         "transforms/quantize_variables.cc",
         "utils/generated_op_quant_spec_getters.inc",
@@ -1377,7 +1362,6 @@ cc_library(
         "transforms/lower_quant_annotations_helper.h",
         "transforms/passes.h",
         "transforms/prepare_quantize_helper.h",
-        "transforms/quantization/quant_utils.h",
     ],
     deps = [
         "convert_type",
@@ -1390,7 +1374,6 @@ cc_library(
         ":tensorflow_lite_post_quantize_inc_gen",
         ":tensorflow_lite_quantize_by_converter_inc_gen",
         ":tensorflow_lite_quantize_inc_gen",
-        ":tensorflow_lite_strict_quantize_inc_gen",
         ":validators",
         "//tensorflow/compiler/mlir/lite/quantization/common/quantization_lib",
         "//tensorflow/compiler/mlir/lite/quantization/common/quantization_lib:quantization_config",
@@ -1407,10 +1390,8 @@ cc_library(
         "//tensorflow/core:lib",
         "//tensorflow/core:protos_all_cc",
         "//tensorflow/core/platform:logging",
-        "@com_google_absl//absl/base:no_destructor",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
-        "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -1888,7 +1869,6 @@ tf_cc_binary(
     srcs = [
         ":tf_tfl_translate_main",
     ],
-    # visibility = ["//visibility:public"], # copybara:uncomment
     deps = [
         ":common",
         ":converter_flags_proto_cc",
@@ -1990,6 +1970,7 @@ cc_library(
         ":tf_tfl_passes",
         "//tensorflow/cc/saved_model:loader",
         "//tensorflow/compiler/mlir:op_or_arg_name_mapper",
+        "//tensorflow/compiler/mlir/lite/core:macros",
         "//tensorflow/compiler/mlir/lite/debug",
         "//tensorflow/compiler/mlir/lite/experimental/remat:metadata_util",
         "//tensorflow/compiler/mlir/lite/metrics:converter_error_data_proto_cc",
@@ -2211,8 +2192,10 @@ tf_proto_library(
     srcs = ["converter_flags.proto"],
     make_default_target_header_only = True,
     protodeps = [
-        ":types_proto",
+        "//tensorflow/compiler/mlir/quantization/stablehlo:quantization_options_proto",
+        "//tensorflow/compiler/mlir/quantization/stablehlo:quantization_config_proto",
         "//tensorflow/compiler/mlir/lite/debug:debug_options_proto",
+        ":types_proto",
     ],
     visibility = ["//visibility:public"],
 )
@@ -2244,9 +2227,3 @@ tf_proto_library(
 #     deps = [":converter_flags_proto"],
 # )
 # copybara:uncomment_end
-
-filegroup(
-    name = "litfiles",
-    srcs = glob(["runlit*py"]),
-    visibility = ["//tensorflow/compiler/mlir/lite:__subpackages__"],
-)

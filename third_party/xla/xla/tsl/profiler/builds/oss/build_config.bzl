@@ -3,10 +3,6 @@
 TF profiler build macros for use in OSS.
 """
 
-load(
-    "@local_xla//third_party/py/rules_pywrap:pywrap.default.bzl",
-    "use_pywrap_rules",
-)
 load("//xla/tsl:package_groups.bzl", "DEFAULT_LOAD_VISIBILITY")
 load("//xla/tsl:tsl.bzl", "cc_header_only_library")
 
@@ -23,7 +19,4 @@ def tf_profiler_pybind_cc_library_wrapper(name, actual, **kwargs):
     symbols in these deps symbols should be linked to, and exported by, the core
     pywrap_tensorflow_internal.so
     """
-    if use_pywrap_rules():
-        native.alias(name = name, actual = actual, **kwargs)
-    else:
-        cc_header_only_library(name = name, deps = [actual], **kwargs)
+    cc_header_only_library(name = name, deps = [actual], **kwargs)

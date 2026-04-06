@@ -269,8 +269,9 @@ class MlirFunctionContext : public TracingContext {
     RegisterDialects(*context_);
     // TODO(aminim) figure out the location story here
     module_ = ModuleOp::create(builder_.getUnknownLoc());
-    func_ = func::FuncOp::create(builder_.getUnknownLoc(), name,
-                                 builder_.getFunctionType({}, {}));
+    func_ = func::FuncOp::create(
+        builder_.getUnknownLoc(), name,
+        builder_.getFunctionType(std::nullopt, std::nullopt));
     module_->push_back(func_);
     builder_ = OpBuilder::atBlockBegin(func_.addEntryBlock());
   }

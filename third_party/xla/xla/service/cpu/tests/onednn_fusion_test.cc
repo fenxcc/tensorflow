@@ -18,7 +18,6 @@ limitations under the License.
 #include "xla/error_spec.h"
 #include "xla/tests/hlo_test_base.h"
 #include "xla/tsl/platform/test.h"
-#include "tsl/platform/cpu_info.h"
 
 namespace xla::cpu {
 namespace {
@@ -27,8 +26,7 @@ using OneDnnFusionTest = HloTestBase;
 
 inline constexpr bool IsOneDnnGraphEnabled() {
 #if defined(XLA_ONEDNN_USE_GRAPH_API)
-  // Some Aarch64 CPUs have failures. Only test on x86 for now.
-  return tsl::port::IsX86CPU();
+  return true;
 #endif  // XLA_ONEDNN_USE_GRAPH_API
   return false;
 }
@@ -119,33 +117,6 @@ TEST_F(OneDnnFusionTest, MatMul) {
       %p0 = f32[10,20] parameter(0)
       %p1 = f32[20,30] parameter(1)
       ROOT %fusion = f32[10,30] fusion(%p0, %p1), kind=kCustom,
-        calls=onednn_fusion,
-        backend_config={"fusion_config": {kind: "__onednn_fusion"}}
-    })";
-
-  if (!IsOneDnnGraphEnabled()) {
-    GTEST_SKIP() << "oneDNN fusion is not supported";
-  }
-
-  EXPECT_TRUE(RunAndCompare(kModuleStr, ErrorSpec{1e-5}));
-}
-
-TEST_F(OneDnnFusionTest, MatMulAdd) {
-  constexpr absl::string_view kModuleStr = R"(
-    HloModule mul
-    onednn_fusion {
-      %p0 = f32[10,20] parameter(0)
-      %p1 = f32[20,30] parameter(1)
-      %dot = f32[10,30] dot(%p0, %p1),
-        lhs_contracting_dims={1}, rhs_contracting_dims={0}
-      %p2 = f32[10,30] parameter(2)
-      ROOT %add = f32[10,30] add(%dot, %p2)
-    }
-    ENTRY entry {
-      %p0 = f32[10,20] parameter(0)
-      %p1 = f32[20,30] parameter(1)
-      %p2 = f32[10,30] parameter(2)
-      ROOT %fusion = f32[10,30] fusion(%p0, %p1, %p2), kind=kCustom,
         calls=onednn_fusion,
         backend_config={"fusion_config": {kind: "__onednn_fusion"}}
     })";

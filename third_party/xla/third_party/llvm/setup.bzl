@@ -12,7 +12,6 @@ _LLVM_TARGETS = [
     "RISCV",
     "SystemZ",
     "X86",
-    "SPIRV",
 ]
 
 def llvm_setup(name):

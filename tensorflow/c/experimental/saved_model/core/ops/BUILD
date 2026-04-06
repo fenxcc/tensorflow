@@ -82,7 +82,6 @@ tf_cc_test(
         "//tensorflow/core/common_runtime/eager:context",
         "//tensorflow/core/common_runtime/eager:core",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings:string_view",
     ],
 )
 

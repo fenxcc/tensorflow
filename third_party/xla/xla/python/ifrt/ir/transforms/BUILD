@@ -1,5 +1,4 @@
 load("@llvm-project//mlir:tblgen.bzl", "gentbl_cc_library")
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//xla:xla.default.bzl", "xla_cc_test")
 load("//xla/tsl:tsl.default.bzl", "get_compatible_with_portable")
 
@@ -69,13 +68,10 @@ cc_library(
         "//xla/client:executable_build_options",
         "//xla/hlo/ir:hlo",
         "//xla/mlir_hlo",
-        "//xla/pjrt:mlir_to_hlo",
         "//xla/pjrt:pjrt_compiler",
         "//xla/pjrt:pjrt_executable",
         "//xla/python/ifrt",
         "//xla/python/ifrt:attribute_map",
-        "//xla/python/ifrt:user_context",
-        "//xla/python/ifrt:with_user_context",
         "//xla/python/ifrt/hlo:hlo_program",
         "//xla/python/ifrt/ir",
         "//xla/python/ifrt/ir:atom_program_compiler",
@@ -86,17 +82,16 @@ cc_library(
         "//xla/python/ifrt/ir:version",
         "//xla/python/ifrt/ir:vifrt",
         "//xla/python/ifrt/support:sharding_conversions",
+        "//xla/python/pjrt_ifrt:xla_ifrt",
         "//xla/service:compilation_environments",
         "//xla/service:computation_placer_hdr",
         "//xla/service:hlo_proto_cc",
         "//xla/service/spmd/shardy:constants",
         "//xla/service/spmd/shardy:utils",
-        "//xla/tsl/concurrency:future",
         "//xla/tsl/platform:env",
         "//xla/tsl/platform:errors",
         "//xla/tsl/platform:status",
         "//xla/tsl/platform:statusor",
-        "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:flat_hash_map",
@@ -110,7 +105,6 @@ cc_library(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/types:span",
-        "@com_google_protobuf//:protobuf_lite",
         "@llvm-project//llvm:Support",
         "@llvm-project//mlir:AllPassesAndDialects",
         "@llvm-project//mlir:FuncDialect",
@@ -128,7 +122,6 @@ cc_library(
         "@stablehlo//:register",
         "@stablehlo//:stablehlo_ops",
         "@stablehlo//:stablehlo_serialization",
-        "@stablehlo//:version",
     ],
 )
 
@@ -152,12 +145,9 @@ cc_library(
     deps = [
         "//xla:xla_data_proto_cc",
         "//xla/mlir/utils:type_util",
-        "//xla/pjrt:pjrt_executable",
         "//xla/python/ifrt",
         "//xla/python/ifrt/ir",
         "//xla/python/pjrt_ifrt:pjrt_dtype",
-        "//xla/python/pjrt_ifrt:xla_ifrt",
-        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -202,7 +192,6 @@ xla_cc_test(
         "//xla/python/ifrt/support:module_parsing",
         "//xla/tsl/platform:env",
         "//xla/tsl/platform:errors",
-        "@com_google_absl//absl/status:status_matchers",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_googletest//:gtest_main",
@@ -211,5 +200,6 @@ xla_cc_test(
         "@llvm-project//mlir:Pass",
         "@llvm-project//mlir:Support",
         "@local_tsl//tsl/platform:path",
+        "@local_tsl//tsl/platform:status_matchers",
     ],
 )

@@ -14,13 +14,11 @@ limitations under the License.
 ==============================================================================*/
 #include <cstdint>
 #include <memory>
-#include <string>
 #include <utility>
 #include <vector>
 
 #include "absl/log/log.h"
 #include "absl/status/status.h"
-#include "absl/strings/str_cat.h"
 #include "tensorflow/core/framework/dataset.h"
 #include "tensorflow/core/framework/partial_tensor_shape.h"
 #include "tensorflow/core/framework/tensor.h"
@@ -84,8 +82,8 @@ class SqlDatasetOp : public DatasetOpKernel {
  private:
   class Dataset : public DatasetBase {
    public:
-    Dataset(OpKernelContext* ctx, const std::string& driver_name,
-            const std::string& data_source_name, const std::string& query,
+    Dataset(OpKernelContext* ctx, const string& driver_name,
+            const string& data_source_name, const string& query,
             const DataTypeVector& output_types,
             const std::vector<PartialTensorShape>& output_shapes)
         : DatasetBase(DatasetContext(ctx)),
@@ -96,9 +94,9 @@ class SqlDatasetOp : public DatasetOpKernel {
           output_shapes_(output_shapes) {}
 
     std::unique_ptr<IteratorBase> MakeIteratorInternal(
-        const std::string& prefix) const override {
+        const string& prefix) const override {
       return std::make_unique<Iterator>(
-          Iterator::Params{this, absl::StrCat(prefix, "::Sql")});
+          Iterator::Params{this, strings::StrCat(prefix, "::Sql")});
     }
 
     const DataTypeVector& output_dtypes() const override {
@@ -109,7 +107,7 @@ class SqlDatasetOp : public DatasetOpKernel {
       return output_shapes_;
     }
 
-    std::string DebugString() const override { return "SqlDatasetOp::Dataset"; }
+    string DebugString() const override { return "SqlDatasetOp::Dataset"; }
 
     absl::Status InputDatasets(
         std::vector<const DatasetBase*>* inputs) const override {

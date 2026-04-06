@@ -77,7 +77,7 @@ class ReaderInterface : public ResourceBase {
   // Note: Must Reset on error.
   virtual absl::Status RestoreState(const tstring& state) = 0;
 
-  std::string DebugString() const override { return "a reader"; }
+  string DebugString() const override { return "a reader"; }
 
  protected:
   ~ReaderInterface() override {}

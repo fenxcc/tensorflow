@@ -232,7 +232,7 @@ std::shared_ptr<model::Model> CachingTaskRunner::model() const {
 
 RoundRobinTaskRunner::RoundRobinTaskRunner(
     std::unique_ptr<TaskIterator> iterator, int64_t num_consumers,
-    std::string worker_address)
+    string worker_address)
     : num_consumers_(num_consumers),
       worker_address_(worker_address),
       buffer_(num_consumers_),

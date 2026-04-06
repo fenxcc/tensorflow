@@ -87,13 +87,6 @@ class MemoryUsageMonitor {
     return BytesToMegabytes(peak_in_use_mem_bytes_);
   }
 
-  float GetPeakPrivateFootprintInMB() const {
-    if (!is_supported_ || check_memory_thd_ != nullptr) {
-      return kInvalidMemUsageMB;
-    }
-    return BytesToMegabytes(peak_private_footprint_bytes_);
-  }
-
   MemoryUsageMonitor(MemoryUsageMonitor&) = delete;
   MemoryUsageMonitor& operator=(const MemoryUsageMonitor&) = delete;
   MemoryUsageMonitor(MemoryUsageMonitor&&) = delete;
@@ -112,7 +105,6 @@ class MemoryUsageMonitor {
   std::unique_ptr<std::thread> check_memory_thd_ = nullptr;
   int64_t peak_mem_footprint_bytes_ = kInvalidMemUsageBytes;
   int64_t peak_in_use_mem_bytes_ = kInvalidMemUsageBytes;
-  int64_t peak_private_footprint_bytes_ = kInvalidMemUsageBytes;
 };
 
 }  // namespace memory

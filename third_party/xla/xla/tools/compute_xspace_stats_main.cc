@@ -15,7 +15,6 @@ limitations under the License.
 
 // A tool for computing GPU statistics from an XSpace protobuf.
 
-#include <iostream>
 #include <string>
 #include <vector>
 
@@ -53,9 +52,7 @@ int main(int argc, char** argv) {
   bool parse_ok = tsl::Flags::Parse(&argc, argv, flag_list);
   tsl::port::InitMain(kUsageString.c_str(), &argc, &argv);
   if (!parse_ok) {
-    // Print the usage using cerr to avoid truncation by LOG.
-    std::cerr << kUsageString;
-    return 1;
+    LOG(QFATAL) << kUsageString;
   }
 
   xla::AppendDebugOptionsFlags(&flag_list);

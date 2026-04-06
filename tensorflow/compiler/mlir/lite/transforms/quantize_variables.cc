@@ -43,7 +43,7 @@ limitations under the License.
 namespace mlir {
 namespace TFL {
 namespace {
-#define GEN_PASS_DEF_QUANTIZEVARIABLESPASS
+#define GEN_PASS_CLASSES
 #include "tensorflow/compiler/mlir/lite/transforms/passes.h.inc"
 
 using ResourceIdMap =
@@ -80,7 +80,7 @@ Type GetDequantizedTypeFromAssigneVariableOp(VarHandleOp var_handle_op) {
 }
 
 class QuantizeVariablesPass
-    : public impl::QuantizeVariablesPassBase<QuantizeVariablesPass> {
+    : public QuantizeVariablesPassBase<QuantizeVariablesPass> {
  public:
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(QuantizeVariablesPass)
   explicit QuantizeVariablesPass() = default;

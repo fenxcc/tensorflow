@@ -555,22 +555,22 @@ class ParallelBatchDatasetOp::Dataset : public DatasetBase {
         TF_EXCLUSIVE_LOCKS_REQUIRED(*mu_) {
       batch_results_.push_back(std::make_shared<BatchResult>(ctx));
       std::shared_ptr<BatchResult> result = batch_results_.back();
-      string batch_prefix = absl::StrCat(kBatchResults, "_", index);
+      string batch_prefix = strings::StrCat(kBatchResults, "_", index);
       mutex_lock l(result->mu);
       result->end_of_input = reader->Contains(
-          prefix(), absl::StrCat(batch_prefix, "_", kEndOfInput));
+          prefix(), strings::StrCat(batch_prefix, "_", kEndOfInput));
       TF_RETURN_IF_ERROR(reader->ReadScalar(
-          prefix(), absl::StrCat(batch_prefix, "_", kNumElements),
+          prefix(), strings::StrCat(batch_prefix, "_", kNumElements),
           &result->num_elements));
       result->call_finished = reader->Contains(
-          prefix(), absl::StrCat(batch_prefix, "_", kCallFinished));
+          prefix(), strings::StrCat(batch_prefix, "_", kCallFinished));
       result->output_allocated = reader->Contains(
-          prefix(), absl::StrCat(batch_prefix, "_", kOutputAllocated));
+          prefix(), strings::StrCat(batch_prefix, "_", kOutputAllocated));
 
       TF_RETURN_IF_ERROR(ReadBatch(ctx, reader, dataset()->batch_size_,
                                    prefix(), batch_prefix, &result->output));
       TF_RETURN_IF_ERROR(ReadStatus(prefix(),
-                                    absl::StrCat(batch_prefix, "_", kStatus),
+                                    strings::StrCat(batch_prefix, "_", kStatus),
                                     reader, &result->status));
       if (result->output_allocated) {
         RecordBufferEnqueue(ctx, result->output);
@@ -581,30 +581,31 @@ class ParallelBatchDatasetOp::Dataset : public DatasetBase {
     absl::Status WriteBatchResult(IteratorStateWriter* writer, size_t index)
         TF_EXCLUSIVE_LOCKS_REQUIRED(*mu_) {
       std::shared_ptr<BatchResult> result = batch_results_[index];
-      string batch_prefix = absl::StrCat(kBatchResults, "_", index);
+      string batch_prefix = strings::StrCat(kBatchResults, "_", index);
       mutex_lock l(result->mu);
       if (result->end_of_input) {
         TF_RETURN_IF_ERROR(writer->WriteScalar(
-            prefix(), absl::StrCat(batch_prefix, "_", kEndOfInput), ""));
+            prefix(), strings::StrCat(batch_prefix, "_", kEndOfInput), ""));
       }
       TF_RETURN_IF_ERROR(writer->WriteScalar(
-          prefix(), absl::StrCat(batch_prefix, "_", kNumElements),
+          prefix(), strings::StrCat(batch_prefix, "_", kNumElements),
           result->num_elements));
       if (result->call_finished) {
         TF_RETURN_IF_ERROR(writer->WriteScalar(
-            prefix(), absl::StrCat(batch_prefix, "_", kCallFinished), ""));
+            prefix(), strings::StrCat(batch_prefix, "_", kCallFinished), ""));
       }
       if (result->output_allocated) {
         TF_RETURN_IF_ERROR(writer->WriteScalar(
-            prefix(), absl::StrCat(batch_prefix, "_", kOutputAllocated), ""));
+            prefix(), strings::StrCat(batch_prefix, "_", kOutputAllocated),
+            ""));
       }
 
       TF_RETURN_IF_ERROR(WriteBatch(dataset()->batch_size_,
                                     result->num_elements, prefix(),
                                     batch_prefix, writer, &result->output));
-      TF_RETURN_IF_ERROR(WriteStatus(prefix(),
-                                     absl::StrCat(batch_prefix, "_", kStatus),
-                                     result->status, writer));
+      TF_RETURN_IF_ERROR(
+          WriteStatus(prefix(), strings::StrCat(batch_prefix, "_", kStatus),
+                      result->status, writer));
       return absl::OkStatus();
     }
 

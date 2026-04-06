@@ -23,10 +23,10 @@ limitations under the License.
 
 namespace tensorflow {
 
-static std::string JoinedCopies(const std::string& s, int copies) {
-  std::string res;
+static string JoinedCopies(const string& s, int copies) {
+  string res;
   for (int i = 0; i < copies; ++i) {
-    absl::StrAppend(&res, i > 0 ? ";" : "", s);
+    strings::StrAppend(&res, i > 0 ? ";" : "", s);
   }
   return res;
 }
@@ -62,7 +62,7 @@ TEST(RnnOpsTest, LSTMBlockCell_ShapeFn) {
   ShapeInferenceTestOp op("LSTMBlockCell");
 
   // Last 6 inputs don't affect shape inference.
-  std::string input_suffix = absl::StrCat(";", JoinedCopies("?", 6));
+  string input_suffix = strings::StrCat(";", JoinedCopies("?", 6));
 
   // Rank checks.
   INFER_ERROR("must be rank 2", op, "[?];?" + input_suffix);
@@ -77,7 +77,7 @@ TEST(RnnOpsTest, LSTMBlockCellGrad_ShapeFn) {
   ShapeInferenceTestOp op("LSTMBlockCellGrad");
 
   // Last 14 inputs don't affect shape inference.
-  std::string input_suffix = absl::StrCat(";", JoinedCopies("?", 14));
+  string input_suffix = strings::StrCat(";", JoinedCopies("?", 14));
 
   // Rank checks.
   INFER_ERROR("must be rank 2", op, "[?];?" + input_suffix);
@@ -107,7 +107,7 @@ TEST(RnnOpsTest, BlockLSTM_ShapeFn) {
                    .Finalize(&op.node_def));
 
   // Middle inputs don't affect shape inference.
-  std::string infix = ";" + JoinedCopies("?", 6) + ";";
+  string infix = ";" + JoinedCopies("?", 6) + ";";
 
   // Rank checks.
   INFER_ERROR("must be rank 3", op, "?;[?]" + infix + "?");
@@ -147,7 +147,7 @@ TEST(RnnOpsTest, BlockLSTMGrad_ShapeFn) {
                    .Finalize(&op.node_def));
 
   // Last inputs don't affect shape inference.
-  std::string suffix = ";" + JoinedCopies("?", 9);
+  string suffix = ";" + JoinedCopies("?", 9);
 
   // Rank check for x
   INFER_ERROR("must be rank 3", op, "?;[?];?;?;?;?;?;?;?" + suffix);
@@ -167,11 +167,11 @@ TEST(RnnOpsTest, BlockLSTMGrad_ShapeFn) {
       "[?,?,?];" + JoinedCopies("[?,?]", 3) + ";" + JoinedCopies("[?]", 4));
 
   // Output with copies input shapes to output.
-  std::string input = strings::StrCat("?;[?,?,?];", JoinedCopies("[?,?]", 3),
-                                      ";", JoinedCopies("[?]", 4), suffix);
-  std::string expected = "in1";
+  string input = strings::StrCat("?;[?,?,?];", JoinedCopies("[?,?]", 3), ";",
+                                 JoinedCopies("[?]", 4), suffix);
+  string expected = "in1";
   for (int i = 1; i < 8; ++i) {
-    absl::StrAppend(&expected, ";in", i + 1);
+    strings::StrAppend(&expected, ";in", (i + 1));
   }
   INFER_OK(op, input, expected);
 }

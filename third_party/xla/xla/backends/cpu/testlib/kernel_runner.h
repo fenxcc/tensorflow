@@ -25,7 +25,9 @@ limitations under the License.
 #include "xla/backends/cpu/runtime/function_library.h"
 #include "xla/backends/cpu/runtime/kernel.h"
 #include "xla/codegen/kernel_definition.h"
-#include "xla/codegen/llvm_kernel_source.h"
+#include "xla/codegen/llvm_ir_kernel_source.h"
+#include "xla/codegen/llvm_kernel_definition.h"
+#include "xla/codegen/mlir_kernel_definition.h"
 #include "xla/codegen/mlir_kernel_source.h"
 #include "xla/codegen/testlib/kernel_runner.h"
 #include "xla/runtime/work_group.h"
@@ -37,9 +39,9 @@ namespace xla::cpu {
 class KernelRunner final : public xla::KernelRunner {
  public:
   static absl::StatusOr<KernelRunner> Create(
-      KernelDefinition<LlvmKernelSource> kernel, JitCompiler compiler);
+      LlvmKernelDefinition kernel_definition, JitCompiler compiler);
   static absl::StatusOr<KernelRunner> Create(
-      KernelDefinition<MlirKernelSource> kernel, JitCompiler compiler);
+      MlirKernelDefinition kernel_definition, JitCompiler compiler);
 
   KernelRunner(KernelRunner&&) = default;
   KernelRunner& operator=(KernelRunner&&) = default;
@@ -57,7 +59,7 @@ class KernelRunner final : public xla::KernelRunner {
   NumWorkGroups num_workgroups_;
 };
 
-absl::StatusOr<LlvmKernelSource> LowerToLlvm(
+absl::StatusOr<LlvmIrKernelSource> LowerToLlvm(
     MlirKernelSource& mlir_kernel_source);
 
 }  // namespace xla::cpu

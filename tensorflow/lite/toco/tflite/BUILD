@@ -1,4 +1,3 @@
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load(
     "//tensorflow:tensorflow.bzl",
     "tf_cc_test",
@@ -176,7 +175,6 @@ cc_library(
         "//tensorflow/lite/toco:tooling_util",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/log:check",
-        "@com_google_absl//absl/strings:string_view",
         "@flatbuffers",
     ],
 )

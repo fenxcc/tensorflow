@@ -93,7 +93,6 @@ cuEventCreate
 cuEventDestroy
 cuEventDestroy_v2
 cuEventElapsedTime
-cuEventElapsedTime_v2
 cuEventQuery
 cuEventRecord
 cuEventRecordWithFlags

@@ -32,7 +32,6 @@ limitations under the License.
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
-#include "google/protobuf/text_format.h"
 #include "xla/backends/gpu/codegen/triton/support.h"
 #include "xla/hlo/ir/hlo_casting_utils.h"
 #include "xla/hlo/ir/hlo_instruction.h"
@@ -54,17 +53,6 @@ limitations under the License.
 
 namespace xla::gpu {
 namespace {
-
-static const GemmPerfTable& Profile() {
-  static const GemmPerfTable* profile = []() {
-    auto* profile = new GemmPerfTable();
-    CHECK(tsl::protobuf::TextFormat::ParseFromString(kDefaultMatmulPTable,
-                                                     profile))
-        << "Cannot parse a default profile.";
-    return profile;
-  }();
-  return *profile;
-}
 
 struct InterpolationSpecification {
   int b;
@@ -186,12 +174,17 @@ InterpolationSpecification Spec(const HloFusionInstruction& dot_fusion,
 
 absl::StatusOr<GemmPerfTableEntryValues> ReadDefaultProfile(
     const se::DeviceDescription& device_info) {
+  GemmPerfTable table;
+  if (!tsl::protobuf::TextFormat::ParseFromString(kDefaultMatmulPTable,
+                                                  &table)) {
+    return absl::FailedPreconditionError("Cannot parse a default perf table.");
+  }
   std::string key = HloOpProfiles::GetProfileName(device_info);
 
-  if (!Profile().entries().contains(key)) {
+  if (!table.entries().contains(key)) {
     return absl::NotFoundError(absl::StrCat("Cannot find key: ", key));
   }
-  return Profile().entries().at(key);
+  return table.entries().at(key);
 }
 
 std::optional<InterpolationSpecification> GetInterpolationSpec(

@@ -49,7 +49,7 @@ class CompileOnlyService : public Service {
   // intended for use in static compilation.  See
   // |CompileOnlyClient::CompileAheadOfTime| for additional details.
   absl::StatusOr<std::vector<std::unique_ptr<AotCompilationResult>>>
-  CompileAheadOfTime(const AotXlaComputationInstance& computation,
+  CompileAheadOfTime(absl::Span<const AotXlaComputationInstance> computations,
                      const AotCompilationOptions& options,
                      std::unique_ptr<AotCompilationMetadata>* metadata);
 

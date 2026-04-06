@@ -857,10 +857,8 @@ TEST_F(LocalClientExecuteTest, ShapeBufferToLiteralConversion64bit) {
 }
 
 // Disabled on interpreter backend since infeed HLO is unsupported.
-// Not all TPU generations support infeed/outfeed, but SE does provide the
-// capability to query this.
 TEST_F(LocalClientExecuteTest, InfeedTest) {
-  if (test::DeviceTypeIsOneOf({test::kInterpreter, test::kTpu})) {
+  if (test::DeviceIs(test::kInterpreter)) {
     GTEST_SKIP();
   }
   XlaBuilder builder(TestName());
@@ -887,10 +885,8 @@ TEST_F(LocalClientExecuteTest, InfeedTest) {
 }
 
 // Disabled on interpreter backend since infeed/outfeed HLOs are unsupported.
-// Not all TPU generations support infeed/outfeed, but SE does provide the
-// capability to query this.
 TEST_F(LocalClientExecuteTest, InfeedOutfeedTest) {
-  if (test::DeviceTypeIsOneOf({test::kInterpreter, test::kTpu})) {
+  if (test::DeviceIs(test::kInterpreter)) {
     GTEST_SKIP();
   }
   XlaBuilder builder(TestName());

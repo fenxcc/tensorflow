@@ -20,7 +20,6 @@ limitations under the License.
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include "absl/log/log.h"
-#include "absl/status/status_matchers.h"
 #include "absl/strings/string_view.h"
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/ir/hlo_print_options.h"
@@ -29,12 +28,14 @@ limitations under the License.
 #include "xla/hlo/utils/hlo_matchers.h"
 #include "xla/service/collective_utils.h"
 #include "xla/service/gpu/transforms/collectives/collective_combiner_annotator.h"
+#include "xla/tsl/platform/status_matchers.h"
 #include "xla/tsl/platform/statusor.h"
 
 namespace xla::gpu {
 namespace {
 
 using ::testing::Matcher;
+using ::tsl::testing::IsOkAndHolds;
 
 namespace op = xla::testing::opcode_matchers;
 
@@ -123,7 +124,7 @@ ENTRY entry {
                                          suggested_threshold_bytes);
   EXPECT_THAT(RunCombiner(module.get(), default_threshold_bytes,
                           default_threshold_bytes),
-              absl_testing::IsOkAndHolds(true));
+              IsOkAndHolds(true));
 
   VLOG(1) << module->ToString();
   // Pipelined all gathers were combined up to the predefined max available
@@ -208,7 +209,7 @@ ENTRY entry {
   TF_ASSERT_OK_AND_ASSIGN(auto module,
                           ParseAndReturnVerifiedModule(kHloString));
   EXPECT_THAT(RunCombiner(module.get(), kDefaultAllGatherCombineThreshold),
-              absl_testing::IsOkAndHolds(true));
+              IsOkAndHolds(true));
 
   VLOG(1) << module->ToString();
   const absl::string_view kExpected = R"(
@@ -297,8 +298,7 @@ ENTRY entry {
 
   TF_ASSERT_OK_AND_ASSIGN(auto module,
                           ParseAndReturnVerifiedModule(kHloString));
-  EXPECT_THAT(RunCombiner(module.get(), threshold_bytes),
-              absl_testing::IsOkAndHolds(true));
+  EXPECT_THAT(RunCombiner(module.get(), threshold_bytes), IsOkAndHolds(true));
 
   VLOG(1) << module->ToString();
   // Pipelined all gathers were combined up to the predefined max available
@@ -351,7 +351,7 @@ TEST_F(GpuAllReduceCombinerTest,
   AnnotateWithSuggestedCombinerThreshold(module.get(),
                                          suggested_threshold_bytes);
   EXPECT_THAT(RunCombiner(module.get(), kDefaultAllReduceCombineThreshold),
-              absl_testing::IsOkAndHolds(true));
+              IsOkAndHolds(true));
   Matcher<const HloInstruction*> combined_all_reduce =
       op::AllReduce(op::Parameter(0), op::Parameter(1));
   EXPECT_THAT(module->entry_computation()->root_instruction(),
@@ -389,8 +389,7 @@ TEST_F(GpuAllReduceCombinerTest,
 
   TF_ASSERT_OK_AND_ASSIGN(auto module, ParseAndReturnVerifiedModule(kHloText));
   int64_t threshold_bytes = 10000000000;  // 10GB
-  EXPECT_THAT(RunCombiner(module.get(), threshold_bytes),
-              absl_testing::IsOkAndHolds(false));
+  EXPECT_THAT(RunCombiner(module.get(), threshold_bytes), IsOkAndHolds(false));
 }
 
 TEST_F(GpuAllReduceCombinerTest,
@@ -422,7 +421,7 @@ TEST_F(GpuAllReduceCombinerTest,
   AnnotateWithSuggestedCombinerThreshold(module.get(),
                                          suggested_threshold_bytes);
   EXPECT_THAT(RunCombiner(module.get(), kDefaultAllReduceCombineThreshold),
-              absl_testing::IsOkAndHolds(false));
+              IsOkAndHolds(false));
 }
 
 }  // namespace

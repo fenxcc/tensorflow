@@ -26,10 +26,13 @@ limitations under the License.
 #ifndef TENSORFLOW_TSL_PLATFORM_STRINGPIECE_H_
 #define TENSORFLOW_TSL_PLATFORM_STRINGPIECE_H_
 
-// IWYU pragma: private, include "absl/strings/string_view.h"
-
 #include "absl/base/macros.h"
-#include "absl/strings/string_view.h"
+#include "absl/strings/string_view.h"  // IWYU pragma: export
+
+// TODO: b/323943471 - This macro should eventually be provided by Abseil.
+#ifndef ABSL_DEPRECATE_AND_INLINE
+#define ABSL_DEPRECATE_AND_INLINE()
+#endif
 
 namespace tsl {
 

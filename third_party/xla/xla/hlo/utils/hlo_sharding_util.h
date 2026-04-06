@@ -130,6 +130,11 @@ std::optional<int64_t> SelectDominantDevice(
 // instructions which already have sharding.
 void AssignComputationDevice(HloComputation* computation, int64_t device);
 
+// Given an instruction container, returns the device which is most commonly
+// occurring among the instructions.
+std::optional<int64_t> GetMostOccurringDevice(
+    absl::Span<HloInstruction* const> instructions);
+
 // Given a set of computations, tries to extract the dominant device. A device
 // is dominant if the combined occurrence among all the instructions of the
 // input computations, is greater/equal than/to dominant_factor (real number
@@ -176,6 +181,17 @@ HloSharding PropagateShardingThroughReshape(const Shape& source_shape,
 HloSharding ReverseSharding(const HloSharding& sharding,
                             absl::Span<const int64_t> dimensions);
 
+// Returns a sharding tiled on unique dimension dim by reshaping the tile
+// assignment of the sharding argument. Only dimensions in the dims span
+// argument are considered for reshaping, the others are ignored.
+// Assumptions: sharding is tile sharded, and dim must be included in dims.
+HloSharding ReshapeToTileDimension(const HloSharding& sharding, int64_t dim,
+                                   absl::Span<const int64_t> dims);
+
+// Returns true if the provided module includes one or more instructions with
+// a tile sharding.
+bool ContainsTileSharding(const HloModule& module);
+
 // Returns the preferred output sharding for a gather op based on the sharding
 // of the indices.
 HloSharding GatherOutputShardingFromIndex(const HloSharding& index_sharding,
@@ -186,6 +202,12 @@ HloSharding GatherOutputShardingFromIndex(const HloSharding& index_sharding,
 HloSharding GatherIndexShardingFromOutput(const HloSharding& output_sharding,
                                           const HloInstruction* hlo);
 
+// Returns a new HloSharding for a gather op so that only non offset dimensions
+// are sharded. Assume "result" is returned by this function. It is ensured that
+// "GetIndexSharding(result, hlo)" will have the same number of elements as
+// "result".
+HloSharding GatherEffectiveOutputSharding(const HloInstruction& hlo);
+
 // Returns the preferred index sharding for a scatter op based on the sharding
 // of the data.
 HloSharding ScatterIndexShardingFromUpdate(
@@ -195,6 +217,20 @@ HloSharding ScatterIndexShardingFromUpdate(
 // of the index.
 HloSharding ScatterUpdateShardingFromIndex(
     const HloSharding& index_sharding, const HloScatterInstruction* scatter);
+
+// Returns a new index sharding for a scatter op so that we only shard on first
+// "number of scatter_window_dims" dimensions. Assume "result" is returned by
+// this function. It is ensured that "ScatterUpdateShardingFromIndex(result,
+// hlo)" will have the same number of elements as "result".
+HloSharding ScatterEffectiveIndexSharding(const HloSharding& index_sharding,
+                                          const HloScatterInstruction& scatter);
+
+// Returns a new data sharding for a scatter op so that we only shard on
+// scatter_window_dims. Assume "result" is returned by this function. It is
+// ensured that "ScatterIndexShardingFromUpdate(result, hlo)" will have the same
+// number of elements as "result".
+HloSharding ScatterEffectiveDataSharding(const HloSharding& data_sharding,
+                                         const HloScatterInstruction& scatter);
 
 // Returns an output sharding of gather by passing through the data operand's
 // sharding.
@@ -266,6 +302,11 @@ std::optional<HloSharding> ScatterUpdateShardingFromOutputParallelDimensions(
 absl::StatusOr<std::pair<std::unique_ptr<HloInstruction>, HloOpcode>>
 IdentityValueAndHloOpcodeForScatterReduceComputation(
     const HloScatterInstruction& scatter);
+
+// Given a sharding and a list of devices in the topology, return a
+// list of the devices that `sharding` applies to.
+std::vector<int64_t> DevicesForSharding(
+    const HloSharding& sharding, absl::Span<const int64_t> available_devices);
 
 // Returns a sharding that replicates data across devices along the given
 // dimensions in the original sharding.
@@ -533,8 +574,8 @@ Shape TileLeafShape(const HloSharding& sharding, const Shape& shape);
 // DetermineArgumentLayoutsFromCompileOptions() in
 // tensorflow/compiler/xla/pjrt/utils.h.
 absl::Status CanonicalizeLayoutAfterShardingPropagation(
-    HloModule* module, absl::Span<const bool> update_output_layout,
-    absl::Span<const bool> update_parameters_layout);
+    HloModule* module, const std::vector<bool>& update_output_layout,
+    const std::vector<bool>& update_parameters_layout);
 
 // Returns true iff the specified hlo or sharding has a spatially partitioned
 // sharding (tiled or replicated) that can be propagated by sharding
@@ -572,11 +613,6 @@ HloSharding InferDotOperandSharding(
     int64_t operand_index,
     const dot_as_convolution_util::DotConvolutionDimsInfo& dnums,
     bool consider_other_operand, bool may_combine_partial_sharding);
-
-// If the sharding is a V2 sharding (using iota_reshape_dims and
-// iota_transpose_perm) and its type is OTHER, converts it to a V1 sharding
-// (using tile_assignment_devices). Otherwise, does nothing.
-void ConvertV2ToV1Sharding(OpSharding& sharding);
 
 }  // namespace hlo_sharding_util
 }  // namespace xla

@@ -135,11 +135,9 @@ absl::Status LoadOpenCLOnce() {
       typedef void (*enableOpenCL_t)();
       enableOpenCL_t enableOpenCL =
           reinterpret_cast<enableOpenCL_t>(dlsym(libopencl, "enableOpenCL"));
-      if (enableOpenCL != nullptr) {
-        enableOpenCL();
-        LoadOpenCLFunctions(libopencl, true);
-        return absl::OkStatus();
-      }
+      enableOpenCL();
+      LoadOpenCLFunctions(libopencl, true);
+      return absl::OkStatus();
     }
   }
 #else
@@ -150,9 +148,7 @@ absl::Status LoadOpenCLOnce() {
     LoadOpenCLFunctions(libopencl, false);
     return absl::OkStatus();
   }
-  const char* dlerror_result = dlerror();
-  TFLITE_LOG(INFO) << "Failed to load OpenCL library with dlopen: "
-                   << (dlerror_result ? dlerror_result : "unknown error")
+  TFLITE_LOG(INFO) << "Failed to load OpenCL library with dlopen: " << dlerror()
                    << ". Trying ICD loader.";
   // Check if OpenCL functions are found via OpenCL ICD Loader.
   LoadOpenCLFunctions(libopencl, false);
@@ -166,8 +162,7 @@ absl::Status LoadOpenCLOnce() {
     return absl::UnknownError("OpenCL is not supported.");
   }
   // record error
-  dlerror_result = dlerror();
-  std::string error(dlerror_result ? dlerror_result : "unknown error");
+  std::string error(dlerror());
   return absl::UnknownError(
       absl::StrCat("Can not open OpenCL library on this device - ", error));
 #endif

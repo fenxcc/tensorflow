@@ -35,7 +35,7 @@ limitations under the License.
 #include "xla/stream_executor/cuda/cudnn_sdpa_score_mod.h"
 #include "xla/stream_executor/device_memory.h"
 #include "xla/stream_executor/dnn.h"
-#include "xla/stream_executor/engine_options.h"
+#include "xla/stream_executor/numeric_options.h"
 #include "xla/stream_executor/scratch_allocator.h"
 #include "xla/stream_executor/stream_executor.h"
 #include "xla/tsl/protobuf/dnn.pb.h"
@@ -58,7 +58,7 @@ class CudnnGraph : public dnn::DnnGraph {
   explicit CudnnGraph(cudnn_frontend::graph::Graph&& graph)
       : graph_(std::move(graph)) {}
   // Prepares a graph and checks whether it is generally supported.
-  absl::Status Prepare(dnn::DnnSupport&, const EngineOptions&) override;
+  absl::Status Prepare(dnn::DnnSupport&, const NumericOptions&) override;
   // Builds single plan of the graph with given ID.
   absl::Status Build(dnn::DnnSupport&, std::optional<int64_t> plan_id) override;
   // Builds all the plans
@@ -106,7 +106,7 @@ class CudnnSupport : public dnn::DnnSupport {
       int batch_size, dnn::RnnInputMode input_mode,
       dnn::RnnDirectionMode direction_mode, dnn::RnnMode rnn_mode,
       dnn::DataType data_type, const dnn::AlgorithmConfig& algorithm_config,
-      const EngineOptions& engine_options, float dropout, uint64_t seed,
+      const NumericOptions& numeric_options, float dropout, uint64_t seed,
       ScratchAllocator* state_allocator, bool use_padded_io) override;
 
   absl::StatusOr<std::unique_ptr<dnn::RnnSequenceTensorDescriptor>>
@@ -270,7 +270,7 @@ class CudnnSupport : public dnn::DnnSupport {
       DeviceMemoryBase output_data,
       const dnn::ConvolutionDescriptor& convolution_descriptor,
       bool use_fallback, ScratchAllocator* scratch_allocator,
-      const EngineOptions& engine_options,
+      const NumericOptions& numeric_options,
       std::vector<std::unique_ptr<const dnn::ConvRunner>>* out_exec_plans)
       override;
 
@@ -289,7 +289,7 @@ class CudnnSupport : public dnn::DnnSupport {
       const dnn::FilterDescriptor& filter_descriptor,
       const dnn::BatchDescriptor& output_descriptor,
       const dnn::ConvolutionDescriptor& convolution_descriptor,
-      bool use_fallback, const EngineOptions& engine_options,
+      bool use_fallback, const NumericOptions& numeric_options,
       std::vector<std::unique_ptr<const dnn::GraphConvRunner>>* out_exec_plans,
       std::string serialized_graph) override;
 
@@ -313,7 +313,7 @@ class CudnnSupport : public dnn::DnnSupport {
       const dnn::BatchDescriptor& output_descriptor,
       const dnn::ConvolutionDescriptor& convolution_descriptor,
       bool use_fallback, dnn::ActivationMode activation_mode,
-      const EngineOptions& engine_options,
+      const NumericOptions& numeric_options,
       std::vector<std::unique_ptr<const dnn::FusedConvRunner>>* out_exec_plans)
       override;
 
@@ -322,7 +322,7 @@ class CudnnSupport : public dnn::DnnSupport {
       dnn::DataType output_type, Stream* stream, bool trans_a, bool trans_b,
       uint64_t m, uint64_t n, uint64_t k, int64_t lda, int64_t ldb, int64_t ldc,
       dnn::ActivationMode activation_mode, bool use_fallback,
-      const EngineOptions& engine_options,
+      const NumericOptions& numeric_options,
       std::vector<std::unique_ptr<const dnn::FusedMatmulRunner>>*
           out_exec_plans) override;
 
@@ -441,6 +441,18 @@ class CudnnSupport : public dnn::DnnSupport {
       DeviceMemory<uint8_t>* reserve_space_data,
       ScratchAllocator* workspace_allocator) override;
 
+  absl::Status DoConvolve(
+      dnn::ConvolutionKind kind, dnn::DataType element_type,
+      dnn::DataType output_type, Stream* stream,
+      const dnn::BatchDescriptor& input_descriptor, DeviceMemoryBase input_data,
+      const dnn::FilterDescriptor& filter_descriptor,
+      DeviceMemoryBase filter_data,
+      const dnn::BatchDescriptor& output_descriptor,
+      DeviceMemoryBase output_data,
+      const dnn::ConvolutionDescriptor& convolution_descriptor,
+      dnn::AlgorithmDesc algorithm_desc, DeviceMemory<uint8_t> scratch_memory,
+      dnn::ProfileResult* output_profile_result) override;
+
   absl::Status DoFusedConvolve(
       Stream* stream, dnn::DataType input_type, dnn::DataType side_input_type,
       dnn::DataType bias_type, dnn::DataType output_type,
@@ -474,7 +486,7 @@ class CudnnSupport : public dnn::DnnSupport {
 
   absl::Status DoPoolForward(dnn::DataType element_type, Stream* stream,
                              const dnn::PoolingDescriptor& pooling_dimensions,
-                             const EngineOptions& engine_options,
+                             const NumericOptions& numeric_options,
                              const dnn::BatchDescriptor& input_dimensions,
                              DeviceMemoryBase input_data,
                              const dnn::BatchDescriptor& output_dimensions,
@@ -493,7 +505,7 @@ class CudnnSupport : public dnn::DnnSupport {
 
   absl::Status DoPoolBackward(dnn::DataType element_type, Stream* stream,
                               const dnn::PoolingDescriptor& pooling_dimensions,
-                              const EngineOptions& engine_options,
+                              const NumericOptions& numeric_options,
                               const dnn::BatchDescriptor& input_dimensions,
                               DeviceMemoryBase input_data,
                               const dnn::BatchDescriptor& output_dimensions,
@@ -561,17 +573,17 @@ class CudnnSupport : public dnn::DnnSupport {
 
   bool GetConvolveAlgorithms(CudaComputeCapability cuda_compute_capability,
                              dnn::DataType input_type,
-                             const EngineOptions& engine_options,
+                             const NumericOptions& numeric_options,
                              std::vector<dnn::AlgorithmDesc>* out_algorithms);
 
   bool GetConvolveBackwardDataAlgorithms(
       CudaComputeCapability cuda_compute_capability, dnn::DataType input_type,
-      const EngineOptions& engine_options,
+      const NumericOptions& numeric_options,
       std::vector<dnn::AlgorithmDesc>* out_algorithms);
 
   bool GetConvolveBackwardFilterAlgorithms(
       CudaComputeCapability cuda_compute_capability, dnn::DataType input_type,
-      const EngineOptions& engine_options,
+      const NumericOptions& numeric_options,
       std::vector<dnn::AlgorithmDesc>* out_algorithms);
 
   template <class T, class U>
@@ -661,6 +673,18 @@ class CudnnSupport : public dnn::DnnSupport {
       DeviceMemory<uint8_t> scratch_memory, int ctc_loss_algo_id);
 
  private:
+  absl::Status DoPrepareForConvolution(
+      dnn::ConvolutionKind kind, dnn::DataType element_type, Stream* stream,
+      const dnn::BatchDescriptor& input_descriptor, DeviceMemoryBase input_data,
+      const dnn::FilterDescriptor& filter_descriptor,
+      DeviceMemoryBase filter_data,
+      const dnn::BatchDescriptor& output_descriptor,
+      DeviceMemoryBase output_data,
+      const dnn::ConvolutionDescriptor& convolution_descriptor,
+      const dnn::AlgorithmConfig& algorithm_config,
+      ScratchAllocator* scratch_allocator, dnn::AlgorithmDesc* algorithm_desc,
+      DeviceMemory<uint8_t>* scratch_memory) override;
+
   absl::Status DoPrepareForCtcLoss(
       Stream* stream, dnn::DataType element_type,
       const dnn::RnnStateTensorDescriptor& probs_desc,
@@ -668,7 +692,8 @@ class CudnnSupport : public dnn::DnnSupport {
       absl::Span<const int> labels_data,
       absl::Span<const int> labels_lengths_data,
       absl::Span<const int> input_lengths_data,
-      const EngineOptions& engine_options, ScratchAllocator* scratch_allocator,
+      const NumericOptions& numeric_options,
+      ScratchAllocator* scratch_allocator,
       DeviceMemory<uint8_t>* scratch_memory, int* ctc_loss_algo_id) override;
 
   CudnnSupport(const CudnnSupport&) = delete;
@@ -729,7 +754,7 @@ absl::StatusOr<CudnnGraph> GetCudnnBlockScaledDotOperationGraph(
     const dnn::TensorDescriptor& lhs_scale,
     const dnn::TensorDescriptor& rhs_data,
     const dnn::TensorDescriptor& rhs_scale, dnn::DataType result_type,
-    int block_size, bool has_global_scale);
+    int block_size);
 
 }  // namespace gpu
 }  // namespace stream_executor

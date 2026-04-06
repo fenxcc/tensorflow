@@ -58,14 +58,14 @@ namespace monitoring {
 // monitorable entity is exporting it.
 struct MetricDescriptor {
   // Metric names are path-like.  E.g., "/mycomponent/mymetric".
-  std::string name;
+  string name;
 
   // A human-readable description of what this metric measures.
-  std::string description;
+  string description;
 
   // Label names for the metric.
   // See the example in the top level comment for MetricDescriptor.
-  std::vector<std::string> label_names;
+  std::vector<string> label_names;
 
   MetricKind metric_kind;
 
@@ -80,15 +80,15 @@ struct Point {
   struct Label {
     // The |name| field must match the |label_name| field in the
     // MetricDescriptor for this Point.
-    std::string name;
-    std::string value;
+    string name;
+    string value;
   };
   std::vector<Label> labels;
 
   // The actual metric value, dependent on the value_type enum.
   ValueType value_type;
   int64_t int64_value;
-  std::string string_value;
+  string string_value;
   bool bool_value;
   double double_value;
   HistogramProto histogram_value;
@@ -131,14 +131,14 @@ struct Point {
   // made.
   //
   // start_timestamp must not be younger than end_timestamp.
-  uint64_t start_timestamp_millis;
-  uint64_t end_timestamp_millis;
+  uint64 start_timestamp_millis;
+  uint64 end_timestamp_millis;
 };
 
 // A set of points belonging to a metric.
 struct PointSet {
   // This must match a name defined by a MetricDescriptor message.
-  std::string metric_name;
+  string metric_name;
 
   // No two Points in the same PointSet should have the same set of labels.
   std::vector<std::unique_ptr<Point>> points;
@@ -147,9 +147,8 @@ struct PointSet {
 // Standard format in which the metrics are collected, before being exported.
 struct CollectedMetrics {
   // The keys are the metric-names.
-  std::map<std::string, std::unique_ptr<MetricDescriptor>>
-      metric_descriptor_map;
-  std::map<std::string, std::unique_ptr<PointSet>> point_set_map;
+  std::map<string, std::unique_ptr<MetricDescriptor>> metric_descriptor_map;
+  std::map<string, std::unique_ptr<PointSet>> point_set_map;
 };
 
 }  // namespace monitoring

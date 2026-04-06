@@ -27,10 +27,7 @@ limitations under the License.
 #include <utility>
 #include <vector>
 
-#include <gtest/gtest.h>
 #include "absl/container/flat_hash_map.h"
-#include "absl/container/flat_hash_set.h"
-#include "absl/log/check.h"
 #include "absl/status/statusor.h"
 #include "absl/types/span.h"
 #include "xla/hlo/analysis/alias_info.h"
@@ -55,9 +52,11 @@ limitations under the License.
 #include "xla/service/memory_space_assignment/utils.h"
 #include "xla/shape.h"
 #include "xla/shape_util.h"
-#include "xla/tests/hlo_pjrt_test_base.h"
+#include "xla/tests/hlo_test_base.h"
 #include "xla/tsl/lib/core/status_test_util.h"
-#include "xla/tsl/platform/statusor.h"
+#include "tsl/platform/status.h"
+#include "tsl/platform/statusor.h"
+#include "tsl/platform/test.h"
 
 namespace xla {
 namespace memory_space_assignment {
@@ -92,7 +91,7 @@ class TestBufferIntervalComparator : public BufferIntervalComparator {
   MsaBufferIntervalCompare compare_method_;
 };
 
-class MemorySpaceAssignmentTestBase : public HloPjRtTestBase {
+class MemorySpaceAssignmentTestBase : public HloTestBase {
  protected:
   // We use the following two memory space values to describe the default (slow
   // and large) and alternate (fast and small) memory spaces.
@@ -190,13 +189,13 @@ class MemorySpaceAssignmentTestBase : public HloPjRtTestBase {
     HloCostAnalysis hlo_cost_analysis(hlo_cost_options);
     HloCostAnalysisWithAcceptState hlo_cost_analysis_wrapper(hlo_cost_analysis);
     for (HloComputation* computation : module->MakeNonfusionComputations()) {
-      CHECK_OK(computation->Accept(&hlo_cost_analysis));
+      TF_CHECK_OK(computation->Accept(&hlo_cost_analysis));
     }
-    CHECK_OK(HloAliasAnalysis::Run(module, &alias_info_).status());
+    TF_CHECK_OK(HloAliasAnalysis::Run(module).status());
 
     Options memory_space_options = DefaultMemorySpaceOptions();
     if (memory_space_options_override) {
-      memory_space_options = *std::move(memory_space_options_override);
+      memory_space_options = *memory_space_options_override;
     }
     CostAnalysisOptions cost_analysis_options = DefaultCostAnalysisOptions();
     if (cost_analysis_options_override) {
@@ -212,9 +211,9 @@ class MemorySpaceAssignmentTestBase : public HloPjRtTestBase {
             CreateHloCostAnalysisCalculator(hlo_cost_analysis_wrapper),
             /*enable_cache=*/false));
 
-    auto status_or_cost_analysis = CostAnalysis::Create(
-        op_cost_manager, cost_analysis_options, &alias_info_, *module);
-    CHECK_OK(status_or_cost_analysis.status());
+    auto status_or_cost_analysis =
+        CostAnalysis::Create(op_cost_manager, cost_analysis_options, *module);
+    TF_CHECK_OK(status_or_cost_analysis.status());
     auto cost_analysis = std::move(status_or_cost_analysis.value());
 
     memory_space_options.cost_analysis = cost_analysis.get();
@@ -231,7 +230,7 @@ class MemorySpaceAssignmentTestBase : public HloPjRtTestBase {
     MemoryBoundednessBufferIntervalComparator comparator(
         *cost_analysis, &cache_, msa_sort_order_overrides);
     return AssignMemorySpace(
-        module, std::move(memory_space_options),
+        module, memory_space_options,
         [&comparator](const MsaBufferInterval& lhs,
                       const MsaBufferInterval& rhs) {
           return comparator.LessThan(lhs, rhs);
@@ -243,7 +242,7 @@ class MemorySpaceAssignmentTestBase : public HloPjRtTestBase {
       HloModule* module, std::optional<Options> options_override = std::nullopt,
       int64_t max_prefetch_interval = 10, int64_t min_prefetch_interval = 2) {
     InstructionHoister instruction_hoister;
-    CHECK_OK(instruction_hoister.Run(module).status());
+    TF_CHECK_OK(instruction_hoister.Run(module).status());
     InstructionCountPrefetchIntervalPicker prefetch_interval_picker(
         min_prefetch_interval, max_prefetch_interval);
     return AssignMemorySpace(module, std::move(options_override),
@@ -299,7 +298,7 @@ class MemorySpaceAssignmentTestBase : public HloPjRtTestBase {
 
     Options options = DefaultMemorySpaceOptions();
     if (options_override) {
-      options = *std::move(options_override);
+      options = *options_override;
     }
     std::unique_ptr<TestBufferIntervalComparator> test_comparator;
     if (buffer_interval_compare.has_value()) {
@@ -313,8 +312,7 @@ class MemorySpaceAssignmentTestBase : public HloPjRtTestBase {
       options.is_allowed_in_alternate_mem_fn = is_allowed_in_alternate_mem;
     }
 
-    TF_ASSIGN_OR_RETURN(auto alias_analysis,
-                        HloAliasAnalysis::Run(module, &alias_info_));
+    TF_ASSIGN_OR_RETURN(auto alias_analysis, HloAliasAnalysis::Run(module));
     TF_ASSIGN_OR_RETURN(std::unique_ptr<HloLiveRange> hlo_live_range,
                         HloLiveRange::Run(module->schedule(), *alias_analysis,
                                           module->entry_computation()));
@@ -376,74 +374,6 @@ class MemorySpaceAssignmentTestBase : public HloPjRtTestBase {
     }
   }
 
-  // Returns a set of HloPositions for the given instruction names and
-  // shape_index.
-  absl::flat_hash_set<HloPosition> GetHloPositions(
-      const HloModule* module, std::vector<std::string> instruction_names,
-      ShapeIndex shape_index = {}) {
-    absl::flat_hash_set<HloPosition> block_prefetched_positions;
-    for (const auto& instruction_name : instruction_names) {
-      HloInstruction* param = FindInstruction(module, instruction_name);
-      EXPECT_NE(param, nullptr);
-      HloPosition param_position{param, shape_index};
-      block_prefetched_positions.insert(param_position);
-    }
-    return block_prefetched_positions;
-  }
-
-  struct CustomCallPrefetchInfo {
-    std::string prefetched_instruction_name;
-    std::string prefetch_start_instruction_name;
-    std::string prefetch_done_instruction_name;
-  };
-
-  // Returns a map of HloPositions to CustomCallPrefetchDetails for the given
-  // custom call prefetch instructions.
-  absl::flat_hash_map<HloPosition, std::vector<CustomCallPrefetchDetails>>
-  GetCustomCallPrefetchDetailsMap(
-      const HloModule* module,
-      std::vector<CustomCallPrefetchInfo> custom_call_prefetch_instructions) {
-    absl::flat_hash_map<HloPosition, std::vector<CustomCallPrefetchDetails>>
-        hlo_position_to_custom_call_prefetch_details;
-    for (const auto& info : custom_call_prefetch_instructions) {
-      HloInstruction* param =
-          FindInstruction(module, info.prefetched_instruction_name);
-      EXPECT_NE(param, nullptr);
-      HloPosition param_position{param, {}};
-      HloInstruction* prefetch_start =
-          FindInstruction(module, info.prefetch_start_instruction_name);
-      EXPECT_NE(prefetch_start, nullptr);
-      HloInstruction* prefetch_done =
-          FindInstruction(module, info.prefetch_done_instruction_name);
-      EXPECT_NE(prefetch_done, nullptr);
-
-      CustomCallPrefetchDetails details{/*prefetch_start=*/prefetch_start,
-                                        /*prefetch_done=*/prefetch_done,
-                                        /*intermediate_instructions=*/
-                                        {prefetch_done->mutable_operand(1),
-                                         prefetch_done->mutable_operand(2)}};
-
-      hlo_position_to_custom_call_prefetch_details[param_position].push_back(
-          details);
-    }
-    return hlo_position_to_custom_call_prefetch_details;
-  }
-
-  // Checks for every instruction in instruction_names that the operand at
-  // operand_index has the given opcode and memory space.
-  void CheckOperandOpcodeAndMemorySpaceForInstructionNames(
-      HloModule* module, std::vector<std::string>& instruction_names,
-      int64_t operand_index, HloOpcode operand_opcode,
-      int64_t operand_memory_space) {
-    for (const std::string& name : instruction_names) {
-      HloInstruction* use_inst = FindInstruction(module, name);
-      EXPECT_NE(use_inst, nullptr);
-      const HloInstruction* operand = use_inst->operand(operand_index);
-      EXPECT_EQ(operand->opcode(), operand_opcode);
-      EXPECT_EQ(operand->shape().layout().memory_space(), operand_memory_space);
-    }
-  }
-
   struct OutstandingAsyncCopies {
     int64_t max_copies;
     int64_t max_prefetches;
@@ -491,9 +421,8 @@ class MemorySpaceAssignmentTestBase : public HloPjRtTestBase {
     // Returns the offset of the assignment, -1 if it's not in the alternate
     // memory.
     const HloModule* module = instruction->GetModule();
-    AliasInfo alias_info;
-    auto status_or_alias_analysis = HloAliasAnalysis::Run(module, &alias_info);
-    CHECK_OK(status_or_alias_analysis.status());
+    auto status_or_alias_analysis = HloAliasAnalysis::Run(module);
+    TF_CHECK_OK(status_or_alias_analysis.status());
     auto alias_analysis = std::move(status_or_alias_analysis.value());
     const HloBuffer& buffer =
         alias_analysis->GetUniqueBufferAt(instruction, index);
@@ -562,7 +491,7 @@ class MemorySpaceAssignmentTestBase : public HloPjRtTestBase {
     HloSchedule schedule(module.get());
     schedule.set_sequence(computation, {p0, p1, tanh, a, b, c, d, e, f, g, h, i,
                                         j, k, l, m, n, o, add});
-    CHECK_OK(module->set_schedule(schedule));
+    TF_CHECK_OK(module->set_schedule(schedule));
     return module;
   }
 

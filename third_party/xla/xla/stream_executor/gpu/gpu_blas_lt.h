@@ -30,11 +30,14 @@ limitations under the License.
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/synchronization/mutex.h"
+#include "xla/protobuf_util.h"
 #include "xla/stream_executor/blas.h"
 #include "xla/stream_executor/device_memory.h"
 #include "xla/stream_executor/gpu/gpu_blas_lt.pb.h"
+#include "xla/stream_executor/host_or_device_scalar.h"
 #include "xla/types.h"
 #include "xla/xla_data.pb.h"
+#include "tsl/platform/errors.h"
 
 namespace stream_executor::gpu {
 
@@ -148,10 +151,6 @@ struct BlasLt {
     kBiasThenGELUWithAux = kBiasThenGELU | 1024,
     kBiasThenSILUWithAux = kBiasThenSILU | 1024,
   };
-
-  static absl::StatusOr<Epilogue> EpilogueFromProto(
-      const xla::BlasLtEpilogueProto& proto);
-  static xla::BlasLtEpilogueProto EpilogueToProto(Epilogue epilogue);
 
   // Describes the location of pointers for the scaling factors alpha and beta.
   enum class PointerMode {

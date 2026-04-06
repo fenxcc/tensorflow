@@ -37,17 +37,12 @@ struct CompilationOptions {
   // If true, the PTX compiler will generate debug information.
   bool generate_debug_info = false;
 
-  // If set, the PTX compiler's informational/error log will be generated and
-  // returned in the compilation result.
-  bool dump_compilation_log = false;
-
   friend bool operator==(const CompilationOptions& lhs,
                          const CompilationOptions& rhs) {
     return lhs.disable_optimizations == rhs.disable_optimizations &&
            lhs.cancel_if_reg_spill == rhs.cancel_if_reg_spill &&
            lhs.generate_line_info == rhs.generate_line_info &&
-           lhs.generate_debug_info == rhs.generate_debug_info &&
-           lhs.dump_compilation_log == rhs.dump_compilation_log;
+           lhs.generate_debug_info == rhs.generate_debug_info;
   }
 
   friend bool operator!=(const CompilationOptions& lhs,
@@ -59,19 +54,16 @@ struct CompilationOptions {
   friend H AbslHashValue(H h, const CompilationOptions& options) {
     return H::combine(std::move(h), options.disable_optimizations,
                       options.cancel_if_reg_spill, options.generate_line_info,
-                      options.generate_debug_info,
-                      options.dump_compilation_log);
+                      options.generate_debug_info);
   }
 
   template <typename Sink>
   friend void AbslStringify(Sink& sink, const CompilationOptions& options) {
     absl::Format(&sink,
                  "disable_optimizations: %v, cancel_if_reg_spill: %v, "
-                 "generate_line_info: %v, generate_debug_info: %v, "
-                 "dump_compilation_log: %v",
+                 "generate_line_info: %v, generate_debug_info: %v",
                  options.disable_optimizations, options.cancel_if_reg_spill,
-                 options.generate_line_info, options.generate_debug_info,
-                 options.dump_compilation_log);
+                 options.generate_line_info, options.generate_debug_info);
   }
 };
 

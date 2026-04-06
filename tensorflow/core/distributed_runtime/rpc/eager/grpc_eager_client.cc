@@ -27,7 +27,6 @@ limitations under the License.
 #include "grpcpp/generic/generic_stub.h"
 #include "absl/log/log.h"
 #include "absl/status/status.h"
-#include "absl/synchronization/notification.h"
 #include "xla/tsl/distributed_runtime/call_options.h"
 #include "tensorflow/core/distributed_runtime/call_options.h"
 #include "tensorflow/core/distributed_runtime/rpc/eager/grpc_eager_service.h"
@@ -251,7 +250,7 @@ class GrpcEagerClient : public EagerClient {
       // TODO(haoyuzhang): Consider supporting cancellation for streaming RPC?
       it->second.SendNextRequest(*request, response, std::move(done_wrapped));
     } else {
-      absl::Notification n;
+      Notification n;
       absl::Status status;
       EnqueueAsync(call_opts, request, response,
                    [&n, &status](const absl::Status& s) {

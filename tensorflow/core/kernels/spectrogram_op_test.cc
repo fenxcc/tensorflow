@@ -159,7 +159,7 @@ TEST(SpectrogramOpTest, InvalidWindowSize) {
       AudioSpectrogram(root.WithOpName("spectrogram_op"), audio_const_op,
                        /*window_size=*/1, /*stride=*/1);
   EXPECT_THAT(root.status(),
-              absl_testing::StatusIs(tsl::error::Code::INVALID_ARGUMENT,
+              tsl::testing::StatusIs(tsl::error::Code::INVALID_ARGUMENT,
                                      ::testing::ContainsRegex("window size")));
 }
 
@@ -177,7 +177,7 @@ TEST(SpectrogramOpTest, InvalidStride) {
       AudioSpectrogram(root.WithOpName("spectrogram_op"), audio_const_op,
                        /*window_size=*/2, /*stride=*/0);
   EXPECT_THAT(root.status(),
-              absl_testing::StatusIs(tsl::error::Code::INVALID_ARGUMENT,
+              tsl::testing::StatusIs(tsl::error::Code::INVALID_ARGUMENT,
                                      ::testing::ContainsRegex("stride")));
 }
 

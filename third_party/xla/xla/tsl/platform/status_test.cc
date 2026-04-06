@@ -1,11 +1,9 @@
-/* Copyright 2021 The TensorFlow Authors. All Rights Reserved.
 
+/* Copyright 2021 The TensorFlow Authors. All Rights Reserved.
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -14,18 +12,16 @@ limitations under the License.
 ==============================================================================*/
 #include "xla/tsl/platform/status.h"
 
-#include <cstddef>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "absl/status/status.h"
-#include "absl/status/status_matchers.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/str_format.h"
-#include "absl/strings/string_view.h"
 #include "xla/tsl/platform/errors.h"
 #include "xla/tsl/platform/stack_frame.h"
+#include "xla/tsl/platform/status_matchers.h"
 #include "xla/tsl/platform/status_to_from_proto.h"
 #include "xla/tsl/platform/test.h"
 #include "xla/tsl/protobuf/error_codes.pb.h"
@@ -37,9 +33,11 @@ namespace {
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 using ::testing::Pair;
+using ::tsl::testing::IsOk;
+using ::tsl::testing::StatusIs;
 
 TEST(ToStringTest, PayloadsArePrinted) {
-  absl::Status status = absl::AbortedError("Aborted Error Message");
+  absl::Status status = errors::Aborted("Aborted Error Message");
   status.SetPayload("payload_key", absl::Cord(absl::StrFormat(
                                        "payload_value %c%c%c", 1, 2, 3)));
 
@@ -49,7 +47,7 @@ TEST(ToStringTest, PayloadsArePrinted) {
 }
 
 TEST(ToStringTest, MatchesAbslStatus) {
-  absl::Status status = absl::AbortedError("Aborted Error Message");
+  absl::Status status = errors::Aborted("Aborted Error Message");
   status.SetPayload("payload_key", absl::Cord(absl::StrFormat(
                                        "payload_value %c%c%c", 1, 2, 3)));
 
@@ -62,7 +60,7 @@ TEST(ToStringTest, MatchesAbslStatus) {
 }
 
 TEST(StackTrace, SerializeAndDeserializeCorrectly) {
-  absl::Status status = absl::AbortedError("Aborted Error Message");
+  absl::Status status = errors::Aborted("Aborted Error Message");
   std::vector<StackFrame> stack_trace;
   stack_trace.push_back(StackFrame("filename_1", 33, "func_name_1"));
   stack_trace.push_back(StackFrame("filename_2", 66, "func_name_2"));
@@ -77,9 +75,9 @@ TEST(StackTrace, SerializeAndDeserializeCorrectly) {
 }
 
 TEST(StatusGroupTest, DeterministicOrderWithoutPayloads) {
-  absl::Status status_a = absl::AbortedError("Status A");
-  absl::Status status_b = absl::AbortedError("Status B");
-  absl::Status status_c = absl::AbortedError("Status C");
+  absl::Status status_a = errors::Aborted("Status A");
+  absl::Status status_b = errors::Aborted("Status B");
+  absl::Status status_c = errors::Aborted("Status C");
 
   absl::Status combined =
       StatusGroup({status_a, status_b, status_c}).as_summary_status();
@@ -99,11 +97,11 @@ TEST(StatusGroupTest, DeterministicOrderWithoutPayloads) {
 }
 
 TEST(StatusGroupTest, DeterministicOrderWithPayloads) {
-  absl::Status status_a = absl::AbortedError("Status A");
+  absl::Status status_a = errors::Aborted("Status A");
   status_a.SetPayload("payload_key", absl::Cord("payload_value_a"));
-  absl::Status status_b = absl::AbortedError("Status B");
+  absl::Status status_b = errors::Aborted("Status B");
   status_b.SetPayload("payload_key", absl::Cord("payload_value_b"));
-  absl::Status status_c = absl::AbortedError("Status C");
+  absl::Status status_c = errors::Aborted("Status C");
   status_c.SetPayload("payload_key", absl::Cord("payload_value_c"));
 
   absl::Status combined =
@@ -132,17 +130,17 @@ TEST(StatusGroupTest, DeterministicOrderWithPayloads) {
 }
 
 TEST(StatusGroupTest, PayloadsMergedProperly) {
-  absl::Status status_a = absl::AbortedError("Status A");
+  absl::Status status_a = errors::Aborted("Status A");
   status_a.SetPayload("payload_key_a",
                       absl::Cord(std::string("payload_value_a")));
-  absl::Status status_b = absl::AbortedError("Status B");
+  absl::Status status_b = errors::Aborted("Status B");
   status_b.SetPayload("payload_key_b",
                       absl::Cord(std::string("payload_value_b")));
-  absl::Status status_c = absl::AbortedError("Status C");
+  absl::Status status_c = errors::Aborted("Status C");
   status_c.SetPayload("payload_key_c",
                       absl::Cord(std::string("payload_value_c")));
   absl::Status derived_status_c =
-      StatusGroup::MakeDerived(absl::AbortedError("Status C"));
+      StatusGroup::MakeDerived(errors::Aborted("Status C"));
   derived_status_c.SetPayload(
       "payload_key_c", absl::Cord(std::string("derived_payload_value_c")));
 
@@ -210,7 +208,7 @@ TEST(Status, SaveEmptyStatusToProto) {
 TEST(Status, MakeOKStatusFromProto) {
   tensorflow::StatusProto status_proto;
   status_proto.set_code(error::OK);
-  EXPECT_THAT(StatusFromProto(status_proto), absl_testing::IsOk());
+  EXPECT_THAT(StatusFromProto(status_proto), IsOk());
 }
 
 TEST(Status, MakeErrorStatusFromProto) {
@@ -219,13 +217,12 @@ TEST(Status, MakeErrorStatusFromProto) {
   status_proto.set_message("Invalid argument");
   status_proto.mutable_payload()->insert({"foo", "bar"});
   absl::Status s = StatusFromProto(status_proto);
-  EXPECT_THAT(
-      s, absl_testing::StatusIs(error::INVALID_ARGUMENT, "Invalid argument"));
+  EXPECT_THAT(s, StatusIs(error::INVALID_ARGUMENT, "Invalid argument"));
   EXPECT_EQ(s.GetPayload("foo"), "bar");
 }
 
 TEST(Status, MakeStatusFromEmptyProto) {
-  EXPECT_THAT(StatusFromProto(tensorflow::StatusProto()), absl_testing::IsOk());
+  EXPECT_THAT(StatusFromProto(tensorflow::StatusProto()), IsOk());
 }
 
 }  // namespace

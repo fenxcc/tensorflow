@@ -16,7 +16,6 @@ limitations under the License.
 #ifndef XLA_LAZY_H_
 #define XLA_LAZY_H_
 
-#include <memory>
 #include <variant>
 
 #include "absl/functional/any_invocable.h"
@@ -25,24 +24,22 @@ namespace xla {
 
 template <typename T>
 class Lazy {
-  using Value = std::unique_ptr<T>;
-
  public:
-  using Initializer = absl::AnyInvocable<T() &&>;
+  explicit Lazy(absl::AnyInvocable<T() &&> func)
+      : maybe_value_(std::move(func)) {}
 
-  explicit Lazy(Initializer init) : data_(std::move(init)) {}
-
-  bool has_value() const { return std::holds_alternative<Value>(data_); }
+  bool has_value() const { return std::holds_alternative<T>(maybe_value_); }
 
   const T& get() const {
-    if (!has_value()) {
-      data_ = std::make_unique<T>(std::move(std::get<Initializer>(data_))());
+    if (!std::holds_alternative<T>(maybe_value_)) {
+      maybe_value_ =
+          std::move(std::get<absl::AnyInvocable<T() &&>>(maybe_value_))();
     }
-    return *std::get<Value>(data_);
+    return std::get<T>(maybe_value_);
   }
 
  private:
-  mutable std::variant<Initializer, Value> data_;
+  mutable std::variant<absl::AnyInvocable<T() &&>, T> maybe_value_;
 };
 
 }  // namespace xla

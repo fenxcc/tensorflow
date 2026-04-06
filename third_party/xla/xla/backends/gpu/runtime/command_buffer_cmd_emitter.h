@@ -26,7 +26,6 @@ namespace xla::gpu {
 struct ConvertToCommandsOptions {
   CommandBufferCmdExecutor::SynchronizationMode synchronization_mode =
       CommandBufferCmdExecutor::SynchronizationMode::kSerialize;
-  bool enable_loop_unroll = false;
 };
 
 // Converts thunk sequence to a command buffer cmd sequence.

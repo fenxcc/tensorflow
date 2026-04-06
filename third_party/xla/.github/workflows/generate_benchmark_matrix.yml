@@ -54,7 +54,7 @@ jobs:
 
     steps:
       - name: Checkout OpenXLA
-        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           # Use inputs.checkout_ref if provided, otherwise default to the event's ref
           # (e.g., PR's HEAD SHA or caller's commit SHA)

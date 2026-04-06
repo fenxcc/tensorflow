@@ -15,8 +15,6 @@ limitations under the License.
 
 #include "xla/python/ifrt/device_list.h"
 
-#include <cstdint>
-#include <utility>
 #include <vector>
 
 #include "absl/container/inlined_vector.h"
@@ -25,9 +23,6 @@ limitations under the License.
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/types/span.h"
-#include "highwayhash/arch_specific.h"
-#include "highwayhash/hh_types.h"
-#include "highwayhash/highwayhash.h"
 #include "xla/python/ifrt/client.h"
 #include "xla/python/ifrt/device.h"
 #include "xla/python/ifrt/device.pb.h"
@@ -36,29 +31,6 @@ limitations under the License.
 
 namespace xla {
 namespace ifrt {
-namespace {
-
-class FingerprintPrinter {
- public:
-  FingerprintPrinter() : hash_(kDefaultKey64) {}
-  void Append(const absl::AlphaNum& a) { hash_.Append(a.data(), a.size()); }
-  uint64_t Fingerprint() && {
-    highwayhash::HHResult64 result;
-    hash_.Finalize(&result);
-    return result;
-  }
-
- private:
-  static constexpr highwayhash::HHKey kDefaultKey64 = {
-      0x4ea9929a25d561c6,
-      0x98470d187b523e8f,
-      0x592040a2da3c4b53,
-      0xbff8b246e3c587a2,
-  };
-  highwayhash::HighwayHashCatT<HH_TARGET> hash_;
-};
-
-}  // namespace
 
 char DeviceList::ID = 0;
 
@@ -80,28 +52,21 @@ absl::StatusOr<DeviceListRef> DeviceList::FromProto(
   return client->MakeDeviceList(devices);
 }
 
-void DeviceList::ToProto(DeviceListProto& proto, SerDesVersion version) const {
-  // TODO(b/423702568): Change the return type to `absl::Status` for graceful
-  // error handling.
+DeviceListProto DeviceList::ToProto(SerDesVersion version) const {
+  // TODO(b/423702568): Change the return type to `absl::StatusOr<...>` for
+  // graceful error handling.
   CHECK_GE(version.version_number(), SerDesVersionNumber(0))
       << "Unsupported " << version.version_number()
       << " for DeviceList serialization";
 
-  proto.Clear();
+  DeviceListProto proto;
   proto.set_version_number(SerDesVersionNumber(0).value());
 
   proto.mutable_device_ids()->Reserve(devices().size());
   for (Device* device : devices()) {
     proto.mutable_device_ids()->AddAlreadyReserved(device->Id().value());
   }
-}
-
-uint64_t DeviceList::fingerprint() const {
-  FingerprintPrinter printer;
-  for (Device* device : devices()) {
-    printer.Append(device->Id().value());
-  }
-  return std::move(printer).Fingerprint();
+  return proto;
 }
 
 std::vector<DeviceId> GetDeviceIds(const DeviceListRef& device_list) {

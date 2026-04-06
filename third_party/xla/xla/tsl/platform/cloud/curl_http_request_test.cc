@@ -18,7 +18,6 @@ limitations under the License.
 #include <fstream>
 #include <string>
 
-#include "absl/algorithm/container.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "xla/tsl/lib/core/status_test_util.h"
@@ -43,7 +42,7 @@ class FakeEnv : public EnvWrapper {
 // A fake proxy that pretends to be libcurl.
 class FakeLibCurl : public LibCurl {
  public:
-  FakeLibCurl(const std::string& response_content, uint64 response_code)
+  FakeLibCurl(const string& response_content, uint64 response_code)
       : response_content_(response_content), response_code_(response_code) {}
   FakeLibCurl(const string& response_content, uint64 response_code,
               std::vector<std::tuple<uint64, curl_off_t>> progress_ticks,
@@ -154,8 +153,8 @@ class FakeLibCurl : public LibCurl {
       posted_content_ = "";
       do {
         bytes_read = read_callback_(buffer, 1, sizeof(buffer), read_data_);
-        posted_content_ = absl::StrCat(posted_content_,
-                                       absl::string_view(buffer, bytes_read));
+        posted_content_ = strings::StrCat(
+            posted_content_, absl::string_view(buffer, bytes_read));
       } while (bytes_read > 0);
     }
     if (write_data_ || write_callback_) {
@@ -224,7 +223,7 @@ class FakeLibCurl : public LibCurl {
     }
     char* out_char_str = reinterpret_cast<char*>(
         port::Malloc(sizeof(char) * temp_str.size() + 1));
-    absl::c_copy(temp_str, out_char_str);
+    std::copy(temp_str.begin(), temp_str.end(), out_char_str);
     out_char_str[temp_str.size()] = '\0';
     return out_char_str;
   }

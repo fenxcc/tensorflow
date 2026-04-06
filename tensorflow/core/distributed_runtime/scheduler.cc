@@ -15,7 +15,6 @@ limitations under the License.
 
 #include "tensorflow/core/distributed_runtime/scheduler.h"
 
-#include <limits>
 #include <queue>
 
 #include "tensorflow/core/common_runtime/device.h"
@@ -281,7 +280,7 @@ Microseconds GreedyScheduler::ComputeSchedule(
 const Node* GreedyScheduler::GetNodeWithHighestPriority(
     const std::vector<const Node*>& nodes) {
   const Node* curr_node = nullptr;
-  int64_t curr_priority = std::numeric_limits<int64_t>::max();
+  int64_t curr_priority = kint64max;
   for (const Node* n : nodes) {
     if ((*priority_)[n->id()] < curr_priority) {
       curr_node = n;

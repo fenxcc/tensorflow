@@ -19,7 +19,6 @@ limitations under the License.
 #define XLA_LITERAL_UTIL_H_
 
 #include <array>
-#include <cmath>
 #include <cstdint>
 #include <initializer_list>
 #include <iterator>
@@ -41,7 +40,6 @@ limitations under the License.
 #include "xla/layout.h"
 #include "xla/layout_util.h"
 #include "xla/literal.h"
-#include "xla/literal_util.h"
 #include "xla/primitive_util.h"
 #include "xla/shape.h"
 #include "xla/shape_util.h"
@@ -245,8 +243,6 @@ class LiteralUtil {
   // If the given literal's data type is <SrcType>, converts it to a <DstType>
   // literal; otherwise, returns a copy of it. If the literal is a tuple,
   // recursively converts its elements.
-  static Literal ConvertF8E4M3FNToF32(const LiteralSlice& f8e4m3fn_literal);
-  static Literal ConvertF8E5M2ToF32(const LiteralSlice& f8e5m2_literal);
   static Literal ConvertS8ToF32(const LiteralSlice& s8_literal);
   static Literal ConvertBF16ToF32(const LiteralSlice& bf16_literal);
   static Literal ConvertBF16ToF64(const LiteralSlice& bf16_literal);

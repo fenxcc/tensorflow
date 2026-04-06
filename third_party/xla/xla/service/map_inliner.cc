@@ -114,7 +114,7 @@ absl::Status MapInlinerVisitor::HandleMap(HloInstruction* map) {
   return absl::OkStatus();
 }
 
-absl::StatusOr<bool> MapInliner::RunImpl(
+absl::StatusOr<bool> MapInliner::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   MapInlinerVisitor visitor(/*computation=*/nullptr);

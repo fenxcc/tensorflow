@@ -66,20 +66,34 @@ using ::testing::ElementsAre;
 static int64_t shared_resource;
 
 // An adaptor from a lambda that runs tasks and a TaskRunner API.
-template <typename Runner>
+template <typename Runner, typename WorkerId>
 class TaskRunnerAdaptor : public Thunk::TaskRunner {
  public:
-  explicit TaskRunnerAdaptor(Runner runner) : runner_(std::move(runner)) {}
+  TaskRunnerAdaptor(Runner runner, WorkerId worker_id)
+      : runner_(std::move(runner)), worker_id_(std::move(worker_id)) {}
 
   void operator()(Thunk::Task task) final { runner_(std::move(task)); }
 
+  std::optional<int64_t> current_worker_id() const final {
+    return worker_id_();
+  }
+
  private:
   Runner runner_;
+  WorkerId worker_id_;
 };
 
 template <typename Runner>
 auto MakeTaskRunnerFrom(Runner&& runner) {
-  return TaskRunnerAdaptor<Runner>(std::forward<Runner>(runner));
+  auto no_id = []() { return std::nullopt; };
+  return TaskRunnerAdaptor<Runner, decltype(no_id)>(
+      std::forward<Runner>(runner), no_id);
+}
+
+template <typename Runner, typename WorkerId>
+auto MakeTaskRunnerFrom(Runner&& runner, WorkerId&& worker_id) {
+  return TaskRunnerAdaptor<Runner, WorkerId>(std::forward<Runner>(runner),
+                                             std::forward<WorkerId>(worker_id));
 }
 
 // A test-only thunk for verifying thunk executor implementation:
@@ -113,26 +127,16 @@ class AddI32Thunk final : public Thunk {
 
   tsl::AsyncValueRef<ExecuteEvent> Execute(const ExecuteParams&) final;
 
-  // Pretend that half of the thunks may block, to test that ThunkExecutor
-  // launches such thunks as separate tasks.
-  bool ExecuteMayBlock() const final { return id_ % 2 == 0; }
-
   BufferUses buffer_uses() const final;
   ResourceUses resource_uses() const final;
 
  private:
-  // Use global static counter to generate unique thunk ids.
-  static size_t counter_;
-
-  size_t id_;
   std::vector<BufferAllocation::Slice> srcs_;
   std::vector<BufferAllocation::Slice> dsts_;
   std::vector<std::string>* trace_;
   std::optional<Resource::Kind> shared_resource_;
   bool inject_error_;
 };
-
-size_t AddI32Thunk::counter_ = 0;
 
 std::unique_ptr<Thunk> AddI32Thunk::Create(
     std::string name, std::vector<BufferAllocation::Slice> srcs,
@@ -150,7 +154,6 @@ AddI32Thunk::AddI32Thunk(std::string name,
                          std::optional<Resource::Kind> shared_resource,
                          bool inject_error)
     : Thunk(Kind::kKernel, Info{name}),
-      id_(counter_++),
       srcs_(std::move(srcs)),
       dsts_(std::move(dsts)),
       trace_(trace),
@@ -242,14 +245,10 @@ tsl::AsyncValueRef<Thunk::ExecuteEvent> AddI32Thunk::Execute(
 AddI32Thunk::BufferUses AddI32Thunk::buffer_uses() const {
   BufferUses buffer_uses;
   for (const auto& src : srcs_) {
-    buffer_uses.push_back(BufferUse::Read(
-        src, ShapeUtil::MakeShape(
-                 S32, {src.size() / ShapeUtil::ByteSizeOfPrimitiveType(S32)})));
+    buffer_uses.push_back(BufferUse::Read(src));
   }
   for (const auto& dst : dsts_) {
-    buffer_uses.push_back(BufferUse::Write(
-        dst, ShapeUtil::MakeShape(
-                 S32, {dst.size() / ShapeUtil::ByteSizeOfPrimitiveType(S32)})));
+    buffer_uses.push_back(BufferUse::Write(dst));
   }
   return buffer_uses;
 }
@@ -476,10 +475,13 @@ TEST(ThunkExecutorTest, Execute) {
   auto data = LiteralUtil::CreateFull({20}, int32_t{1});
   BufferAllocations allocations = CreateBufferAllocations(data);
 
-  auto task_runner = MakeTaskRunnerFrom([&](Thunk::Task task) {
-    trace.push_back("<TaskRunner>");
-    task();
-  });
+  auto task_runner = MakeTaskRunnerFrom(
+      [&](Thunk::Task task) {
+        trace.push_back("<TaskRunner>");
+        task();
+      },
+      // Always return current worker id as 0.
+      [] { return 0; });
 
   Thunk::ExecuteParams params = {nullptr, &allocations};
   params.task_runner = &task_runner;
@@ -529,8 +531,6 @@ class NoOpAsyncThunk : public Thunk {
   BufferUses buffer_uses() const override {
     return BufferUses{BufferUse::Write(slice_)};
   }
-
-  bool ExecutesOnExternalThreadPool() const override { return true; }
 
  private:
   static tsl::thread::ThreadPool* ThreadPool() {

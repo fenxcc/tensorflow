@@ -131,15 +131,12 @@ tf_py_strict_test(
     shard_count = 16,
     deps = [
         ":test_base",
-        "//tensorflow/core/protobuf:for_core_protos_py_proto",
         "//tensorflow/python/data/experimental/ops:data_service_ops",
-        "//tensorflow/python/data/experimental/service:server_lib",
         "//tensorflow/python/data/kernel_tests:test_base",
         "//tensorflow/python/data/kernel_tests:tf_record_test_base",
         "//tensorflow/python/data/ops:dataset_ops",
         "//tensorflow/python/data/ops:readers",
         "//tensorflow/python/framework:combinations",
-        "//tensorflow/python/framework:dtypes",
         "//tensorflow/python/framework:errors",
         "//tensorflow/python/ops:math_ops",
         "//tensorflow/python/ops:random_ops",
@@ -163,7 +160,7 @@ tf_py_strict_test(
         "//tensorflow/python/ops:array_ops",
         "//tensorflow/python/platform:client_testlib",
         "@absl_py//absl/testing:parameterized",
-        "@pypi//portpicker",
+        "@pypi_portpicker//:pkg",
     ],
 )
 

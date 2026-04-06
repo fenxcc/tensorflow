@@ -263,9 +263,8 @@ TEST(DispatcherState, RegisterInvalidWorkerInFixedWorkerSet) {
 
   DispatcherState state(config);
   EXPECT_THAT(state.ValidateWorker("localhost:20000"),
-              absl_testing::StatusIs(
-                  error::FAILED_PRECONDITION,
-                  HasSubstr("The worker's address is not configured")));
+              StatusIs(error::FAILED_PRECONDITION,
+                       HasSubstr("The worker's address is not configured")));
 
   // Tests that `RegisterWorker` always returns OK, and ignores errors. This is
   // because the journal records are supposed to be valid. If there is an error,
@@ -273,9 +272,8 @@ TEST(DispatcherState, RegisterInvalidWorkerInFixedWorkerSet) {
   TF_EXPECT_OK(RegisterWorker("localhost:20000", state));
   std::shared_ptr<const Worker> worker;
   EXPECT_THAT(state.WorkerFromAddress("/worker/task/0:20000", worker),
-              absl_testing::StatusIs(
-                  error::NOT_FOUND,
-                  "Worker with address /worker/task/0:20000 not found."));
+              StatusIs(error::NOT_FOUND,
+                       "Worker with address /worker/task/0:20000 not found."));
 }
 
 TEST(DispatcherState, ListWorkers) {

@@ -17,7 +17,6 @@ limitations under the License.
 
 #include <memory>
 
-#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include "absl/strings/string_view.h"
 #include "xla/hlo/ir/hlo_instruction.h"
@@ -93,7 +92,8 @@ ENTRY main {
   config.set_use_spmd_partitioning(true);
   TF_ASSERT_OK_AND_ASSIGN(auto module,
                           ParseAndReturnVerifiedModule(hlo, config));
-  ASSERT_OK(CollectivePipeliningAnalyzer(/*pointer_size=*/4).Run(module.get()));
+  TF_ASSERT_OK(
+      CollectivePipeliningAnalyzer(/*pointer_size=*/4).Run(module.get()));
 
   HloInstruction* ar = hlo_query::FindInstruction(
       module->entry_computation()->root_instruction()->while_body(),
@@ -155,7 +155,8 @@ ENTRY main {
   config.set_num_partitions(8);
   TF_ASSERT_OK_AND_ASSIGN(auto module,
                           ParseAndReturnVerifiedModule(hlo, config));
-  ASSERT_OK(CollectivePipeliningAnalyzer(/*pointer_size=*/4).Run(module.get()));
+  TF_ASSERT_OK(
+      CollectivePipeliningAnalyzer(/*pointer_size=*/4).Run(module.get()));
 
   HloInstruction* ar = hlo_query::FindInstruction(
       module->entry_computation()->root_instruction()->while_body(),
@@ -219,7 +220,8 @@ ENTRY main {
   config.set_num_partitions(8);
   TF_ASSERT_OK_AND_ASSIGN(auto module,
                           ParseAndReturnVerifiedModule(hlo, config));
-  ASSERT_OK(CollectivePipeliningAnalyzer(/*pointer_size=*/4).Run(module.get()));
+  TF_ASSERT_OK(
+      CollectivePipeliningAnalyzer(/*pointer_size=*/4).Run(module.get()));
 
   HloInstruction* ar = hlo_query::FindInstruction(
       module->entry_computation()->root_instruction()->while_body(),
@@ -283,7 +285,8 @@ ENTRY main {
   config.set_num_partitions(8);
   TF_ASSERT_OK_AND_ASSIGN(auto module,
                           ParseAndReturnVerifiedModule(hlo, config));
-  ASSERT_OK(CollectivePipeliningAnalyzer(/*pointer_size=*/4).Run(module.get()));
+  TF_ASSERT_OK(
+      CollectivePipeliningAnalyzer(/*pointer_size=*/4).Run(module.get()));
 
   HloInstruction* ar = hlo_query::FindInstruction(
       module->entry_computation()->root_instruction()->while_body(),
@@ -346,7 +349,8 @@ ENTRY main {
   config.set_num_partitions(8);
   TF_ASSERT_OK_AND_ASSIGN(auto module,
                           ParseAndReturnVerifiedModule(hlo, config));
-  ASSERT_OK(CollectivePipeliningAnalyzer(/*pointer_size=*/4).Run(module.get()));
+  TF_ASSERT_OK(
+      CollectivePipeliningAnalyzer(/*pointer_size=*/4).Run(module.get()));
 
   HloInstruction* rs = hlo_query::FindInstruction(
       module->entry_computation()->root_instruction()->while_body(),
@@ -411,7 +415,8 @@ ENTRY main {
   config.set_num_partitions(8);
   TF_ASSERT_OK_AND_ASSIGN(auto module,
                           ParseAndReturnVerifiedModule(hlo, config));
-  ASSERT_OK(CollectivePipeliningAnalyzer(/*pointer_size=*/4).Run(module.get()));
+  TF_ASSERT_OK(
+      CollectivePipeliningAnalyzer(/*pointer_size=*/4).Run(module.get()));
 
   HloInstruction* rs = hlo_query::FindInstruction(
       module->entry_computation()->root_instruction()->while_body(),
@@ -476,7 +481,8 @@ ENTRY main {
   config.set_num_partitions(8);
   TF_ASSERT_OK_AND_ASSIGN(auto module,
                           ParseAndReturnVerifiedModule(hlo, config));
-  ASSERT_OK(CollectivePipeliningAnalyzer(/*pointer_size=*/4).Run(module.get()));
+  TF_ASSERT_OK(
+      CollectivePipeliningAnalyzer(/*pointer_size=*/4).Run(module.get()));
 
   HloInstruction* rs = hlo_query::FindInstruction(
       module->entry_computation()->root_instruction()->while_body(),
@@ -535,7 +541,8 @@ ENTRY main {
   config.set_num_partitions(8);
   TF_ASSERT_OK_AND_ASSIGN(auto module,
                           ParseAndReturnVerifiedModule(hlo, config));
-  ASSERT_OK(CollectivePipeliningAnalyzer(/*pointer_size=*/4).Run(module.get()));
+  TF_ASSERT_OK(
+      CollectivePipeliningAnalyzer(/*pointer_size=*/4).Run(module.get()));
 
   HloInstruction* ag = hlo_query::FindInstruction(
       module->entry_computation()->root_instruction()->while_body(),
@@ -597,7 +604,8 @@ ENTRY main {
   config.set_num_partitions(8);
   TF_ASSERT_OK_AND_ASSIGN(auto module,
                           ParseAndReturnVerifiedModule(hlo, config));
-  ASSERT_OK(CollectivePipeliningAnalyzer(/*pointer_size=*/4).Run(module.get()));
+  TF_ASSERT_OK(
+      CollectivePipeliningAnalyzer(/*pointer_size=*/4).Run(module.get()));
 
   HloInstruction* ag = hlo_query::FindInstruction(
       module->entry_computation()->root_instruction()->while_body(),
@@ -658,7 +666,8 @@ ENTRY main {
   config.set_num_partitions(8);
   TF_ASSERT_OK_AND_ASSIGN(auto module,
                           ParseAndReturnVerifiedModule(hlo, config));
-  ASSERT_OK(CollectivePipeliningAnalyzer(/*pointer_size=*/4).Run(module.get()));
+  TF_ASSERT_OK(
+      CollectivePipeliningAnalyzer(/*pointer_size=*/4).Run(module.get()));
 
   HloInstruction* ag = hlo_query::FindInstruction(
       module->entry_computation()->root_instruction()->while_body(),

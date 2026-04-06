@@ -294,33 +294,10 @@ config_setting(
 )
 
 config_setting(
-    name = "linux_x86_64_with_onednn_async",
-    constraint_values =
-        [
-            "@platforms//cpu:x86_64",
-            "@platforms//os:linux",
-        ],
-    define_values = {
-        "build_with_onednn_async": "true",
-    },
-    visibility = ["//visibility:public"],
-)
-
-config_setting(
     name = "linux_ppc64le",
     constraint_values =
         [
             "@platforms//cpu:ppc",
-            "@platforms//os:linux",
-        ],
-    visibility = ["//visibility:public"],
-)
-
-config_setting(
-    name = "linux_riscv64",
-    constraint_values =
-        [
-            "@platforms//cpu:riscv64",
             "@platforms//os:linux",
         ],
     visibility = ["//visibility:public"],
@@ -387,15 +364,6 @@ selects.config_setting_group(
     name = "ppc64le_or_cross",
     match_any = [
         ":linux_ppc64le",
-        ":with_cross_compiler_support",
-    ],
-    visibility = ["//visibility:public"],
-)
-
-selects.config_setting_group(
-    name = "riscv64_or_cross",
-    match_any = [
-        ":linux_riscv64",
         ":with_cross_compiler_support",
     ],
     visibility = ["//visibility:public"],
@@ -472,7 +440,6 @@ selects.config_setting_group(
         ":linux_aarch64",
         ":linux_armhf",
         ":linux_ppc64le",
-        ":linux_riscv64",
         ":linux_s390x",
         ":linux_x86_64",
     ],
@@ -596,7 +563,6 @@ bzl_library(
         "@local_config_rocm//rocm:build_defs_bzl",
         "@local_config_tensorrt//:build_defs_bzl",
         "@local_xla//third_party/py/rules_pywrap:pywrap_bzl",
-        "@rules_cc//cc/common",
     ],
 )
 

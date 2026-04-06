@@ -234,7 +234,7 @@ TEST(FirstComeFirstServedTaskRunnerTest, Cancel) {
   for (int i = 0; i < range; ++i) {
     GetElementResult result;
     EXPECT_THAT(runner.GetNext(GetElementRequest(), result),
-                absl_testing::StatusIs(error::CANCELLED));
+                testing::StatusIs(error::CANCELLED));
   }
 }
 
@@ -278,14 +278,14 @@ TEST(FirstComeFirstServedTaskRunnerTest, GetNextAndCancel) {
   int64_t i;
   for (i = 0; i < range / 2; ++i) {
     EXPECT_THAT(GetNextFromTaskRunner<int64_t>(runner, GetElementRequest()),
-                absl_testing::IsOkAndHolds(i));
+                IsOkAndHolds(i));
   }
   runner.Cancel();
 
   for (; i < range; ++i) {
     GetElementResult result;
     EXPECT_THAT(runner.GetNext(GetElementRequest(), result),
-                absl_testing::StatusIs(error::CANCELLED));
+                testing::StatusIs(error::CANCELLED));
   }
 }
 
@@ -297,13 +297,13 @@ TEST(FirstComeFirstServedTaskRunnerTest, Error) {
               errors::InvalidArgument("Invalid argument"),
               tstring("Second element"), errors::Aborted("Aborted")}));
   EXPECT_THAT(GetNextFromTaskRunner<tstring>(runner, GetElementRequest()),
-              absl_testing::IsOkAndHolds("First element"));
+              IsOkAndHolds("First element"));
   EXPECT_THAT(GetNextFromTaskRunner<tstring>(runner, GetElementRequest()),
-              absl_testing::StatusIs(error::INVALID_ARGUMENT));
+              testing::StatusIs(error::INVALID_ARGUMENT));
   EXPECT_THAT(GetNextFromTaskRunner<tstring>(runner, GetElementRequest()),
-              absl_testing::IsOkAndHolds("Second element"));
+              IsOkAndHolds("Second element"));
   EXPECT_THAT(GetNextFromTaskRunner<tstring>(runner, GetElementRequest()),
-              absl_testing::StatusIs(error::ABORTED));
+              testing::StatusIs(error::ABORTED));
 }
 
 TEST(CachingTaskRunnerTest, GetNext) {
@@ -335,10 +335,9 @@ TEST(CachingTaskRunnerTest, EmptyDataset) {
 
   GetElementResult result;
   EXPECT_THAT(runner.GetNext(request, result),
-              absl_testing::StatusIs(
-                  error::INVALID_ARGUMENT,
-                  HasSubstr("Cross-trainer caching requires the input "
-                            "dataset to be infinite.")));
+              StatusIs(error::INVALID_ARGUMENT,
+                       HasSubstr("Cross-trainer caching requires the input "
+                                 "dataset to be infinite.")));
 }
 
 TEST(CachingTaskRunnerTest, SlowClientSkipsData) {
@@ -396,14 +395,14 @@ TEST(CachingTaskRunnerTest, Cancel) {
   int i;
   for (i = 0; i < 10; ++i) {
     EXPECT_THAT(GetNextFromTaskRunner<int64_t>(runner, request),
-                absl_testing::IsOkAndHolds(i));
+                IsOkAndHolds(i));
   }
   runner.Cancel();
 
   for (; i < 10; ++i) {
     GetElementResult result;
     EXPECT_THAT(runner.GetNext(request, result),
-                absl_testing::StatusIs(error::CANCELLED));
+                testing::StatusIs(error::CANCELLED));
   }
 }
 
@@ -442,7 +441,7 @@ TEST(CachingTaskRunnerTest, CancelConcurrentReaders) {
   GetElementResult result;
   request.set_trainer_id(absl::StrCat("Trainer_", 0));
   EXPECT_THAT(runner.GetNext(request, result),
-              absl_testing::StatusIs(error::CANCELLED));
+              testing::StatusIs(error::CANCELLED));
 }
 
 TEST(CachingTaskRunnerTest, Errors) {
@@ -479,10 +478,9 @@ TEST(CachingTaskRunnerTest, Errors) {
             if (absl::IsInvalidArgument(element.status())) {
               EXPECT_THAT(
                   element.status(),
-                  absl_testing::StatusIs(
-                      error::INVALID_ARGUMENT,
-                      HasSubstr("Cross-trainer caching requires the input "
-                                "dataset to be infinite.")));
+                  StatusIs(error::INVALID_ARGUMENT,
+                           HasSubstr("Cross-trainer caching requires the input "
+                                     "dataset to be infinite.")));
               return;
             }
           }

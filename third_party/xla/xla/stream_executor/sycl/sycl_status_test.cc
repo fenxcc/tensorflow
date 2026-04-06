@@ -18,29 +18,30 @@ limitations under the License.
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include "absl/status/status.h"
-#include "absl/status/status_matchers.h"
 #include "absl/strings/string_view.h"
+#include "xla/tsl/platform/status_matchers.h"
 #include "xla/tsl/platform/test.h"
 
-namespace stream_executor::sycl {
+namespace stream_executor::gpu {
 namespace {
 
 using ::testing::HasSubstr;
+using ::tsl::testing::IsOk;
+using ::tsl::testing::StatusIs;
 
 TEST(SyclStatusTest, ToStatusReturnsExpectedStatusCodes) {
   // We only promise SyclError::kSyclSuccess to map to Ok, everything
   // else to Internal.
-  EXPECT_THAT(ToStatus(SyclError::kSyclSuccess), absl_testing::IsOk());
+  EXPECT_THAT(ToStatus(SyclError::kSyclSuccess), IsOk());
   EXPECT_THAT(ToStatus(SyclError::kSyclErrorInvalidDevice),
-              absl_testing::StatusIs(absl::StatusCode::kInternal));
+              StatusIs(absl::StatusCode::kInternal));
 }
 
 TEST(SyclStatusTest, ToStatusIncludesDetailMessage) {
   constexpr absl::string_view kMyMessage = "Some arbitrary message";
   EXPECT_THAT(ToStatus(SyclError::kSyclErrorInvalidDevice, kMyMessage),
-              absl_testing::StatusIs(absl::StatusCode::kInternal,
-                                     HasSubstr(kMyMessage)));
+              StatusIs(absl::StatusCode::kInternal, HasSubstr(kMyMessage)));
 }
 
 }  // namespace
-}  // namespace stream_executor::sycl
+}  // namespace stream_executor::gpu

@@ -70,9 +70,9 @@ class TakeWhileDatasetOp : public UnaryDatasetOpKernel {
     ~Dataset() override { input_->Unref(); }
 
     std::unique_ptr<IteratorBase> MakeIteratorInternal(
-        const std::string& prefix) const override {
+        const string& prefix) const override {
       return std::make_unique<Iterator>(
-          Iterator::Params{this, absl::StrCat(prefix, "::TakeWhile")});
+          Iterator::Params{this, strings::StrCat(prefix, "::TakeWhile")});
     }
 
     const DataTypeVector& output_dtypes() const override {
@@ -83,7 +83,7 @@ class TakeWhileDatasetOp : public UnaryDatasetOpKernel {
       return input_->output_shapes();
     }
 
-    std::string DebugString() const override {
+    string DebugString() const override {
       return "TakeWhileDatasetOp::Dataset";
     }
 

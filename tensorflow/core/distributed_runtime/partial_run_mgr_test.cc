@@ -15,7 +15,6 @@ limitations under the License.
 
 #include "tensorflow/core/distributed_runtime/partial_run_mgr.h"
 
-#include "absl/synchronization/notification.h"
 #include "tensorflow/core/lib/core/notification.h"
 #include "tensorflow/core/platform/test.h"
 
@@ -89,7 +88,7 @@ class StatusPropagationTest : public ::testing::TestWithParam<StatusTestParam> {
   PartialRunMgr partial_run_mgr_;
 
   // State to help keep track of when the callback is called.
-  absl::Notification invoked_;
+  Notification invoked_;
   absl::Status status_;
 
   void set_status(const absl::Status& status) {

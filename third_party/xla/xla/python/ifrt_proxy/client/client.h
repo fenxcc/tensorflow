@@ -28,6 +28,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 #include "absl/types/span.h"
@@ -41,6 +42,7 @@
 #include "xla/python/ifrt/device.h"
 #include "xla/python/ifrt/device_list.h"
 #include "xla/python/ifrt/dtype.h"
+#include "xla/python/ifrt/future.h"
 #include "xla/python/ifrt/memory.h"
 #include "xla/python/ifrt/remap_plan.h"
 #include "xla/python/ifrt/shape.h"
@@ -54,7 +56,6 @@
 #include "xla/python/ifrt_proxy/client/memory.h"
 #include "xla/python/ifrt_proxy/client/rpc_helper.h"
 #include "xla/python/ifrt_proxy/common/ifrt_service.pb.h"
-#include "xla/tsl/concurrency/future.h"
 #include "xla/tsl/concurrency/ref_count.h"
 
 namespace xla {
@@ -73,14 +74,16 @@ class Client final : public llvm::RTTIExtends<Client, xla::ifrt::Client> {
       const void* data, xla::ifrt::DType dtype, xla::ifrt::Shape shape,
       std::optional<absl::Span<const int64_t>> byte_strides,
       xla::ifrt::ShardingRef sharding, HostBufferSemantics semantics,
-      std::function<void()> on_done_with_host_buffer) override;
+      std::function<void()> on_done_with_host_buffer,
+      tsl::RCReference<xla::ifrt::UserContext> user_context) override;
   absl::StatusOr<std::vector<xla::ifrt::ArrayRef>>
   MakeArraysFromHostBufferShards(
       absl::Span<MakeArraysFromHostBufferShardsSpec> specs,
-      HostBufferSemantics semantics) override;
+      HostBufferSemantics semantics,
+      tsl::RCReference<xla::ifrt::UserContext> user_context) override;
   absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> MakeErrorArrays(
-      const absl::Status& error,
-      absl::Span<const ArraySpec> array_specs) override;
+      const absl::Status& error, absl::Span<const ArraySpec> array_specs,
+      tsl::RCReference<UserContext> user_context) override;
   absl::StatusOr<xla::ifrt::ArrayRef> AssembleArrayFromSingleDeviceArrays(
       DType dtype, Shape shape, ShardingRef sharding,
       absl::Span<xla::ifrt::ArrayRef> arrays,
@@ -96,14 +99,8 @@ class Client final : public llvm::RTTIExtends<Client, xla::ifrt::Client> {
       const RemapPlan& plan, absl::Span<xla::ifrt::ArrayRef> arrays,
       ArrayCopySemantics semantics) override;
 
-  absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> ReshardArrays(
-      absl::Span<ArrayRef> arrays, absl::Span<const ArraySpec> specs,
-      ArrayCopySemantics semantics) override {
-    return absl::UnimplementedError(
-        "ReshardArrays is not supported for the IFRT proxy client.");
-  }
-
-  tsl::Future<> GetReadyFuture(absl::Span<const ValueRef> values) override;
+  xla::ifrt::Future<> GetReadyFuture(
+      absl::Span<const ValueRef> values) override;
 
   absl::StatusOr<tsl::RCReference<Tuple>> MakeTuple(
       absl::Span<ValueRef> values) override {
@@ -139,7 +136,7 @@ class Client final : public llvm::RTTIExtends<Client, xla::ifrt::Client> {
     return absl::UnimplementedError(
         "LookupAddressableDevice is not supported for the IFRT proxy client.");
   }
-  absl::StatusOr<xla::ifrt::DeviceListRef> MakeDeviceList(
+  xla::ifrt::DeviceListRef MakeDeviceList(
       absl::Span<xla::ifrt::Device* const> devices) const override;
   xla::ifrt::Compiler* GetDefaultCompiler() override {
     return &default_compiler_;

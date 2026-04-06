@@ -46,7 +46,7 @@ class InitTextFileToImportTestPass
     : public impl::InitTextFileToImportTestPassBase<
           InitTextFileToImportTestPass> {
  public:
-  explicit InitTextFileToImportTestPass() = default;
+  explicit InitTextFileToImportTestPass() {}
 
   StringRef getArgument() const final {
     return "tf-init-text-file-to-import-test";
@@ -115,7 +115,7 @@ class InitTextFileToImportSavedModelTestPass
     : public impl::InitTextFileToImportSavedModelTestPassBase<
           InitTextFileToImportSavedModelTestPass> {
  public:
-  explicit InitTextFileToImportSavedModelTestPass() = default;
+  explicit InitTextFileToImportSavedModelTestPass() {}
 
  private:
   void runOnOperation() override;

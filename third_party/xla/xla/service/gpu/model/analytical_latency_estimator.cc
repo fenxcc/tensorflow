@@ -18,10 +18,8 @@ limitations under the License.
 #include <memory>
 #include <utility>
 
-#include "absl/log/check.h"
 #include "absl/log/log.h"
 #include "absl/time/time.h"
-#include "xla/hlo/analysis/symbolic_expr.h"
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/ir/hlo_opcode.h"
 #include "xla/hlo/utils/hlo_query.h"
@@ -63,7 +61,7 @@ LatencyEstimator::TimeCost AnalyticalLatencyEstimator::NodeCost(
   }
 
   absl::Duration total_estimated_time =
-      gpu_performance_model_.Get()
+      gpu_performance_model_
           .EstimateRunTimeForInstruction(instr, &*cost_analysis_)
           .exec_time;
   LatencyEstimator::TimeCost cost_in_us =
@@ -78,10 +76,10 @@ AnalyticalLatencyEstimator::AnalyticalLatencyEstimator(
     std::unique_ptr<LatencyEstimator> latency_estimator,
     const se::DeviceDescription& gpu_info,
     HloCostAnalysis::ShapeSizeFunction shape_size_function,
-    HloComputation* computation, mlir::MLIRContext* mlir_context)
+    HloComputation* computation)
     : config_(config),
       gpu_info_(gpu_info),
-      gpu_performance_model_(gpu_info, mlir_context),
+      gpu_performance_model_(gpu_info),
       latency_estimator_(std::move(latency_estimator)),
       shape_size_function_(shape_size_function) {
   cost_analysis_.emplace(
@@ -90,7 +88,7 @@ AnalyticalLatencyEstimator::AnalyticalLatencyEstimator(
                                   /*min_latencies_seconds=*/{},
                                   /*count_multiple_input_accesses=*/true},
       gpu_info_);
-  CHECK_OK(computation->Accept(&cost_analysis_.value()));
+  TF_CHECK_OK(computation->Accept(&cost_analysis_.value()));
 }
 
 }  // namespace gpu

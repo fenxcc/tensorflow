@@ -95,7 +95,7 @@ absl::Status ReplaceUnknownShapeDim(const ItemConfig& cfg,
                                     const TensorShapeProto& shape_pb_in,
                                     TensorShapeProto* shape_pb_out,
                                     TensorShape* shape_out) {
-  std::vector<int32_t> dims;
+  std::vector<int32> dims;
   for (const auto& dim_proto : shape_pb_in.dim()) {
     if (cfg.placeholder_unknown_output_shape_dim >= 0 &&
         dim_proto.size() == -1) {
@@ -103,7 +103,7 @@ absl::Status ReplaceUnknownShapeDim(const ItemConfig& cfg,
       shape_pb_out->add_dim()->set_size(
           cfg.placeholder_unknown_output_shape_dim);
     } else {
-      dims.push_back(std::max<int32_t>(1, dim_proto.size()));
+      dims.push_back(std::max<int32>(1, dim_proto.size()));
       shape_pb_out->add_dim()->set_size(dim_proto.size());
     }
   }
@@ -117,7 +117,7 @@ absl::Status ReplaceUnknownShapeDim(const ItemConfig& cfg,
 // (b/134092018).
 absl::Status UpdatePlaceholderShape(
     const ItemConfig& cfg,
-    const std::unordered_set<std::string>& signature_feed_nodes,
+    const std::unordered_set<string>& signature_feed_nodes,
     GrapplerItem* new_item, NodeDef* node) {
   if (node->attr().count("dtype") == 0) {
     return absl::InternalError(absl::StrCat("Unknown type for placeholder ",
@@ -188,7 +188,7 @@ absl::Status UpdatePlaceholderShape(
   } else if (cfg.feed_nodes.count(node->name()) > 0) {
     // If specific feed nodes were given, only update their tensors.
     auto it = find_if(new_item->feed.begin(), new_item->feed.end(),
-                      [&node](std::pair<std::string, Tensor>& f) {
+                      [&node](std::pair<string, Tensor>& f) {
                         return f.first == node->name();
                       });
     DCHECK(it != new_item->feed.end());
@@ -294,8 +294,7 @@ absl::Status RuntimeGraphOptimizer(const GraphDef& graph_def_arg,
 }
 
 std::unique_ptr<GrapplerItem> GrapplerItemFromMetaGraphDef(
-    const std::string& id, const MetaGraphDef& meta_graph,
-    const ItemConfig& cfg) {
+    const string& id, const MetaGraphDef& meta_graph, const ItemConfig& cfg) {
   if (id.empty()) {
     LOG(ERROR) << "id must be non-empty.";
     return nullptr;
@@ -306,7 +305,7 @@ std::unique_ptr<GrapplerItem> GrapplerItemFromMetaGraphDef(
 
   // Fill in feed nodes from config, if any provided.
   for (const auto& feed_node : cfg.feed_nodes) {
-    const std::string feed_name = NodeName(feed_node);
+    const string feed_name = NodeName(feed_node);
     new_item->feed.emplace_back(feed_name, Tensor());
   }
   for (const auto& fetch_node : cfg.fetch_nodes) {
@@ -326,8 +325,8 @@ std::unique_ptr<GrapplerItem> GrapplerItemFromMetaGraphDef(
 
   // Detect feed and fetch nodes from signature defs. Signatures may share same
   // inputs or outputs.
-  std::unordered_set<std::string> signature_feed_nodes;
-  std::unordered_set<std::string> signature_fetch_nodes;
+  std::unordered_set<string> signature_feed_nodes;
+  std::unordered_set<string> signature_fetch_nodes;
   for (const auto& name_and_signature : meta_graph.signature_def()) {
     for (const auto& name_and_input : name_and_signature.second.inputs()) {
       const TensorInfo& input = name_and_input.second;
@@ -443,7 +442,7 @@ std::unique_ptr<GrapplerItem> GrapplerItemFromMetaGraphDef(
   // have to run restore op first.
 
   // Try to find initializers from variables and tables as init ops.
-  for (const std::string& var_collection :
+  for (const string& var_collection :
        {"variables", "local_variables", "model_variables",
         "trainable_variables"}) {
     if (meta_graph.collection_def().count(var_collection) == 0) {
@@ -477,7 +476,7 @@ std::unique_ptr<GrapplerItem> GrapplerItemFromMetaGraphDef(
   // We keep the mapping from asset node to asset files. This should have been
   // used as feed but since asset node is usually a constant node, we will fill
   // the values of these constant nodes with their actual asset file paths.
-  std::unordered_map<std::string, std::string> asset_node_to_value;
+  std::unordered_map<string, string> asset_node_to_value;
 
   // Assets file may have changed their directory, we assemble their new paths
   // if assets_directory_override is set. We also make sure we still can
@@ -496,8 +495,8 @@ std::unique_ptr<GrapplerItem> GrapplerItemFromMetaGraphDef(
               LOG(ERROR) << "Failed to parse AssetFile.";
               continue;
             }
-            std::string asset_filepath = io::JoinPath(
-                cfg.assets_directory_override, asset_file_def.filename());
+            string asset_filepath = io::JoinPath(cfg.assets_directory_override,
+                                                 asset_file_def.filename());
             if (!FilesExist({asset_filepath}, nullptr)) {
               LOG(ERROR) << "Can't access one or more of the asset files "
                          << asset_filepath << ", skipping this input";
@@ -515,7 +514,7 @@ std::unique_ptr<GrapplerItem> GrapplerItemFromMetaGraphDef(
   } else if (meta_graph.collection_def().count("asset_filepaths") > 0) {
     const CollectionDef& file_paths =
         meta_graph.collection_def().at("asset_filepaths");
-    std::vector<std::string> paths;
+    std::vector<string> paths;
     for (const auto& raw_path : file_paths.bytes_list().value()) {
       paths.push_back(raw_path);
     }
@@ -545,7 +544,7 @@ std::unique_ptr<GrapplerItem> GrapplerItemFromMetaGraphDef(
   // Add each node referenced in a collection to the list of nodes to keep.
   for (const auto& col : meta_graph.collection_def()) {
     const CollectionDef& collection = col.second;
-    for (const std::string& node : collection.node_list().value()) {
+    for (const string& node : collection.node_list().value()) {
       new_item->keep_ops.push_back(NodeName(node));
     }
   }
@@ -655,7 +654,7 @@ std::unique_ptr<GrapplerItem> GrapplerItemFromMetaGraphDef(
   }
 
   // Validate feed, fetch and init nodes
-  std::unordered_set<std::string> nodes;
+  std::unordered_set<string> nodes;
   for (const auto& node : new_item->graph.node()) {
     nodes.insert(node.name());
   }
@@ -681,8 +680,7 @@ std::unique_ptr<GrapplerItem> GrapplerItemFromMetaGraphDef(
 }
 
 std::unique_ptr<GrapplerItem> GrapplerItemFromMetaGraphDefFile(
-    const std::string& id, const std::string& meta_graph_file,
-    const ItemConfig& cfg) {
+    const string& id, const string& meta_graph_file, const ItemConfig& cfg) {
   MetaGraphDef meta_graph;
   if (!ReadMetaGraphDefFromFile(meta_graph_file, &meta_graph).ok()) {
     LOG(ERROR) << "Failed to read " << meta_graph_file;

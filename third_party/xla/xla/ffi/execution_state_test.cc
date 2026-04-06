@@ -20,10 +20,9 @@ limitations under the License.
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include "xla/ffi/type_registry.h"
 #include "xla/tsl/lib/core/status_test_util.h"
-#include "xla/tsl/platform/statusor.h"
-#include "xla/tsl/platform/test.h"
+#include "tsl/platform/statusor.h"
+#include "tsl/platform/test.h"
 
 namespace xla::ffi {
 
@@ -31,7 +30,7 @@ using TypeId = ExecutionState::TypeId;
 
 using ::testing::HasSubstr;
 
-TEST(ExecutionStateTest, SetAndGetForInternalType) {
+TEST(ExecutionStateTest, SetAndGet) {
   ExecutionState state;
   EXPECT_FALSE(state.IsSet());
 
@@ -51,36 +50,6 @@ TEST(ExecutionStateTest, SetAndGetForInternalType) {
 
   TF_ASSERT_OK_AND_ASSIGN(int32_t* data, state.Get<int32_t>());
   EXPECT_EQ(*data, 42);
-}
-
-TEST(ExecutionStateTest, SetAndGetForExternalType) {
-  ExecutionState state;
-  EXPECT_FALSE(state.IsSet());
-
-  {  // Empty state returns an error from Get().
-    auto data = state.Get(TypeId(1));
-    EXPECT_THAT(data.status().message(), HasSubstr("State is not set"));
-  }
-
-  {  // Empty state returns an error from Get().
-    auto data = state.Get<int32_t>();
-    EXPECT_THAT(data.status().message(), HasSubstr("State is not set"));
-  }
-
-  TypeRegistry::TypeInfo type_info = {
-      [](void* ptr) { delete static_cast<int32_t*>(ptr); }};
-  TF_ASSERT_OK_AND_ASSIGN(
-      TypeRegistry::TypeId type_id,
-      TypeRegistry::AssignExternalTypeId("int32_t", type_info));
-
-  int32_t* value = new int32_t(42);
-
-  // Once set, state can be retrieved.
-  TF_ASSERT_OK(state.Set(type_id, value));
-  EXPECT_TRUE(state.IsSet());
-
-  TF_ASSERT_OK_AND_ASSIGN(void* data, state.Get(type_id));
-  EXPECT_EQ(data, value);
 }
 
 }  // namespace xla::ffi

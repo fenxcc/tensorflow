@@ -26,9 +26,7 @@ limitations under the License.
 #include <gtest/gtest.h>
 #include "absl/algorithm/container.h"
 #include "absl/status/status.h"
-#include "absl/status/status_matchers.h"
 #include "absl/strings/string_view.h"
-#include "absl/types/span.h"
 #include "xla/hlo/analysis/alias_info.h"
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/ir/hlo_schedule.h"
@@ -43,6 +41,7 @@ namespace xla {
 
 namespace {
 
+using ::tsl::testing::StatusIs;
 
 int GetIndex(absl::Span<HloInstruction* const> instruction_sequence,
              absl::string_view hlo_name) {
@@ -299,7 +298,7 @@ TEST_F(ProfileGuidedLatencyEstimatorTest,
       sched_config, std::make_unique<ApproximateLatencyEstimator>(),
       fdo_profile);
   EXPECT_THAT(latency_estimator->CheckAccuracy(*hlo_module),
-              absl_testing::StatusIs(absl::StatusCode::kFailedPrecondition));
+              StatusIs(absl::StatusCode::kFailedPrecondition));
 }
 
 }  // namespace xla

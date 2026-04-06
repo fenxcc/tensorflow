@@ -40,7 +40,6 @@ limitations under the License.
 #include "xla/array2d.h"
 #include "xla/comparison_util.h"
 #include "xla/hlo/analysis/tuple_points_to_analysis.h"
-#include "xla/hlo/evaluator/hlo_evaluator_interface.h"
 #include "xla/hlo/ir/dfs_hlo_visitor.h"
 #include "xla/hlo/ir/dfs_hlo_visitor_with_default.h"
 #include "xla/hlo/ir/hlo_computation.h"
@@ -59,11 +58,10 @@ limitations under the License.
 
 namespace xla {
 
-// Responsible for evaluating HLO and obtaining the evaluation result.
+// Responsible for evaluating HLO and obtain literal as the evaluation results.
 //
 // This class is not thread-safe.
-class HloEvaluator : public ConstDfsHloVisitorWithDefault,
-                     public HloEvaluatorInterface {
+class HloEvaluator : public ConstDfsHloVisitorWithDefault {
  public:
   // Precomputed analyses that can be passed to Evaluate functions to avoid
   // recomputation during evaluation.
@@ -129,9 +127,8 @@ class HloEvaluator : public ConstDfsHloVisitorWithDefault,
   //
   // (Dummy template arg is to reduce the overloading priority of one overload
   // so that Evaluate(module, {}) resolves unambiguously.)
-  absl::StatusOr<Literal> Evaluate(
-      const HloComputation& computation,
-      absl::Span<const Literal* const> args) override;
+  absl::StatusOr<Literal> Evaluate(const HloComputation& computation,
+                                   absl::Span<const Literal* const> args);
 
   template <typename Dummy = void>
   absl::StatusOr<Literal> Evaluate(const HloComputation& computation,
@@ -166,10 +163,6 @@ class HloEvaluator : public ConstDfsHloVisitorWithDefault,
       const absl::flat_hash_map<const HloInstruction*, const LiteralBase*>&
           substitutions = {});
 
-  void ResetVisitStates() override {
-    ConstDfsHloVisitorWithDefault::ResetVisitStates();
-  }
-
   // Same as Evaluate, except returning false on error and accepts an output
   // pointer.
   bool TryEvaluate(const HloInstruction* instruction, Literal* result,
@@ -193,13 +186,9 @@ class HloEvaluator : public ConstDfsHloVisitorWithDefault,
   absl::StatusOr<Literal> EvaluateDotOp(const DotDimensionNumbers& dim_numbers,
                                         const PrecisionConfig& precision_config,
                                         const Literal& lhs, const Literal& rhs);
-  absl::StatusOr<Literal> EvaluateScaledDotOp(
-      const DotDimensionNumbers& dim_numbers,
-      const PrecisionConfig& precision_config, const Literal& lhs,
-      const Literal& rhs, const Literal& lhs_scale, const Literal& rhs_scale);
 
   void set_dynamic_dimension_inference(
-      DynamicDimensionInference* dynamic_dimension_inference) override {
+      DynamicDimensionInference* dynamic_dimension_inference) {
     dynamic_dimension_inference_ = dynamic_dimension_inference;
   }
 
@@ -208,21 +197,24 @@ class HloEvaluator : public ConstDfsHloVisitorWithDefault,
   }
 
   // Enable the fast path for certain operations like dot or convolution.
-  void set_use_fast_path(bool value) override { use_fast_path_ = value; }
+  void set_use_fast_path(bool value) { use_fast_path_ = value; }
 
   // Use fast path that doesn't use embedded evaluators in reduce.
   void set_reduce_use_fast_path(bool value) { use_fast_path_reduce_ = value; }
+
+  // Handles evaluation of a custom-call op.
+  // Operand literals are provided in |operands| and implementations must
+  // populate |output| before returning.
+  using CustomCallHandler = std::function<absl::StatusOr<Literal>(
+      const HloInstruction* custom_call, absl::Span<const Literal*> operands)>;
 
   // Sets a handler that is called during evaluation for custom-call ops.
   // If no handler is defined the default error behavior will occur. The handler
   // will be provided evaluated literals for all operands and is expected to
   // return an output literal of the appropriate shape.
-  void set_custom_call_handler(CustomCallHandler handler) override {
+  void set_custom_call_handler(CustomCallHandler handler) {
     custom_call_handler_ = std::move(handler);
   }
-
-  // Gets the handler for custom call ops.
-  CustomCallHandler custom_call_handler() { return custom_call_handler_; }
 
   // Callback for each multiply-accumulate in each dot or convolution operation.
   using TraceMACHandler = std::function<void(
@@ -373,8 +365,6 @@ class HloEvaluator : public ConstDfsHloVisitorWithDefault,
   absl::Status HandleReduceWindow(const HloInstruction* hlo) override;
   absl::Status HandleMap(const HloInstruction* map) override;
   absl::Status HandleCustomCall(const HloInstruction* custom_call) override;
-  absl::Status HandleOptimizationBarrier(
-      const HloInstruction* optimization_barrier) override;
 
   // Unsupported HLOs, note some of them (such as BatchNorm*) are typically
   // expanded in a semantic-preserving way into other HLOs by adding expansion
@@ -567,19 +557,10 @@ class HloEvaluator : public ConstDfsHloVisitorWithDefault,
     TF_RET_CHECK(ShapeUtil::SameDimensions(shape, operand->shape()));
 
     Literal result(shape);
-    bool same_layout =
-        LayoutUtil::Equal(operand->shape().layout(), shape.layout());
-    if (same_layout) {
-      TF_RETURN_IF_ERROR(result.PopulateLinearParallel<ReturnT>(
-          [&](int64_t linear_index, int /*thread_id*/) {
-            return unary_op(operand_literal.GetLinear<NativeT>(linear_index));
-          }));
-    } else {
-      TF_RETURN_IF_ERROR(result.PopulateParallel<ReturnT>(
-          [&](absl::Span<const int64_t> multi_index, int /*thread_id*/) {
-            return unary_op(operand_literal.Get<NativeT>(multi_index));
-          }));
-    }
+    TF_RETURN_IF_ERROR(
+        result.PopulateLinearParallel<ReturnT>([&](int64_t linear_index, int) {
+          return unary_op(operand_literal.GetLinear<NativeT>(linear_index));
+        }));
     return result;
   }
 

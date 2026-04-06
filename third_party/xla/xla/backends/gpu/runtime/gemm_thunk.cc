@@ -19,7 +19,6 @@ limitations under the License.
 #include <optional>
 #include <utility>
 
-#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/types/span.h"
@@ -32,7 +31,8 @@ limitations under the License.
 #include "xla/stream_executor/gpu/gpu_blas_lt.h"
 #include "xla/stream_executor/stream.h"
 #include "xla/tsl/platform/statusor.h"
-#include "tsl/profiler/lib/nvtx_utils.h"
+#include "tsl/platform/logging.h"
+#include "tsl/platform/statusor.h"
 
 namespace xla {
 namespace gpu {
@@ -62,15 +62,9 @@ absl::Status GemmThunk::ExecuteOnStream(const ExecuteParams& params) {
       se::Stream * stream,
       GetStreamForExecution(Thunk::execution_stream_id(), params));
 
-  // Sanitizer initcheck may return false positives for TMA (DTCS-1123).
-  auto output = allocs.GetDeviceAddress(output_buffer_);
-  tsl::profiler::MarkMemoryInitialized(
-      output.opaque(), output.size(),
-      static_cast<tsl::profiler::StreamHandle>(
-          stream->platform_specific_handle().stream));
-
   return RunGemm(config_, allocs.GetDeviceAddress(lhs_buffer_),
-                 allocs.GetDeviceAddress(rhs_buffer_), output, workspace,
+                 allocs.GetDeviceAddress(rhs_buffer_),
+                 allocs.GetDeviceAddress(output_buffer_), workspace,
                  deterministic_, stream);
 }
 
@@ -83,7 +77,7 @@ absl::Status GemmThunk::Initialize(const InitializeParams& params) {
 
 absl::StatusOr<ThunkProto> GemmThunk::ToProto() const {
   ThunkProto proto;
-  *proto.mutable_thunk_info() = thunk_info().ToProto();
+  TF_ASSIGN_OR_RETURN(*proto.mutable_thunk_info(), GetThunkInfoProto());
 
   auto* gemm_thunk_proto = proto.mutable_gemm_thunk();
   *gemm_thunk_proto->mutable_gemm_config() = config_.ToProto();

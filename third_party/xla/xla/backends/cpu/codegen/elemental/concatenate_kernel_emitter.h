@@ -16,24 +16,27 @@ limitations under the License.
 #ifndef XLA_BACKENDS_CPU_CODEGEN_ELEMENTAL_CONCATENATE_KERNEL_EMITTER_H_
 #define XLA_BACKENDS_CPU_CODEGEN_ELEMENTAL_CONCATENATE_KERNEL_EMITTER_H_
 
+#include <string>
+
 #include "absl/status/statusor.h"
-#include "absl/strings/string_view.h"
 #include "xla/backends/cpu/codegen/target_machine_features.h"
-#include "xla/codegen/kernel_emitter.h"
-#include "xla/codegen/llvm_kernel_source.h"
+#include "xla/codegen/kernel_definition.h"
+#include "xla/codegen/llvm_kernel_definition.h"
+#include "xla/codegen/llvm_kernel_emitter.h"
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/service/buffer_assignment.h"
 
 namespace xla::cpu {
 
-class ConcatenateKernelEmitter final : public KernelEmitter<LlvmKernelSource> {
+class ConcatenateKernelEmitter final : public LlvmKernelEmitter {
  public:
   ConcatenateKernelEmitter(const HloInstruction* instr,
                            const BufferAssignment* buffer_assignment,
                            const TargetMachineFeatures* target_machine);
 
-  absl::string_view name() const final { return "concatenate_kernel_emitter"; }
-  absl::StatusOr<KernelDefinition> EmitKernelDefinition() override;
+  absl::StatusOr<LlvmKernelDefinition> EmitKernelDefinition() override;
+
+  std::string name() const final { return "concatenate_kernel_emitter"; }
 
  private:
   const HloInstruction* instr_;

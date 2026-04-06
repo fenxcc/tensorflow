@@ -13,13 +13,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include <memory>
 #include <string>
-#include <utility>
 
-#include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include "absl/status/status.h"
 #include "xla/client/client_library.h"
 #include "xla/client/executable_build_options.h"
 #include "xla/client/local_client.h"
@@ -62,20 +58,9 @@ TEST(XlaCompileTest, LoadCpuExecutable) {
 
   // Load from AOT result.
   ExecutableBuildOptions executable_build_options;
-
-  auto local_executable_or_status =
-      client->Load(serialized_aot_result, executable_build_options);
-  if (!local_executable_or_status.ok()) {
-    EXPECT_EQ(local_executable_or_status.status().code(),
-              absl::StatusCode::kInvalidArgument);
-
-    EXPECT_THAT(local_executable_or_status.status().message(),
-                ::testing::HasSubstr("Failed to load XLA:CPU AOT result."));
-    return;
-  }
-
-  std::unique_ptr<LocalExecutable> local_executable =
-      std::move(local_executable_or_status.value());
+  TF_ASSERT_OK_AND_ASSIGN(
+      std::unique_ptr<LocalExecutable> local_executable,
+      client->Load(serialized_aot_result, executable_build_options));
 
   // Run loaded excutable.
   auto alpha_literal = xla::LiteralUtil::CreateR0<float>(3.14f);

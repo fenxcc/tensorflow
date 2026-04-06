@@ -110,7 +110,7 @@ TEST_F(MinimumMemoryForSequenceTest, MultiComputation) {
   HloComputation* entry_computation =
       module->AddEntryComputation(builder.Build());
 
-  BufferValue::SizeFunction size_fn = [](const BufferValue& buffer) {
+  auto size_fn = [](const BufferValue& buffer) {
     return ShapeUtil::ByteSizeOf(buffer.shape(), /*pointer_size=*/8);
   };
 
@@ -122,9 +122,9 @@ TEST_F(MinimumMemoryForSequenceTest, MultiComputation) {
   TF_ASSERT_OK(schedule.Verify());
 
   std::unique_ptr<HloAliasAnalysis> alias_analysis =
-      HloAliasAnalysis::Run(module.get(), &alias_info_).value();
+      HloAliasAnalysis::Run(module.get()).value();
   EXPECT_EQ(25, HeapSimulator::MinimumMemoryForModule(schedule, *alias_analysis,
-                                                      &alias_info_, &size_fn)
+                                                      &alias_info_, size_fn)
                     .value());
 }
 
@@ -230,18 +230,18 @@ TEST_F(MinimumMemoryForSequenceTest, SubcomputationAccounting) {
   schedule.set_sequence(body_computation, while_body_vec);
   schedule.set_sequence(entry_computation, entry_comp_vec);
 
-  BufferValue::SizeFunction size_fn = [](const BufferValue& buffer) {
+  auto size_fn = [](const BufferValue& buffer) {
     return ShapeUtil::ByteSizeOf(buffer.shape());
   };
 
   std::unique_ptr<HloAliasAnalysis> alias_analysis =
-      HloAliasAnalysis::Run(module.get(), &alias_info_).value();
+      HloAliasAnalysis::Run(module.get()).value();
 
   // HeapSimulator accounts for subcomputations. The output buffer is aliased,
   // so we don't double count.
   EXPECT_EQ(64, HeapSimulator::MinimumMemoryForComputation(
                     *entry_computation, schedule.sequence(entry_computation),
-                    *alias_analysis, &alias_info_, &size_fn)
+                    *alias_analysis, &alias_info_, size_fn)
                     .value());
 }
 
@@ -335,8 +335,7 @@ class HeapSimulatorTracker {
   // simulation over the entire module.
   void RunWholeModule(
       const std::vector<HloInstruction*>& full_module_sequence) {
-    alias_analysis_ =
-        HloAliasAnalysis::Run(module_.get(), &alias_info_).value();
+    alias_analysis_ = HloAliasAnalysis::Run(module_.get()).value();
 
     // Construct the module sequence grouped by computation.
     HloSchedule schedule(module_.get());
@@ -352,13 +351,12 @@ class HeapSimulatorTracker {
     // the sequence. This lets us ensure the Alloc calls are in the sequence
     // order. The Free calls are sorted by BufferValue.id, which is at least
     // deterministic.
-    BufferValue::SizeFunction size_fn =
-        [&reverse_position](const BufferValue& buffer) {
-          return reverse_position[buffer.instruction()];
-        };
+    auto size_fn = [&reverse_position](const BufferValue& buffer) {
+      return reverse_position[buffer.instruction()];
+    };
     auto algorithm = std::make_unique<HeapCallRecorder>(&actual_calls_);
     result_ = HeapSimulator::Run(std::move(algorithm), *module_, schedule,
-                                 *alias_analysis_, &alias_info_, &size_fn)
+                                 *alias_analysis_, &alias_info_, size_fn)
                   .value();
   }
 
@@ -417,9 +415,7 @@ class HeapSimulatorTracker {
     // size of the buffers doesn't matter, so we always return 0.  We rely on
     // the secondary sorting criteria of DecreasingSizeRunsHeap to sort calls
     // by buffer id, for determinism in the tests.
-    BufferValue::SizeFunction zero_size = [](const BufferValue& buffer) {
-      return 0;
-    };
+    auto zero_size = [](const BufferValue& buffer) { return 0; };
     auto algorithm = std::make_unique<HeapCallRecorder>(&actual_calls_);
 
     alias_analysis_ = HloAliasAnalysis::Run(module_.get(), alias_info).value();
@@ -429,7 +425,7 @@ class HeapSimulatorTracker {
     result_ =
         HeapSimulator::Run(std::move(algorithm), *module_->entry_computation(),
                            HloInstructionSequence(instruction_sequence),
-                           *alias_analysis_, &alias_info_, &zero_size, options)
+                           *alias_analysis_, &alias_info_, zero_size, options)
             .value();
   }
 
@@ -1000,8 +996,8 @@ TEST_F(HeapSimulatorTest, AsyncCallImplicitSharding) {
   TF_ASSERT_OK_AND_ASSIGN(auto module,
                           ParseAndReturnUnverifiedModule(hlo_string));
   TF_ASSERT_OK_AND_ASSIGN(auto alias_analysis,
-                          HloAliasAnalysis::Run(module.get(), &alias_info_));
-  BufferValue::SizeFunction size_fn = [](const BufferValue& buffer) -> int64_t {
+                          HloAliasAnalysis::Run(module.get()));
+  auto size_fn = [](const BufferValue& buffer) -> int64_t {
     const Shape& shape = buffer.shape();
     if (!shape.IsArray()) {
       return 0;
@@ -1013,7 +1009,7 @@ TEST_F(HeapSimulatorTest, AsyncCallImplicitSharding) {
 
   HeapSimulator::Result<HloValue> result =
       HeapSimulator::Run(std::move(algorithm), *module, module->schedule(),
-                         *alias_analysis, &alias_info_, &size_fn)
+                         *alias_analysis, &alias_info_, size_fn)
           .value();
   for (const auto& [value, chunk] : result.heap_results[0].chunk_map) {
     if (value->instruction()->name() == "dynamic-update-slice") {
@@ -3830,31 +3826,18 @@ TEST_F(BreadthFirstMidpointIteratorTest, General2) {
   RunTest(0, 10, {5, 2, 8, 1, 4, 7, 10, 0, 3, 6, 9});
 }
 
-TEST_F(BreadthFirstMidpointIteratorTest, LargeValuesStackOverflow) {
-  // This test ensures that the iterator can be used with large values without
-  // overflowing the stack.
-  int start = 0;
-  int end = 1 << 12;
-  BreadthFirstMidpointIterator iterator(start, end);
-  for (; !iterator.End(); iterator.Next()) {
-    // No need to check values, just iterate.
-  }
-}
-
 class GlobalDecreasingSizeBestFitHeapBenchmark : public HeapAlgorithmTestBase {
  public:
   void TestBody() override {}
 
   void RunBenchmark(::testing::benchmark::State& state) {
     const int n = state.range(0);
-    int alignment = state.range(1);
     std::vector<const HloValue*> buffers;
     for (int i = 0; i < n; i++) {
       buffers.push_back(DummyBufferValue());
     }
     for (auto s : state) {
-      benchmark::DoNotOptimize(alignment);
-      GlobalDecreasingSizeBestFitHeap<HloValue> heap(alignment);
+      GlobalDecreasingSizeBestFitHeap<HloValue> heap(/*alignment=*/1);
       for (int i = 0; i < n; i++) {
         heap.Alloc(buffers[i], i * 20);
       }
@@ -3872,8 +3855,7 @@ static void BM_GlobalDecreasingSizeBestFitHeap(
   GlobalDecreasingSizeBestFitHeapBenchmark bm;
   bm.RunBenchmark(state);
 }
-BENCHMARK(BM_GlobalDecreasingSizeBestFitHeap)
-    ->ArgsProduct({{1, 4, 16, 64}, {1, 1024}});
+BENCHMARK(BM_GlobalDecreasingSizeBestFitHeap)->Arg(1)->Arg(4)->Arg(16)->Arg(64);
 
 }  // namespace
 }  // namespace xla

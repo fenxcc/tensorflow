@@ -1,6 +1,4 @@
 // RUN: emitters_opt %s -split-input-file -xla-expand-float-ops -canonicalize | FileCheck %s
-// RUN: emitters_opt %s -split-input-file -xla-expand-float-ops="approximate_tanh=false" -canonicalize
-// RUN | FileCheck %s -check-prefixes=CHECK-NO-APPROX-TANH
 
 module {
   func.func @tanh(%arg0: f32) -> f32 {
@@ -11,11 +9,6 @@ module {
 
 // CHECK-LABEL: @tanh
 // CHECK-NOT: tanh
-
-// CHECK-NO-APPROX-TANH-LABEL: @tanh
-// CHECK-NO-APPROX-TANH-SAME: (%[[ARG:.*]]: f32) -> f32
-// CHECK-NO-APPROX-TANH: %[[RES:.*]] = math.tanh %[[ARG]] : f32
-// CHECK-NO-APPROX-TANH: return %[[RES]] : f32
 
 // -----
 

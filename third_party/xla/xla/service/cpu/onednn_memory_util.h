@@ -15,21 +15,18 @@ limitations under the License.
 
 #ifndef XLA_SERVICE_CPU_ONEDNN_MEMORY_UTIL_H_
 #define XLA_SERVICE_CPU_ONEDNN_MEMORY_UTIL_H_
+#if defined(INTEL_MKL)
 
-#include <cstdint>
 #include <memory>
-#include <vector>
 
-#include "absl/log/check.h"
-#include "absl/status/statusor.h"
-#include "oneapi/dnnl/dnnl.hpp"
-#include "oneapi/dnnl/dnnl_common_types.h"
+#include "dnnl.hpp"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Value.h"
 #include "xla/literal.h"
+#include "xla/service/cpu/runtime_lightweight_check.h"
 #include "xla/service/llvm_ir/ir_array.h"
-#include "xla/shape.h"
 #include "xla/xla_data.pb.h"
 
 namespace xla {
@@ -40,7 +37,9 @@ static const int kOneDnnMaxNDims = DNNL_MAX_NDIMS;
 struct StackAlloca {
   llvm::IRBuilderBase* builder;
   llvm::Value* value;
-  void EmitLifetimeEnd() { builder->CreateLifetimeEnd(value); }
+  void EmitLifetimeEnd() {
+    builder->CreateLifetimeEnd(value, builder->getInt64(-1));
+  }
 };
 
 // Declare as opaque to put structure definition together with dependant code.
@@ -49,7 +48,7 @@ using MemrefInfoHandler = std::shared_ptr<MemrefInfoPOD>;
 
 MemrefInfoHandler CreateMemrefInfoFromLiteral(const Literal* literal);
 
-MemrefInfoHandler CreateMemrefFromShape(const Shape& shape, const void* buf);
+MemrefInfoHandler CreateMemrefFromShape(const Shape& shape, void* buf);
 
 StackAlloca GetAllocaAndEmitMemrefInfo(llvm::IRBuilderBase& builder,
                                        const llvm_ir::IrArray& ir_array);
@@ -127,7 +126,7 @@ absl::StatusOr<dnnl::memory::desc> TransposeLastTwoDims(
 #define TRANSPOSE_LAST_TWO_DIMS_IF(pred, mem_desc)        \
   if (pred) {                                             \
     auto trans_mem_desc = TransposeLastTwoDims(mem_desc); \
-    CHECK(trans_mem_desc.ok());                           \
+    XLA_LIGHTWEIGHT_CHECK(trans_mem_desc.ok());           \
     mem_desc = *trans_mem_desc;                           \
   }
 
@@ -135,41 +134,8 @@ dnnl::memory::desc ShapeToMemDesc(const Shape& shape);
 
 Shape MemDescToXlaShapeFlattened(const dnnl::memory::desc& md);
 
-// Define a struct to encapsulate oneDNN memory and primitive objects.
-struct OneDnnResources {
-  // Primitive object
-  dnnl::primitive primitive;
-
-  // Memory objects
-  dnnl::memory src_mem;
-  dnnl::memory wei_mem;
-  dnnl::memory dst_mem;
-  dnnl::memory scratch_mem;
-  dnnl::memory scale_mem;
-  dnnl::memory shift_mem;
-
-  // Post-operation arguments
-  std::vector<std::pair<int, dnnl::memory>> postop_args;
-
-  // Memory reference handlers for arguments and results.
-  std::vector<MemrefInfoHandler> arg_memrefs;
-  std::vector<MemrefInfoHandler> result_memrefs;
-
-  // Constructor to initialize all members to default values.
-  OneDnnResources()
-      : primitive(dnnl::primitive()),
-        src_mem(dnnl::memory()),
-        wei_mem(dnnl::memory()),
-        dst_mem(dnnl::memory()),
-        scratch_mem(dnnl::memory()),
-        scale_mem(dnnl::memory()),
-        shift_mem(dnnl::memory()),
-        postop_args(),
-        arg_memrefs(),
-        result_memrefs() {}
-};
-
 }  // namespace cpu
 }  // namespace xla
 
+#endif  // INTEL_MKL
 #endif  // XLA_SERVICE_CPU_ONEDNN_MEMORY_UTIL_H_

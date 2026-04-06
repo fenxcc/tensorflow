@@ -24,13 +24,14 @@ limitations under the License.
 #include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
-#include "rocm/include/hip/driver_types.h"
 #include "rocm/include/hip/hip_runtime_api.h"
+#include "xla/stream_executor/device_description.h"
 #include "xla/stream_executor/gpu/context_map.h"
 #include "xla/stream_executor/gpu/scoped_activate_context.h"
 #include "xla/stream_executor/rocm/rocm_driver_wrapper.h"
 #include "xla/stream_executor/rocm/rocm_status.h"
 #include "xla/tsl/platform/errors.h"
+#include "xla/tsl/platform/status.h"
 
 namespace stream_executor::gpu {
 
@@ -39,7 +40,7 @@ namespace {
 // Returns the current context or dies if it fails.
 hipCtx_t CurrentContextOrDie() {
   hipCtx_t current = nullptr;
-  CHECK_OK(
+  TF_CHECK_OK(
       ToStatus(hipCtxGetCurrent(&current), "Failed to query current context"));
   return current;
 }
@@ -57,6 +58,45 @@ hipCtx_t CurrentContext() {
                   "was likely performed without using a StreamExecutor context";
   }
   return current;
+}
+
+// Returns the amount of memory reserved by ROCm libraries.
+bool GetReservedMemory(uint64_t* reserve) {
+  hipDeviceProp_t props;
+  hipDevice_t dev;
+  hipError_t res = wrap::hipGetDevice(&dev);
+
+  if (res != hipSuccess) {
+    LOG(FATAL) << "failed to query current device: " << ToString(res);
+    return false;
+  }
+  res = wrap::hipGetDeviceProperties(&props, dev);
+  if (res != hipSuccess) {
+    LOG(ERROR) << "failed to query device properties: " << ToString(res);
+    return false;
+  }
+
+  std::string gcnArchName = props.gcnArchName;
+  auto compute_capability = RocmComputeCapability(gcnArchName);
+  // On gfx90a, we hide 1 GB of GPU memory (512MB for gfx908) from TF,
+  // to allow for late allocations by internal ROCm libraries
+  // (e.g. rocBLAS alone needs~200 MB to put its kernels as of ROCm 4.1)
+  const uint64_t RESERVED_GFX908 = 1048576 * 512;
+  const uint64_t RESERVED_GFX9_X = 1048576 * 1024;
+  const uint64_t RESERVED_GFX10_X = 1048576 * 512;
+  const uint64_t RESERVED_GFX11_X = 1048576 * 512;
+  if (compute_capability.gfx9_mi100()) {
+    *reserve = RESERVED_GFX908;
+  } else if (compute_capability.gfx9_mi200_or_later()) {
+    *reserve = RESERVED_GFX9_X;
+  } else if (compute_capability.gfx10_rx68xx() ||
+             compute_capability.gfx10_rx69xx()) {
+    *reserve = RESERVED_GFX10_X;
+  } else if (compute_capability.gfx11()) {
+    *reserve = RESERVED_GFX11_X;
+  }
+
+  return true;
 }
 
 }  // namespace
@@ -86,7 +126,12 @@ bool RocmContext::GetDeviceTotalMemory(hipDevice_t device, uint64_t* result) {
     LOG(ERROR) << "failed to query total available memory: " << ToString(res);
     return false;
   }
-  *result = value;
+  uint64_t reserve = 0;
+  if (!GetReservedMemory(&reserve)) {
+    LOG(ERROR) << "failed to reserved device memory for ROCm libraries";
+    return false;
+  }
+  *result = value - reserve;
   return true;
 }
 
@@ -100,8 +145,15 @@ bool RocmContext::GetDeviceMemoryUsage(int64_t* free_out, int64_t* total_out) {
     return false;
   }
 
+  uint64_t reserve = 0;
+  if (!GetReservedMemory(&reserve)) {
+    LOG(ERROR) << "failed to reserved device memory for ROCm libraries";
+    return false;
+  }
+
   VLOG(1) << "Device memory: " << total / 1048576 << " MB total, "
-          << free / 1048576 << " MB free";
+          << free / 1048576 << " MB free, reserving " << reserve / 1048576
+          << " MB";
 
   // overflow check
   if (free > std::numeric_limits<int64_t>::max()) {
@@ -109,8 +161,8 @@ bool RocmContext::GetDeviceMemoryUsage(int64_t* free_out, int64_t* total_out) {
     return false;
   }
 
-  *free_out = free;
-  *total_out = total;
+  *free_out = free >= reserve ? free - reserve : 0;
+  *total_out = total - reserve;
   return true;
 }
 
@@ -133,7 +185,7 @@ RocmContext::~RocmContext() {
 }
 
 void RocmContext::SetActive() {
-  CHECK_OK(
+  TF_CHECK_OK(
       ToStatus(wrap::hipCtxSetCurrent(context_), "Failed setting context"));
 }
 

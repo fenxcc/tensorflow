@@ -16,7 +16,6 @@ limitations under the License.
 #include "tsl/platform/numbers.h"
 
 #include <cmath>
-#include <cstdint>
 #include <cstdlib>
 #include <limits>
 #include <string>
@@ -27,8 +26,6 @@ limitations under the License.
 
 namespace tsl {
 namespace strings {
-
-using strings_internal::kFastToBufferSize;
 
 // NOTE: most of the routines in numbers.h are tested indirectly through
 // strcat_test.cc in this directory.
@@ -76,8 +73,6 @@ TEST(HumanReadableNum, Basic) {
   EXPECT_EQ(HumanReadableNum(1048576), "1.05M");
   EXPECT_EQ(HumanReadableNum(23956812342), "23.96B");
   EXPECT_EQ(HumanReadableNum(123456789012345678), "1.23E+17");
-  EXPECT_EQ(HumanReadableNum(std::numeric_limits<int64_t>::max()), "9.22E+18");
-  EXPECT_EQ(HumanReadableNum(std::numeric_limits<int64_t>::min()), "-9.22E+18");
 }
 
 TEST(HumanReadableNumBytes, Bytes) {
@@ -104,8 +99,7 @@ TEST(HumanReadableNumBytes, Bytes) {
   EXPECT_EQ("-4B", HumanReadableNumBytes(-4));
   EXPECT_EQ("-1000B", HumanReadableNumBytes(-1000));
   EXPECT_EQ("-11.77MiB", HumanReadableNumBytes(-12345678));
-  EXPECT_EQ("-8.00EiB",
-            HumanReadableNumBytes(std::numeric_limits<int64_t>::min()));
+  EXPECT_EQ("-8E", HumanReadableNumBytes(kint64min));
 }
 
 TEST(HumanReadableElapsedTime, Basic) {
@@ -206,9 +200,9 @@ TEST(safe_strto64, Int64s) {
   EXPECT_EQ(true, absl::SimpleAtoi("9223372036854775807", &result));
   EXPECT_EQ(9223372036854775807, result);
   EXPECT_EQ(true, absl::SimpleAtoi("-9223372036854775808", &result));
-  // std::numeric_limits<int64_t>::min() == -9223372036854775808
+  // kint64min == -9223372036854775808
   // Use -9223372036854775808 directly results in out of range error
-  EXPECT_EQ(std::numeric_limits<int64_t>::min(), result);
+  EXPECT_EQ(kint64min, result);
 
   // Invalid argument
   EXPECT_EQ(false, absl::SimpleAtoi(" 132as ", &result));

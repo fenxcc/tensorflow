@@ -24,7 +24,8 @@ limitations under the License.
 #include "absl/status/statusor.h"
 #include "xla/stream_executor/device_memory.h"
 #include "xla/stream_executor/platform.h"
-#include "xla/tsl/platform/errors.h"
+#include "tsl/platform/errors.h"
+#include "tsl/platform/status.h"
 
 namespace stream_executor {
 
@@ -72,13 +73,13 @@ class ScopedDeviceMemory {
         allocator_(other.allocator_) {}
 
   // Releases the memory that was provided in the constructor.
-  ~ScopedDeviceMemory() { CHECK_OK(Free()); }
+  ~ScopedDeviceMemory() { TF_CHECK_OK(Free()); }
 
   // Moves ownership of the memory from other to this object.
   //
   // Postcondition: other == nullptr.
   ScopedDeviceMemory &operator=(ScopedDeviceMemory &&other) noexcept {
-    CHECK_OK(Free());
+    TF_CHECK_OK(Free());
     wrapped_ = other.Release();
     allocator_ = other.allocator_;
     device_ordinal_ = other.device_ordinal_;

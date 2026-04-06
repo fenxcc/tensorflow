@@ -90,10 +90,7 @@ void EnablePeerAccess(absl::Span<se::StreamExecutor* const> executors) {
 // Builds a BFCAllocator for all local GPUs.
 absl::StatusOr<std::unique_ptr<tsl::BFCAllocator>> CreateBFCAllocator(
     se::StreamExecutor* executor, double memory_fraction, bool preallocate,
-    std::optional<int64_t> gpu_system_memory_size,
-    const std::vector<tsl::SubAllocator::Visitor>& sub_allocator_alloc_visitors,
-    const std::vector<tsl::SubAllocator::Visitor>&
-        sub_allocator_free_visitors) {
+    std::optional<int64_t> gpu_system_memory_size) {
   bool enable_unified_memory;
   absl::Status status = tsl::ReadBoolFromEnvVar("TF_FORCE_UNIFIED_MEMORY",
                                                 false, &enable_unified_memory);
@@ -111,12 +108,10 @@ absl::StatusOr<std::unique_ptr<tsl::BFCAllocator>> CreateBFCAllocator(
         executor->CreateMemoryAllocator(stream_executor::MemoryType::kUnified));
     sub_allocator = std::make_unique<se::StreamExecutorAllocator>(
         std::move(unified_memory_allocator),
-        stream_executor::MemoryType::kUnified, device_ordinal,
-        sub_allocator_alloc_visitors, sub_allocator_free_visitors);
+        stream_executor::MemoryType::kUnified, device_ordinal);
   } else {
     sub_allocator = std::make_unique<se::DeviceMemAllocator>(
-        executor, tsl::PlatformDeviceId(device_ordinal),
-        sub_allocator_alloc_visitors, sub_allocator_free_visitors);
+        executor, tsl::PlatformDeviceId(device_ordinal));
   }
 
   int64_t free_memory;
@@ -237,7 +232,7 @@ absl::StatusOr<std::unique_ptr<tsl::BFCAllocator>> GetGpuHostAllocator(
 }
 
 int TopologySizes::GetDeviceCount() {
-  return num_partitions * num_hosts_per_partition * num_devices_per_host;
+  return num_slices * num_hosts_per_slice * num_devices_per_host;
 }
 
 // static
@@ -247,14 +242,12 @@ absl::StatusOr<TopologySizes> TopologySizes::FromString(
   std::vector<std::string> topology_components =
       absl::StrSplit(topology_string, 'x');
   if (topology_components.size() != 3 ||
-      !absl::SimpleAtoi(topology_components[0], &sizes.num_partitions) ||
-      !absl::SimpleAtoi(topology_components[1],
-                        &sizes.num_hosts_per_partition) ||
+      !absl::SimpleAtoi(topology_components[0], &sizes.num_slices) ||
+      !absl::SimpleAtoi(topology_components[1], &sizes.num_hosts_per_slice) ||
       !absl::SimpleAtoi(topology_components[2], &sizes.num_devices_per_host)) {
     return absl::InternalError(
         "topology must be of shape "
-        "\"<num-partitions>x<num-hosts-per-partition>x<num-devices-per-host>"
-        "\"");
+        "\"<num-slices>x<num-hosts-per-slice>x<num-devices-per-host>\"");
   }
   return sizes;
 }

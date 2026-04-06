@@ -13,7 +13,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include <iostream>
 #include <memory>
 #include <string>
 #include <tuple>
@@ -102,9 +101,7 @@ int main(int argc, char** argv) {
   bool parse_ok = tsl::Flags::Parse(&argc, argv, flag_list);
   tsl::port::InitMain(kUsageString.c_str(), &argc, &argv);
   if (!parse_ok) {
-    // Print the usage using cerr to avoid truncation by LOG.
-    std::cerr << kUsageString;
-    return 1;
+    LOG(QFATAL) << kUsageString;
   }
   if (opts.input.empty()) {
     QCHECK(argc == 2) << "Must specify a single input file";

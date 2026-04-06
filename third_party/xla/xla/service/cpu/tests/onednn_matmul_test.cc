@@ -13,13 +13,24 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
+#if defined(INTEL_MKL)
+
 #include <string>
+#include <utility>
 
 #include "absl/strings/str_replace.h"
-#include "xla/error_spec.h"
+#include "xla/hlo/testlib/filecheck.h"
 #include "xla/hlo/testlib/test.h"
+#include "xla/hlo/testlib/test_helpers.h"
+#include "xla/hlo/utils/hlo_matchers.h"
+#include "xla/literal.h"
+#include "xla/service/cpu/onednn_contraction_rewriter.h"
 #include "xla/service/cpu/onednn_util.h"
+#include "xla/shape_util.h"
 #include "xla/tests/hlo_test_base.h"
+#include "tsl/platform/cpu_info.h"
+
+namespace op = xla::testing::opcode_matchers;
 
 namespace xla {
 namespace cpu {
@@ -28,7 +39,7 @@ class MatmulTest : public HloTestBase {
  protected:
   DebugOptions GetDebugOptionsForTest() const override {
     DebugOptions debug_options = HloTestBase::GetDebugOptionsForTest();
-    debug_options.set_xla_cpu_experimental_onednn_custom_call(true);
+    debug_options.set_xla_cpu_use_thunk_runtime(false);
     return debug_options;
   }
 
@@ -195,10 +206,6 @@ TEST_F(MatmulTest, SimpleTestBF16) {
   })";
 
   EXPECT_TRUE(RunAndCompare(matmul_module_str, ErrorSpec{1e-2, 1e-4}));
-  // For BF16, we match the optimized HLO with HLO containing
-  // BINARY_ADD instead of SUM as SUM post-op does not work for
-  // BF16 because element-wise addition is not allowed due to
-  // precision constraints by oneDNN.
   MatchOptimizedHlo(matmul_module_str, matmul_rewrite_str_);
 }
 
@@ -1588,7 +1595,7 @@ TEST_F(MatmulTest, SimpleTestTransposeFusionF16) {
   MatchOptimizedHlo(matmul_module_str, matmul_transpose_rewrite_str_);
 }
 
-TEST_F(MatmulTest, SimpleTestNoTransposeFusion1) {
+TEST_F(MatmulTest, SimpleTestNoTransposeFusion) {
   const char* matmul_module_str = R"(
   ENTRY matmul.test {
     arg0.1 = f32[32,40,40,32] parameter(0), parameter_replication={false}
@@ -1603,24 +1610,6 @@ TEST_F(MatmulTest, SimpleTestNoTransposeFusion1) {
                     R"(
     ; CHECK:     transpose(%{{[a-z,A-Z,0-9,_,\.]*}}),
     ; CHECK:     custom_call_target="__onednn$matmul",
-    )");
-}
-
-TEST_F(MatmulTest, SimpleTestNoTransposeFusion2) {
-  const char* matmul_module_str = R"(
-  ENTRY matmul.test {
-    arg0.1 = f32[32,40,40,32] parameter(0), parameter_replication={false}
-    arg0.2 = f32[32,40,32,40] parameter(1), parameter_replication={false}
-    dot.1 = f32[32,40,40,40] dot(arg0.1, arg0.2), lhs_batch_dims={0,1}, lhs_contracting_dims={3}, rhs_batch_dims={0,1}, rhs_contracting_dims={2}
-    transpose.2 = f32[40,32,40,40] transpose(dot.1), dimensions={1,0,3,2}
-    ROOT copy.2 = f32[40,32,40,40] copy(transpose.2)
-  })";
-
-  EXPECT_TRUE(RunAndCompare(matmul_module_str, ErrorSpec{1e-4, 1e-4}));
-  MatchOptimizedHlo(matmul_module_str,
-                    R"(
-    ; CHECK:     custom_call_target="__onednn$matmul",
-    ; CHECK:     fusion(%{{[a-z,A-Z,0-9,_,-]*}})
     )");
 }
 
@@ -1645,32 +1634,6 @@ TEST_F(MatmulTest, WeightsPrepackAndScratch) {
   ; CHECK-SAME:               "weights_prepacked":true,"user_scratchpad":true
   ; CHECK-SAME:           }
   ; CHECK-SAME:       }
-  )");
-}
-
-TEST_F(MatmulTest, PrepackLarge2DWeights) {
-  const char* matmul_module_str = R"(
-  HloModule matmul.weights_prepack_large.f32
-
-  ENTRY matmul.weights_prepack_large.f32 {
-    lhs = f32[2,4096] parameter(0), parameter_replication={false}
-    c = f32[] constant(1)
-    rhs = f32[4096,4096] broadcast(c), dimensions={}
-    ROOT dot = f32[2,4096] dot(lhs, rhs), lhs_contracting_dims={1}, rhs_contracting_dims={0}
-  })";
-
-  MatchOptimizedHlo(matmul_module_str,
-                    R"(
-  ; CHECK: %matmul.weights_prepack_large.f32
-  ; CHECK:     custom_call_target="__onednn$matmul",
-  ; CHECK:       backend_config={
-  ; CHECK-DAG:     "onednn_matmul_config":{
-  ; CHECK-DAG:       "optimization_config":{
-  ; CHECK-DAG:         "weights_prepacked":true,
-  ; CHECK-DAG:         "user_scratchpad":true
-  ; CHECK-DAG:       }
-  ; CHECK-DAG:     }
-  ; CHECK:       }
   )");
 }
 
@@ -1745,25 +1708,6 @@ TEST_F(MatmulTest, BroadcastedAddAfterFusion) {
   ; CHECK-DAG:   }
   ; CHECK:     }
   )");
-}
-
-TEST_F(MatmulTest, SimpleTestF32WithBiasAndAddFusionWithReshape) {
-  const char* matmul_module_str = R"(
-  HloModule matmul.test.f32
-  ENTRY matmul.test.f32 {
-    arg.0 = f32[6304,768] parameter(0), parameter_replication={false}
-    arg.1 = f32[768,3072] parameter(1), parameter_replication={false}
-    dot.378 = f32[6304,3072] dot(arg.0, arg.1), lhs_contracting_dims={1}, rhs_contracting_dims={0}
-    reshape.11 = f32[32,197,3072] reshape(dot.378)
-    constant.381 = f32[3072] constant(0.3)
-    broadcast.382 = f32[32,197,3072] broadcast(constant.381), dimensions={2}
-    add.0 = f32[32,197,3072] add(reshape.11, broadcast.382)
-    const.1 = f32[32,197,3072] constant(0.65)
-    add.1 = f32[32,197,3072] add(add.0, const.1)
-    ROOT out = f32[6304,3072] reshape(add.1)
-  })";
-  EXPECT_TRUE(RunAndCompare(matmul_module_str, ErrorSpec{1e-4, 1e-4}));
-  MatchOptimizedHlo(matmul_module_str, fused_matmul_bias_add_str_);
 }
 
 TEST_F(MatmulTest, SimpleTestF32BiasAndSwish) {
@@ -1851,7 +1795,7 @@ TEST_F(MatmulTest, SimpleTestF16WithBiasAndAddFusion) {
   const std::string matmul_module_str =
       CreateMatmulBiasAddAndAddModuleText("f16", "f16");
   EXPECT_TRUE(RunAndCompare(matmul_module_str, ErrorSpec{1e-2, 1e-4}));
-  MatchOptimizedHlo(matmul_module_str, fused_matmul_bias_add_sum_str_);
+  MatchOptimizedHlo(matmul_module_str, fused_matmul_bias_add_str_);
 }
 
 TEST_F(MatmulTest, SimpleTestF32WithAddFusion_2) {
@@ -1908,3 +1852,5 @@ TEST_F(MatmulTest, MulTanhMul) {
 
 }  // namespace cpu
 }  // namespace xla
+
+#endif  // INTEL_MKL

@@ -27,15 +27,17 @@ limitations under the License.
 #include "xla/stream_executor/platform/initialize.h"
 #include "xla/stream_executor/platform_manager.h"
 #include "xla/stream_executor/sycl/sycl_platform_id.h"
+#include "tsl/platform/errors.h"
+#include "tsl/platform/status.h"
 
 namespace stream_executor {
-namespace sycl {
+namespace gpu {
 
 SyclPlatform::SyclPlatform() : name_("SYCL") {}
 
 SyclPlatform::~SyclPlatform() {}
 
-Platform::Id SyclPlatform::id() const { return kSyclPlatformId; }
+Platform::Id SyclPlatform::id() const { return sycl::kSyclPlatformId; }
 
 int SyclPlatform::VisibleDeviceCount() const {
   // Initialized in a thread-safe manner the first time this is run.
@@ -47,26 +49,23 @@ const std::string& SyclPlatform::Name() const { return name_; }
 
 absl::StatusOr<std::unique_ptr<DeviceDescription>>
 SyclPlatform::DescriptionForDevice(int ordinal) const {
-  return absl::UnimplementedError(
-      "DescriptionForDevice is unimplemented for SYCL platform.");
+  return absl::UnimplementedError("Unimplemented");
 }
 
 absl::StatusOr<StreamExecutor*> SyclPlatform::ExecutorForDevice(int ordinal) {
-  return absl::UnimplementedError(
-      "ExecutorForDevice is unimplemented for SYCL platform.");
+  return absl::UnimplementedError("Unimplemented");
 }
 
 absl::StatusOr<std::unique_ptr<StreamExecutor>>
 SyclPlatform::GetUncachedExecutor(int ordinal) {
-  return absl::UnimplementedError(
-      "GetUncachedExecutor is unimplemented for SYCL platform.");
+  return absl::UnimplementedError("Unimplemented");
 }
 
-}  // namespace sycl
+}  // namespace gpu
 
 static void InitializeSyclPlatform() {
-  CHECK_OK(PlatformManager::RegisterPlatform(
-      std::make_unique<sycl::SyclPlatform>()));
+  TF_CHECK_OK(
+      PlatformManager::RegisterPlatform(std::make_unique<gpu::SyclPlatform>()));
 }
 
 }  // namespace stream_executor

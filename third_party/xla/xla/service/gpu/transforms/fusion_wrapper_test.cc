@@ -17,36 +17,29 @@ limitations under the License.
 #include <optional>
 
 #include <gtest/gtest.h>
-#include "absl/status/statusor.h"
 #include "xla/hlo/testlib/hlo_hardware_independent_test_base.h"
-#include "xla/stream_executor/device_description.h"
 #include "xla/stream_executor/device_description.pb.h"
-#include "xla/tsl/platform/statusor.h"
 
 namespace xla {
 namespace gpu {
 namespace {
 
-absl::StatusOr<stream_executor::DeviceDescription> MakeDeviceDescription() {
-  TF_ASSIGN_OR_RETURN(stream_executor::DeviceDescription device_description,
-                      stream_executor::DeviceDescription::FromProto(
-                          stream_executor::GpuDeviceInfoProto{}));
+auto MakeDeviceDescription() {
+  stream_executor::DeviceDescription device_description{
+      stream_executor::GpuDeviceInfoProto{}};
   device_description.set_threads_per_warp(32);
   return device_description;
 }
 
 class FusionWrapperTest : public HloHardwareIndependentTestBase {
  public:
-  void SetUp() override {
-    TF_ASSERT_OK_AND_ASSIGN(device_description_, MakeDeviceDescription());
-  }
-
   const stream_executor::DeviceDescription& device_description() const {
     return device_description_;
   }
 
  private:
-  stream_executor::DeviceDescription device_description_;
+  const stream_executor::DeviceDescription device_description_{
+      MakeDeviceDescription()};
 };
 
 TEST_F(FusionWrapperTest, ConvolutionWorks) {

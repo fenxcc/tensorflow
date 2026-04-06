@@ -15,7 +15,6 @@ limitations under the License.
 
 #include "tensorflow/core/framework/reader_base.h"
 
-#include "absl/synchronization/notification.h"
 #include "tensorflow/core/framework/reader_base.pb.h"
 #include "tensorflow/core/framework/types.h"
 #include "tensorflow/core/lib/core/coding.h"
@@ -29,7 +28,7 @@ namespace tensorflow {
 
 // ReaderBase ------------------------------------------------------
 
-ReaderBase::ReaderBase(const std::string& name) : name_(name) {}
+ReaderBase::ReaderBase(const string& name) : name_(name) {}
 
 int64_t ReaderBase::NumRecordsProduced() {
   mutex_lock lock(mu_);
@@ -199,10 +198,10 @@ void ReaderBase::Read(QueueInterface* queue, tstring* key, tstring* value,
   }
 }
 
-std::string ReaderBase::GetNextWorkLocked(QueueInterface* queue,
-                                          OpKernelContext* context) const {
-  std::string work;
-  absl::Notification n;
+string ReaderBase::GetNextWorkLocked(QueueInterface* queue,
+                                     OpKernelContext* context) const {
+  string work;
+  Notification n;
   queue->TryDequeue(
       context, [context, &n, &work](const QueueInterface::Tuple& tuple) {
         if (context->status().ok()) {
@@ -234,7 +233,7 @@ void ReaderBase::SaveBaseState(ReaderBaseState* state) const {
 }
 
 tstring ReaderBase::KeyName(const tstring& key) const {
-  return absl::StrCat(current_work(), ":", key);
+  return strings::StrCat(current_work(), ":", key);
 }
 
 absl::Status ReaderBase::RestoreBaseState(const ReaderBaseState& state) {
@@ -246,7 +245,7 @@ absl::Status ReaderBase::RestoreBaseState(const ReaderBaseState& state) {
 #if defined(__ANDROID__) || defined(__EMSCRIPTEN__)
     const string debug_string = "<debug state not available>";
 #else
-    const std::string debug_string = state.DebugString();
+    const string debug_string = state.DebugString();
 #endif
     return errors::InvalidArgument(
         "Unexpected negative value when restoring in ", name(), ": ",
@@ -256,7 +255,7 @@ absl::Status ReaderBase::RestoreBaseState(const ReaderBaseState& state) {
 #if defined(__ANDROID__) || (__EMSCRIPTEN__)
     const string debug_string = "<debug state not available>";
 #else
-    const std::string debug_string = state.DebugString();
+    const string debug_string = state.DebugString();
 #endif
     return errors::InvalidArgument(
         "Inconsistent work started vs. finished when restoring in ", name(),

@@ -857,7 +857,7 @@ class LiteralBase {
 
     DynamicSizeType GetDynamicSize(int64_t dim_index) const;
     void SetDynamicSize(int64_t dim_index, DynamicSizeType size);
-    absl::Status AllocateBuffers();
+    void AllocateBuffers();
     void DeallocateBuffers();
     // Gets/sets the buffer holding the array data.
     const char* buffer() const;
@@ -1526,6 +1526,10 @@ std::ostream& operator<<(std::ostream& out, const Literal& literal);
 class Literal : public MutableLiteralBase {
  public:
   Literal();
+
+  // Create a literal of the given shape. The literal is allocated sufficient
+  // memory to hold the shape. Memory is uninitialized.
+  explicit Literal(const Shape& shape);
   ~Literal() override;
 
   // Literals are moveable, but not copyable. To copy a literal use
@@ -1534,24 +1538,12 @@ class Literal : public MutableLiteralBase {
   Literal(const Literal& other) = delete;
   Literal& operator=(const Literal& other) = delete;
   Literal(Literal&& other);
-  // Create a literal of the given shape.
-  // 'allocate_arrays' indicates whether to allocate memory for the arrays in
-  // the shape. If false, buffer pointers inside of the Literal::Pieces are set
-  // to nullptr. If true, the buffers are allocated but uninitialized.
-  ABSL_DEPRECATED(
-      "This ctor may crash if allocation fails. Use Literal::Make() instead.")
-  explicit Literal(
-      const Shape& shape, bool allocate_arrays = true,
-      ArrayValueState leaf_array_value_state = ArrayValueState::kKnown);
-  Literal& operator=(Literal&& other);
-
-  // Creates a literal of the given shape.
   // 'allocate_arrays' indicates whether to allocate memory for the arrays in
   // the shape. If false, buffer pointers inside of the Literal::Pieces are set
   // to nullptr.
-  static absl::StatusOr<Literal> Make(
-      const Shape& shape, bool allocate_arrays = true,
-      ArrayValueState leaf_array_value_state = ArrayValueState::kKnown);
+  Literal(const Shape& shape, bool allocate_arrays,
+          ArrayValueState leaf_array_value_state = ArrayValueState::kKnown);
+  Literal& operator=(Literal&& other);
 
   // Similar to CopyFrom, but with move semantics. The subshape of this literal
   // rooted at 'dest_shape_index' must be *equal* to the shape 'src_literal'
@@ -1594,11 +1586,6 @@ class Literal : public MutableLiteralBase {
  private:
   friend class LiteralBase;
   friend class MutableLiteralBase;
-  struct UninitializedLiteralTag {};
-
-  // Creates an uninitialized literal.
-  explicit Literal(UninitializedLiteralTag) {}
-
   const Piece& root_piece() const final { return root_piece_; };
   // Deallocate the buffers held by this literal.
   void DeallocateBuffers();
@@ -1611,7 +1598,7 @@ class Literal : public MutableLiteralBase {
   // Recursively sets the subshapes and buffers of all subpieces rooted at
   // 'piece'. If 'allocate_array' is true, memory is allocated for the arrays in
   // the shape.
-  absl::Status SetPiece(
+  void SetPiece(
       const Shape& shape, Piece* piece, bool allocate_arrays,
       ArrayValueState leaf_array_value_state = ArrayValueState::kKnown);
   Piece root_piece_;

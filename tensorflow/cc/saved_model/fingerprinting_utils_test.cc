@@ -101,8 +101,7 @@ TEST(FingerprintingTest, TestFieldTagMatchesInitialSubsequence) {
   field_tags_sub.CopyFrom(field_tags);
   field_tags_sub.DeleteSubrange(2, 2);
 
-  EXPECT_THAT(fieldTagMatches(field_tags_sub, field_tags),
-              absl_testing::IsOkAndHolds(2));
+  EXPECT_THAT(fieldTagMatches(field_tags_sub, field_tags), IsOkAndHolds(2));
 }
 
 TEST(FingerprintingTest, TestFieldTagMatchesNoninitialSubsequence) {
@@ -117,8 +116,7 @@ TEST(FingerprintingTest, TestFieldTagMatchesNoninitialSubsequence) {
   field_tags_sub.CopyFrom(field_tags);
   field_tags_sub.DeleteSubrange(0, 2);
 
-  EXPECT_THAT(fieldTagMatches(field_tags_sub, field_tags),
-              absl_testing::IsOkAndHolds(0));
+  EXPECT_THAT(fieldTagMatches(field_tags_sub, field_tags), IsOkAndHolds(0));
 }
 
 TEST(FingerprintingTest, TestFieldTagMatchesIdenticalSubsequence) {
@@ -132,8 +130,7 @@ TEST(FingerprintingTest, TestFieldTagMatchesIdenticalSubsequence) {
   RepeatedPtrField<FieldIndex> field_tags_sub;
   field_tags_sub.CopyFrom(field_tags);
 
-  EXPECT_THAT(fieldTagMatches(field_tags_sub, field_tags),
-              absl_testing::IsOkAndHolds(4));
+  EXPECT_THAT(fieldTagMatches(field_tags_sub, field_tags), IsOkAndHolds(4));
 }
 
 TEST(FingerprintingTest, TestFieldTagMatchesSuperSubsequence) {
@@ -148,8 +145,7 @@ TEST(FingerprintingTest, TestFieldTagMatchesSuperSubsequence) {
   field_tags_sub.CopyFrom(field_tags);
   field_tags_sub.Add()->set_field(6);
 
-  EXPECT_THAT(fieldTagMatches(field_tags_sub, field_tags),
-              absl_testing::IsOkAndHolds(4));
+  EXPECT_THAT(fieldTagMatches(field_tags_sub, field_tags), IsOkAndHolds(4));
 }
 
 TEST(FingerprintingTest, TestPruneChunkedMessageSingleTarget) {
@@ -342,7 +338,7 @@ TEST(FingerprintingTest, TestHashGraphDef) {
   GraphDef graph_def;
   EXPECT_THAT(
       HashGraphDef(&graph_def, chunk_metadata.message(), reader, chunks_info),
-      absl_testing::IsOkAndHolds(16782272393894422524U));
+      IsOkAndHolds(16782272393894422524U));
 }
 
 TEST(FingerprintingTest, TestHashSignatureDef) {
@@ -365,7 +361,7 @@ TEST(FingerprintingTest, TestHashSignatureDef) {
   SignatureDef signature_def;
   EXPECT_THAT(HashSignatureDef(signature_def_map, chunk_metadata.message(),
                                reader, chunks_info),
-              absl_testing::IsOkAndHolds(0));
+              IsOkAndHolds(0));
 }
 
 TEST(FingerprintingTest, TestHashSavedObjectGraph) {
@@ -388,7 +384,7 @@ TEST(FingerprintingTest, TestHashSavedObjectGraph) {
   EXPECT_THAT(
       HashSavedObjectGraph(&saved_object_graph, chunk_metadata.message(),
                            reader, chunks_info),
-      absl_testing::IsOkAndHolds(17454850744699451884U));
+      IsOkAndHolds(17454850744699451884U));
 }
 
 }  // namespace

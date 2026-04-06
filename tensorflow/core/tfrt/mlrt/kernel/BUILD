@@ -1,4 +1,3 @@
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load(
     "//tensorflow:tensorflow.bzl",
     "tf_cc_shared_test",
@@ -92,7 +91,7 @@ cc_library(
         "@local_tsl//tsl/platform:errors",
         "@local_tsl//tsl/platform:tstring",
         "@local_xla//xla:xla_data_proto_cc",
-        "@local_xla//xla/tsl/concurrency:future",
+        "@local_xla//xla/python/ifrt",
     ],
     alwayslink = 1,
 )
@@ -142,7 +141,6 @@ cc_library(
         "//tensorflow/core/tfrt/mlrt/interpreter:register_span",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/cleanup",
-        "@local_xla//xla/tsl/platform:errors",
     ],
 )
 
@@ -276,7 +274,6 @@ tf_cc_shared_test(
         "@local_xla//xla/python/ifrt",
         "@local_xla//xla/python/ifrt:test_util",
         "@local_xla//xla/python/pjrt_ifrt:tfrt_cpu_client_test_lib",
-        "@local_xla//xla/tsl/concurrency:future",
         "@local_xla//xla/tsl/framework:serving_device_selector",
         "@local_xla//xla/tsl/framework/test_util:mock_serving_device_selector",
         "@local_xla//xla/tsl/lib/core:status_test_util",

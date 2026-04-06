@@ -20,10 +20,7 @@ limitations under the License.
 #include <utility>
 #include <vector>
 
-#include "absl/base/attributes.h"
-#include "absl/base/const_init.h"
 #include "absl/container/flat_hash_map.h"
-#include "absl/log/check.h"
 #include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
@@ -47,21 +44,10 @@ CompilerRegistry() {
 void PjRtRegisterCompiler(absl::string_view platform_name,
                           std::unique_ptr<PjRtCompiler> compiler) {
   CHECK(compiler != nullptr);
-  absl::MutexLock l(registry_mutex);
+  absl::MutexLock l(&registry_mutex);
   auto* compiler_registry = CompilerRegistry();
   CHECK(!compiler_registry->contains(platform_name));
   (*compiler_registry)[platform_name] = std::move(compiler);
-}
-
-absl::StatusOr<PjRtCompiler*> GetPjRtCompiler(absl::string_view platform_name) {
-  absl::ReaderMutexLock l(registry_mutex);
-  const auto* compiler_registry = CompilerRegistry();
-  auto it = compiler_registry->find(platform_name);
-  if (it == compiler_registry->end()) {
-    return absl::NotFoundError(
-        absl::StrCat("No compiler registered for platform ", platform_name));
-  }
-  return it->second.get();
 }
 
 absl::StatusOr<std::unique_ptr<PjRtExecutable>> PjRtCompile(
@@ -72,11 +58,11 @@ absl::StatusOr<std::unique_ptr<PjRtExecutable>> PjRtCompile(
     return (*topology_compiler)
         ->Compile(std::move(options), computation, topology, client);
   }
-  absl::ReaderMutexLock l(registry_mutex);
+  absl::ReaderMutexLock l(&registry_mutex);
   const auto* compiler_registry = CompilerRegistry();
   auto it = compiler_registry->find(topology.platform_name());
   if (it == compiler_registry->end()) {
-    return absl::NotFoundError(absl::StrCat(
+    return tsl::errors::NotFound(absl::StrCat(
         "No compiler registered for platform ", topology.platform_name()));
   }
   return it->second->Compile(std::move(options), computation, topology, client);
@@ -90,7 +76,7 @@ absl::StatusOr<std::unique_ptr<PjRtExecutable>> PjRtCompile(
     return (*topology_compiler)
         ->Compile(std::move(options), module, topology, client);
   }
-  absl::ReaderMutexLock l(registry_mutex);
+  absl::ReaderMutexLock l(&registry_mutex);
   const auto* compiler_registry = CompilerRegistry();
   auto it = compiler_registry->find(topology.platform_name());
   if (it == compiler_registry->end()) {

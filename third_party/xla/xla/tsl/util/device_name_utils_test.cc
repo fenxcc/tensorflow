@@ -44,24 +44,25 @@ bool RoundTripPartialName(int parts_to_test, const std::vector<string>& parts,
                           bool explicitDevice) {
   string original, expected;
   if (parts_to_test & kJob) {
-    absl::StrAppend(&original, "/job:", parts[0]);
-    absl::StrAppend(&expected, "/job:", parts[0]);
+    strings::StrAppend(&original, "/job:", parts[0]);
+    strings::StrAppend(&expected, "/job:", parts[0]);
   }
   if (parts_to_test & kReplica) {
-    absl::StrAppend(&original, "/replica:", parts[1]);
-    absl::StrAppend(&expected, "/replica:", parts[1]);
+    strings::StrAppend(&original, "/replica:", parts[1]);
+    strings::StrAppend(&expected, "/replica:", parts[1]);
   }
   if (parts_to_test & kTask) {
-    absl::StrAppend(&original, "/task:", parts[2]);
-    absl::StrAppend(&expected, "/task:", parts[2]);
+    strings::StrAppend(&original, "/task:", parts[2]);
+    strings::StrAppend(&expected, "/task:", parts[2]);
   }
   if (parts_to_test & kDevice) {
     if (explicitDevice) {
-      absl::StrAppend(&original, "/device:", parts[3]);
-      absl::StrAppend(&expected, "/device:", parts[3]);
+      strings::StrAppend(&original, "/device:", parts[3]);
+      strings::StrAppend(&expected, "/device:", parts[3]);
     } else {
-      absl::StrAppend(&original, "/", parts[3]);
-      absl::StrAppend(&expected, "/device:", absl::AsciiStrToUpper(parts[3]));
+      strings::StrAppend(&original, "/", parts[3]);
+      strings::StrAppend(&expected,
+                         "/device:", absl::AsciiStrToUpper(parts[3]));
     }
   }
   return RoundTripParsedName(original, expected);

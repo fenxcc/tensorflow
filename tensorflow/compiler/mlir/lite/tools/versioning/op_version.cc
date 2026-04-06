@@ -177,10 +177,6 @@ int GetBuiltinOperatorVersion(const OpSignature& op_sig) {
           reinterpret_cast<TfLiteFullyConnectedParams*>(op_sig.builtin_data);
       TFLITE_DCHECK(fully_connected_params != nullptr);
 
-      if (op_sig.inputs.at(1).type == kTfLiteInt2) {
-        return 14;
-      }
-
       if (op_sig.inputs.at(0).type == kTfLiteInt16 &&
           op_sig.inputs.at(1).type == kTfLiteInt4 &&
           op_sig.outputs.at(0).type == kTfLiteInt16) {
@@ -359,9 +355,6 @@ int GetBuiltinOperatorVersion(const OpSignature& op_sig) {
       return 1;
 
     case BuiltinOperator_TRANSPOSE:
-      if (op_sig.inputs.at(0).type == kTfLiteInt4) {
-        return 7;
-      }
       if (op_sig.inputs.at(0).dims.size() > 5) {
         return 6;
       }
@@ -468,9 +461,6 @@ int GetBuiltinOperatorVersion(const OpSignature& op_sig) {
       return 1;
 
     case BuiltinOperator_SLICE:
-      if (op_sig.inputs.at(0).type == kTfLiteInt4) {
-        return 7;
-      }
       if (op_sig.inputs.at(0).type == kTfLiteUInt32) {
         return 6;
       }
@@ -480,6 +470,7 @@ int GetBuiltinOperatorVersion(const OpSignature& op_sig) {
       if (op_sig.inputs.at(0).type == kTfLiteInt16) {
         return 4;
       }
+      // Version 3 supports string input types.
       if (op_sig.inputs.at(0).type == kTfLiteString) {
         return 3;
       }
@@ -505,9 +496,6 @@ int GetBuiltinOperatorVersion(const OpSignature& op_sig) {
       return 1;
 
     case BuiltinOperator_DEQUANTIZE:
-      if (op_sig.inputs.at(0).type == kTfLiteInt2) {
-        return 7;
-      }
       if (op_sig.inputs.at(0).type == kTfLiteInt4) {
         return 6;
       }
@@ -798,7 +786,7 @@ int GetBuiltinOperatorVersion(const OpSignature& op_sig) {
     case BuiltinOperator_EQUAL:
       if (!op_sig.inputs.empty()) {
         if (op_sig.inputs.at(0).type == kTfLiteInt16) {
-          return 5;
+          return 4;
         }
         if (op_sig.inputs.at(0).type == kTfLiteString) {
           return 3;
@@ -810,9 +798,6 @@ int GetBuiltinOperatorVersion(const OpSignature& op_sig) {
       return 1;
     case BuiltinOperator_NOT_EQUAL:
       if (!op_sig.inputs.empty()) {
-        if (op_sig.inputs.at(0).type == kTfLiteInt16) {
-          return 4;
-        }
         if (op_sig.inputs.at(0).type == kTfLiteString) {
           return 3;
         }
@@ -858,9 +843,6 @@ int GetBuiltinOperatorVersion(const OpSignature& op_sig) {
 
     case BuiltinOperator_PAD:
     case BuiltinOperator_PADV2:
-      if (op_sig.inputs.at(0).type == kTfLiteBool) {
-        return 5;
-      }
       if (op_sig.inputs.at(0).dims.size() > 4) {
         return 4;
       }
@@ -1056,21 +1038,15 @@ int GetBuiltinOperatorVersion(const OpSignature& op_sig) {
     case BuiltinOperator_EXP:
     case BuiltinOperator_LOG:
     case BuiltinOperator_REDUCE_PROD:
-    case BuiltinOperator_SQRT:
       if (op_sig.inputs.at(0).type == kTfLiteInt8 ||
           op_sig.inputs.at(0).type == kTfLiteInt16) {
         return 2;
       }
       return 1;
     case BuiltinOperator_DYNAMIC_UPDATE_SLICE:
-      if (op_sig.inputs.at(0).type == kTfLiteInt16) {
-        return 4;
-      } else if (op_sig.inputs.at(0).type == kTfLiteFloat16) {
-        return 3;
-      } else if (op_sig.inputs.at(2).type == kTfLiteInt64) {
-        return 2;
-      }
+      if (op_sig.inputs.at(2).type == kTfLiteInt64) return 2;
       return 1;
+
     // The version one of broadcast to op won't be not supported since the
     // version one was rollbacked and the builtin op code number has been
     // changed because of builtin op code shortage problem.
@@ -1082,11 +1058,8 @@ int GetBuiltinOperatorVersion(const OpSignature& op_sig) {
       }
       return 2;
     case BuiltinOperator_CAST:
-      if (op_sig.inputs.at(0).type == kTfLiteInt2 ||
-          op_sig.outputs.at(0).type == kTfLiteInt2) {
-        return 8;
-      } else if (op_sig.inputs.at(0).type == kTfLiteBFloat16 ||
-                 op_sig.outputs.at(0).type == kTfLiteBFloat16) {
+      if (op_sig.inputs.at(0).type == kTfLiteBFloat16 ||
+          op_sig.outputs.at(0).type == kTfLiteBFloat16) {
         return 7;
       } else if (op_sig.inputs.at(0).type == kTfLiteInt4 &&
                  op_sig.outputs.at(0).type == kTfLiteFloat32) {

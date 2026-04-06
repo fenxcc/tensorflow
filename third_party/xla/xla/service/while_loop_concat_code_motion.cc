@@ -15,21 +15,15 @@ limitations under the License.
 
 #include "xla/service/while_loop_concat_code_motion.h"
 
-#include <cstdint>
 #include <map>
 #include <optional>
-#include <set>
-#include <utility>
 #include <vector>
 
 #include "absl/algorithm/container.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
-#include "absl/log/check.h"
-#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "xla/hlo/ir/hlo_casting_utils.h"
 #include "xla/hlo/ir/hlo_computation.h"
@@ -1040,7 +1034,7 @@ absl::StatusOr<bool> RunOnLoop(HloInstruction* loop,
 
 }  // namespace
 
-absl::StatusOr<bool> WhileLoopConcatCodeMotion::RunImpl(
+absl::StatusOr<bool> WhileLoopConcatCodeMotion::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   bool changed = false;

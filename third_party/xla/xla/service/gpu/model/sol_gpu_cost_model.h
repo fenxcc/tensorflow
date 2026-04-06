@@ -40,8 +40,6 @@ class SolGPUCostModel {
     absl::Duration rtt;
     int64_t gpus_per_node;
     int64_t chunk_size_bytes;
-    // Partition size (devices per fast-interconnect domain). 0 means unset.
-    int64_t partition_size;
   };
 
   enum CollectiveAlgorithmType {

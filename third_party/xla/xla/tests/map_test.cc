@@ -18,7 +18,6 @@ limitations under the License.
 #include <utility>
 
 #include "xla/tests/xla_test_backend_predicates.h"
-#include "absl/log/check.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "xla/array2d.h"
@@ -35,16 +34,15 @@ limitations under the License.
 #include "xla/shape.h"
 #include "xla/shape_util.h"
 #include "xla/tests/client_library_test_runner_mixin.h"
-#include "xla/tests/hlo_pjrt_interpreter_reference_mixin.h"
-#include "xla/tests/hlo_pjrt_test_base.h"
+#include "xla/tests/hlo_test_base.h"
+#include "xla/tsl/platform/status.h"
 #include "xla/tsl/platform/test.h"
 #include "xla/xla_data.pb.h"
 
 namespace xla {
 namespace {
 
-class MapTest : public ClientLibraryTestRunnerMixin<
-                    HloPjRtInterpreterReferenceMixin<HloPjRtTestBase>> {
+class MapTest : public ClientLibraryTestRunnerMixin<HloTestBase> {
  public:
   MapTest() {
     mutable_debug_options()->add_xla_disable_hlo_passes("algsimp");
@@ -62,7 +60,7 @@ class MapTest : public ClientLibraryTestRunnerMixin<
     auto one = ConstantR0<float>(&mapped_builder, 1.0);
     Add(x, one);
     auto computation_status = mapped_builder.Build();
-    CHECK_OK(computation_status.status());
+    TF_CHECK_OK(computation_status.status());
     return std::move(computation_status).value();
   }
 
@@ -72,7 +70,7 @@ class MapTest : public ClientLibraryTestRunnerMixin<
     auto rhs = Parameter(&b, 1, ShapeUtil::MakeShape(F32, {}), "y");
     Max(lhs, rhs);
     auto computation_status = b.Build();
-    CHECK_OK(computation_status.status());
+    TF_CHECK_OK(computation_status.status());
     return std::move(computation_status).value();
   }
 
@@ -84,7 +82,7 @@ class MapTest : public ClientLibraryTestRunnerMixin<
     (void)Parameter(&mapped_builder, 0, ShapeUtil::MakeShape(F32, {}), "x");
     ConstantR0<T>(&mapped_builder, 1);
     auto computation_status = mapped_builder.Build();
-    CHECK_OK(computation_status.status());
+    TF_CHECK_OK(computation_status.status());
     return std::move(computation_status).value();
   }
 
@@ -99,7 +97,7 @@ class MapTest : public ClientLibraryTestRunnerMixin<
     auto two = ConstantR0<float>(&mapped_builder, 2.0);
     Mul(x, two);
     auto computation_status = mapped_builder.Build();
-    CHECK_OK(computation_status.status());
+    TF_CHECK_OK(computation_status.status());
     return std::move(computation_status).value();
   }
 
@@ -118,7 +116,7 @@ class MapTest : public ClientLibraryTestRunnerMixin<
     auto adder_to_one = Add(x, one);
     Mul(x, adder_to_one);
     auto computation_status = mapped_builder.Build();
-    CHECK_OK(computation_status.status());
+    TF_CHECK_OK(computation_status.status());
     return std::move(computation_status).value();
   }
 
@@ -136,7 +134,7 @@ class MapTest : public ClientLibraryTestRunnerMixin<
     auto constant_n = ConstantR0<float>(&builder, n);
     Add(map, constant_n);
     auto computation_status = builder.Build();
-    CHECK_OK(computation_status.status());
+    TF_CHECK_OK(computation_status.status());
     return std::move(computation_status).value();
   }
 
@@ -148,7 +146,7 @@ class MapTest : public ClientLibraryTestRunnerMixin<
     auto y = Parameter(&b, 1, ShapeUtil::MakeShape(F32, {}), "y");
     Gt(x, y);
     auto computation_status = b.Build();
-    CHECK_OK(computation_status.status());
+    TF_CHECK_OK(computation_status.status());
     return std::move(computation_status).value();
   }
 
@@ -167,7 +165,7 @@ class MapTest : public ClientLibraryTestRunnerMixin<
     auto xy = Add(x, y);
     Add(xy, z);
     auto computation_status = mapped_builder.Build();
-    CHECK_OK(computation_status.status());
+    TF_CHECK_OK(computation_status.status());
     return std::move(computation_status).value();
   }
 };
@@ -456,7 +454,7 @@ TEST_F(MapTest, MapOperationWithBuildError) {
                                    "different element types: f32[] and u16[]"));
 }
 
-using MapHloTest = HloPjRtInterpreterReferenceMixin<HloPjRtTestBase>;
+class MapHloTest : public HloTestBase {};
 
 // TODO(b/230123847): Enable this on GPU once mhlo allows mixed-type map.
 TEST_F(MapHloTest, MapWithMixedInputTypes) {
@@ -486,8 +484,7 @@ TEST_F(MapHloTest, MapWithMixedInputTypes) {
 
 // MapTest disables inline and algsimp. MapTestWithFullOpt runs all
 // optimizations.
-using MapTestWithFullOpt = ClientLibraryTestRunnerMixin<
-    HloPjRtInterpreterReferenceMixin<HloPjRtTestBase>>;
+using MapTestWithFullOpt = ClientLibraryTestRunnerMixin<HloTestBase>;
 
 // Regression test for b/31466798. The inliner simplifies map(param0, param1,
 // power) to power(param0, param1) without deleting the old subcomputation which

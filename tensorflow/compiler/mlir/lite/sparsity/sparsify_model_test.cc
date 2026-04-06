@@ -16,6 +16,7 @@ limitations under the License.
 
 #include <stdint.h>
 
+#include <cstdarg>
 #include <map>
 #include <memory>
 #include <string>

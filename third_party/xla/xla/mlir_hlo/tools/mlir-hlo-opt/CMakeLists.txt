@@ -27,8 +27,6 @@ set(LIBS
         MLIRBufferTransforms
         MLIRHLOGPUTransforms
         MhloRegisterDialects
-        StablehloLinalgTransforms
-        StablehloPasses
         )
 add_llvm_executable(mlir-hlo-opt mlir-hlo-opt.cc
   DEPENDS

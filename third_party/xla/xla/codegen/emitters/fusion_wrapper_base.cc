@@ -28,7 +28,7 @@ limitations under the License.
 namespace xla {
 namespace emitters {
 
-absl::StatusOr<bool> FusionWrapperBase::RunImpl(
+absl::StatusOr<bool> FusionWrapperBase::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   auto instructions = module->entry_computation()->MakeInstructionPostOrder();
@@ -47,7 +47,7 @@ absl::StatusOr<bool> FusionWrapperBase::RunImpl(
       }
       return absl::OkStatus();
     }
-    if (!MustWrapInstruction(*instruction)) {
+    if (!MustWrapInstruction(opcode)) {
       return absl::OkStatus();
     }
     auto* computation = instruction->parent();

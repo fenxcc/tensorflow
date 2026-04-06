@@ -21,9 +21,7 @@ limitations under the License.
 #include <vector>
 
 #include "absl/log/log.h"
-#include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "xla/tsl/lib/monitoring/collected_metrics.h"
 #include "xla/tsl/lib/monitoring/collection_registry.h"
@@ -31,6 +29,7 @@ limitations under the License.
 #include "xla/tsl/lib/monitoring/test_utils.h"
 #include "xla/tsl/platform/errors.h"
 #include "xla/tsl/platform/statusor.h"
+#include "xla/tsl/platform/types.h"
 
 namespace tsl {
 namespace monitoring {
@@ -68,21 +67,21 @@ absl::StatusOr<std::vector<Point>> GetPoints(
     const std::vector<std::string>& labels) {
   auto metric_descriptor = metrics.metric_descriptor_map.find(metric_name);
   if (metric_descriptor == metrics.metric_descriptor_map.end()) {
-    return absl::NotFoundError(absl::StrCat(
-        "Metric descriptor is not found for metric ", metric_name, "."));
+    return errors::NotFound("Metric descriptor is not found for metric ",
+                            metric_name, ".");
   }
-  const std::vector<std::string>& label_names =
+  const std::vector<string>& label_names =
       metric_descriptor->second->label_names;
   if (label_names.size() != labels.size()) {
-    return absl::InvalidArgumentError(absl::StrCat(
+    return errors::InvalidArgument(
         "Metric ", metric_name, " has ", label_names.size(), " labels: [",
         absl::StrJoin(label_names, ", "), "]. Got label values [",
-        absl::StrJoin(labels, ", "), "]."));
+        absl::StrJoin(labels, ", "), "].");
   }
   auto point_set = metrics.point_set_map.find(metric_name);
   if (point_set == metrics.point_set_map.end()) {
-    return absl::NotFoundError(absl::StrCat(
-        "Metric point set is not found for metric ", metric_name, "."));
+    return errors::NotFound("Metric point set is not found for metric ",
+                            metric_name, ".");
   }
 
   std::vector<Point> points;
@@ -100,9 +99,9 @@ absl::StatusOr<Point> GetLatestPoint(const CollectedMetrics& metrics,
   TF_ASSIGN_OR_RETURN(std::vector<Point> points,
                       GetPoints(metrics, metric_name, labels));
   if (points.empty()) {
-    return absl::UnavailableError(
-        absl::StrCat("No data collected for metric ", metric_name,
-                     " with labels [", absl::StrJoin(labels, ", "), "]."));
+    return errors::Unavailable("No data collected for metric ", metric_name,
+                               " with labels [", absl::StrJoin(labels, ", "),
+                               "].");
   }
 
   bool same_start_time =

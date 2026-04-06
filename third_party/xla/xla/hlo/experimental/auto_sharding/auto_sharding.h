@@ -109,6 +109,11 @@ class AutoSharding : public HloModulePass {
   ~AutoSharding() override = default;
   absl::string_view name() const override { return "auto_sharding"; }
 
+  using HloPassInterface::Run;
+  absl::StatusOr<bool> Run(
+      HloModule* module,
+      const absl::flat_hash_set<absl::string_view>& execution_threads) override;
+
   double GetSolverOptimalObjectiveValue() {
     return solver_optimal_objective_value_;
   }
@@ -119,10 +124,6 @@ class AutoSharding : public HloModulePass {
   AutoShardingOption option_;
   // Backend-specific aliasing information.
   const AliasInfo* alias_info_;
-
-  absl::StatusOr<bool> RunImpl(
-      HloModule* module,
-      const absl::flat_hash_set<absl::string_view>& execution_threads) override;
 
  private:
   // Stores the optimal value of the objective the solver found.

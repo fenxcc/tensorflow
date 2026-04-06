@@ -35,8 +35,6 @@ namespace xla {
 namespace hlo_diff {
 namespace {
 
-using ::testing::AllOf;
-using ::testing::ElementsAre;
 using ::testing::ExplainMatchResult;
 using ::testing::FieldsAre;
 using ::testing::IsEmpty;
@@ -106,7 +104,7 @@ TEST_F(HloDiffTest, FindMainMatchedComputationWorks) {
   std::unique_ptr<const DiffResult> diff_result =
       ConstructDiffResult(*graph_l, *graph_r, mappings);
   std::unique_ptr<const DiffSummary> diff_summary =
-      ConstructDiffSummary(*graph_l, *graph_r, *diff_result);
+      ConstructDiffSummary(*module_l, *module_r, *diff_result);
   absl::flat_hash_map<const HloComputation*, ComputationSummary>
       left_computation_summary;
   for (const auto& [computation, _] : graph_l->AllComputationProps()) {
@@ -133,7 +131,7 @@ TEST_F(HloDiffTest, FindMainMatchedComputationWorks) {
                          Pointee(Property(&HloComputation::name, "entry")),
                          /*max_matched_instruction_count=*/7,
                          /*split_allegiance_instruction=*/0,
-                         /*diff_fingerprint=*/7996767109468280310U,
+                         /*diff_fingerprint=*/3570884195340145402U,
                          /*all_unchanged=*/true)),
           Pair(Pointee(Property(&HloComputation::name, "fused_computation.1")),
                FieldsAre(/*side=*/DiffSide::kLeft,
@@ -142,7 +140,7 @@ TEST_F(HloDiffTest, FindMainMatchedComputationWorks) {
                                           "fused_computation.1")),
                          /*max_matched_instruction_count=*/2,
                          /*split_allegiance_instruction=*/1,
-                         /*diff_fingerprint=*/15082173510391049604U,
+                         /*diff_fingerprint=*/2604941079081458563U,
                          /*all_unchanged=*/true)),
           Pair(Pointee(Property(&HloComputation::name, "fused_computation.2")),
                FieldsAre(/*side=*/DiffSide::kLeft,
@@ -151,7 +149,7 @@ TEST_F(HloDiffTest, FindMainMatchedComputationWorks) {
                                           "fused_computation.2")),
                          /*max_matched_instruction_count=*/2,
                          /*split_allegiance_instruction=*/1,
-                         /*diff_fingerprint=*/15082173510391049604U,
+                         /*diff_fingerprint=*/2604941079081458563U,
                          /*all_unchanged=*/true))));
   EXPECT_THAT(
       right_computation_summary,
@@ -162,7 +160,7 @@ TEST_F(HloDiffTest, FindMainMatchedComputationWorks) {
                          Pointee(Property(&HloComputation::name, "entry")),
                          /*max_matched_instruction_count=*/7,
                          /*split_allegiance_instruction=*/0,
-                         /*diff_fingerprint=*/7996767109468280310U,
+                         /*diff_fingerprint=*/3570884195340145402U,
                          /*all_unchanged=*/true)),
           Pair(Pointee(Property(&HloComputation::name, "fused_computation.1")),
                FieldsAre(/*side=*/DiffSide::kRight,
@@ -171,7 +169,7 @@ TEST_F(HloDiffTest, FindMainMatchedComputationWorks) {
                                           "fused_computation.1")),
                          /*max_matched_instruction_count=*/2,
                          /*split_allegiance_instruction=*/1,
-                         /*diff_fingerprint=*/15082173510391049604U,
+                         /*diff_fingerprint=*/2604941079081458563U,
                          /*all_unchanged=*/true)),
           Pair(Pointee(Property(&HloComputation::name, "fused_computation.2")),
                FieldsAre(/*side=*/DiffSide::kRight,
@@ -180,77 +178,8 @@ TEST_F(HloDiffTest, FindMainMatchedComputationWorks) {
                                           "fused_computation.2")),
                          /*max_matched_instruction_count=*/2,
                          /*split_allegiance_instruction=*/1,
-                         /*diff_fingerprint=*/15082173510391049604U,
+                         /*diff_fingerprint=*/2604941079081458563U,
                          /*all_unchanged=*/true))));
-}
-
-TEST_F(HloDiffTest, InstructionDiffWorks) {
-  const char* hlo_string_l = R"(
-  HloModule module, is_scheduled=true
-  
-  ENTRY entry {
-    parameter.0 = f32[] parameter(0)
-    parameter.1 = f32[] parameter(1)
-    parameter.2 = f32[] parameter(2)
-    ROOT tuple.0 = (f32[], f32[], f32[]) tuple(parameter.0, parameter.1, parameter.2)
-  }
-  )";
-  const char* hlo_string_r = R"(
-  HloModule module, is_scheduled=true
-  
-  ENTRY entry {
-    parameter.0 = f32[] parameter(0)
-    parameter.1 = f32[] parameter(1)
-    parameter.2 = f32[] parameter(2)
-    ROOT tuple.0 = (f32[], f32[], f32[]) tuple(parameter.0, parameter.1, parameter.2)
-  }
-  )";
-  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<xla::VerifiedHloModule> module_l,
-                          ParseAndReturnVerifiedModule(hlo_string_l));
-  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<const HloGumgraph> graph_l,
-                          HloGumgraph::Create(module_l.get()));
-  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<xla::VerifiedHloModule> module_r,
-                          ParseAndReturnVerifiedModule(hlo_string_r));
-  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<const HloGumgraph> graph_r,
-                          HloGumgraph::Create(module_r.get()));
-
-  DiffResult diff_result;
-  diff_result.AddUnchangedInstruction(
-      module_l->entry_computation()->root_instruction(),
-      module_r->entry_computation()->root_instruction());
-  diff_result.AddUnchangedInstruction(
-      module_l->entry_computation()->parameter_instruction(2),
-      module_r->entry_computation()->parameter_instruction(2));
-  diff_result.AddChangedInstruction(
-      module_l->entry_computation()->parameter_instruction(0),
-      module_r->entry_computation()->parameter_instruction(1));
-  diff_result.AddUnmatchedInstruction(
-      module_l->entry_computation()->parameter_instruction(1), nullptr);
-  diff_result.AddUnmatchedInstruction(
-      nullptr, module_r->entry_computation()->parameter_instruction(0));
-
-  std::unique_ptr<const DiffSummary> diff_summary =
-      ConstructDiffSummary(*graph_l, *graph_r, diff_result);
-
-  EXPECT_THAT(
-      diff_summary->instruction_summary,
-      UnorderedElementsAre(
-          Pair(module_l->entry_computation()->parameter_instruction(0),
-               FieldsAre(DiffSide::kLeft, /*subgraph_unchanged=*/false)),
-          Pair(module_l->entry_computation()->parameter_instruction(1),
-               FieldsAre(DiffSide::kLeft, /*subgraph_unchanged=*/false)),
-          Pair(module_l->entry_computation()->parameter_instruction(2),
-               FieldsAre(DiffSide::kLeft, /*subgraph_unchanged=*/true)),
-          Pair(module_l->entry_computation()->root_instruction(),
-               FieldsAre(DiffSide::kLeft, /*subgraph_unchanged=*/false)),
-          Pair(module_r->entry_computation()->parameter_instruction(0),
-               FieldsAre(DiffSide::kRight, /*subgraph_unchanged=*/false)),
-          Pair(module_r->entry_computation()->parameter_instruction(1),
-               FieldsAre(DiffSide::kRight, /*subgraph_unchanged=*/false)),
-          Pair(module_r->entry_computation()->root_instruction(),
-               FieldsAre(DiffSide::kRight, /*subgraph_unchanged=*/false)),
-          Pair(module_r->entry_computation()->parameter_instruction(2),
-               FieldsAre(DiffSide::kRight, /*subgraph_unchanged=*/true))));
 }
 
 TEST_F(HloDiffTest, ComputationDiffFingerprintWorks) {
@@ -297,7 +226,7 @@ TEST_F(HloDiffTest, ComputationDiffFingerprintWorks) {
   std::unique_ptr<const DiffResult> diff_result =
       ConstructDiffResult(*graph_l, *graph_r, mappings);
   std::unique_ptr<const DiffSummary> diff_summary =
-      ConstructDiffSummary(*graph_l, *graph_r, *diff_result);
+      ConstructDiffSummary(*module_l, *module_r, *diff_result);
   absl::flat_hash_map<const HloComputation*, ComputationSummary>
       left_computation_summary;
   for (const auto& [computation, _] : graph_l->AllComputationProps()) {
@@ -314,7 +243,6 @@ TEST_F(HloDiffTest, ComputationDiffFingerprintWorks) {
       right_computation_summary[computation] = it->second;
     }
   }
-
   EXPECT_THAT(left_computation_summary,
               UnorderedElementsAre(Pair(
                   Pointee(Property(&HloComputation::name, "entry")),
@@ -323,7 +251,7 @@ TEST_F(HloDiffTest, ComputationDiffFingerprintWorks) {
                             Pointee(Property(&HloComputation::name, "entry")),
                             /*max_matched_instruction_count=*/1,
                             /*split_allegiance_instruction=*/0,
-                            /*diff_fingerprint=*/16489949661223615780U,
+                            /*diff_fingerprint=*/13464792036913846758U,
                             /*all_unchanged=*/false))));
   EXPECT_THAT(right_computation_summary,
               UnorderedElementsAre(Pair(
@@ -333,11 +261,11 @@ TEST_F(HloDiffTest, ComputationDiffFingerprintWorks) {
                             Pointee(Property(&HloComputation::name, "entry")),
                             /*max_matched_instruction_count=*/1,
                             /*split_allegiance_instruction=*/0,
-                            /*diff_fingerprint=*/16489949661223615780U,
+                            /*diff_fingerprint=*/13464792036913846758U,
                             /*all_unchanged=*/false))));
   EXPECT_THAT(diff_summary->computation_diff_patterns,
               UnorderedElementsAre(FieldsAre(
-                  /*fingerprint=*/11934792681379436682U,
+                  /*fingerprint=*/2864899211444957078U,
                   /*computation_groups=*/
                   UnorderedElementsAre(FieldsAre(
                       /*left_computations=*/UnorderedElementsAre(
@@ -411,12 +339,12 @@ TEST_F(HloDiffTest, FindConnectedComponentsWorks) {
   std::unique_ptr<const DiffResult> diff_result =
       ConstructDiffResult(*graph_l, *graph_r, *mappings);
   std::unique_ptr<const DiffSummary> diff_summary =
-      ConstructDiffSummary(*graph_l, *graph_r, *diff_result);
+      ConstructDiffSummary(*module_l, *module_r, *diff_result);
   EXPECT_THAT(
       diff_summary->computation_diff_patterns,
       UnorderedElementsAre(
           FieldsAre(
-              /*fingerprint=*/11934792681379436682U,
+              /*fingerprint=*/2864899211444957078U,
               /*computation_groups=*/
               UnorderedElementsAre(
                   FieldsAre(/*left_computations=*/UnorderedElementsAre(
@@ -435,7 +363,7 @@ TEST_F(HloDiffTest, FindConnectedComponentsWorks) {
               FieldsAre(/*changed_instruction_count=*/0,
                         /*left_unmatched_instruction_count=*/2,
                         /*right_unmatched_instruction_count=*/2)),
-          FieldsAre(/*fingerprint=*/9579284718983015170U,
+          FieldsAre(/*fingerprint=*/15473561031564762362U,
                     /*computation_groups=*/
                     UnorderedElementsAre(FieldsAre(
                         /*left_computations=*/UnorderedElementsAre(
@@ -490,12 +418,11 @@ subtract.0 = f32[] subtract(constant.0, constant.1)
   std::unique_ptr<const DiffResult> diff_result =
       ConstructDiffResult(*graph_l, *graph_r, *mappings);
   std::unique_ptr<const DiffSummary> diff_summary =
-      ConstructDiffSummary(*graph_l, *graph_r, *diff_result);
-
+      ConstructDiffSummary(*module_l, *module_r, *diff_result);
   EXPECT_THAT(diff_summary->computation_diff_patterns,
               UnorderedElementsAre(
                   FieldsAre(
-                      /*fingerprint=*/9117565696400115256U,
+                      /*fingerprint=*/619838372110990418U,
                       /*computation_groups=*/
                       UnorderedElementsAre(FieldsAre(
                           /*left_computations=*/UnorderedElementsAre(Pointee(
@@ -506,7 +433,7 @@ subtract.0 = f32[] subtract(constant.0, constant.1)
                                 /*left_unmatched_instruction_count=*/3,
                                 /*right_unmatched_instruction_count=*/0)),
                   FieldsAre(
-                      /*fingerprint=*/2981450499210857672U,
+                      /*fingerprint=*/591642684880638740U,
                       /*computation_groups=*/
                       UnorderedElementsAre(FieldsAre(
                           /*left_computations=*/IsEmpty(),
@@ -595,26 +522,24 @@ TEST_F(HloDiffTest, DiffSummaryFromDiffResultProtoWorks) {
     add.0 = f32[] add(parameter.1, parameter.0)
   }
   )"));
-  diff_result.AddUnchangedInstruction(
-      module_l->entry_computation()->root_instruction(),
-      module_r->entry_computation()->root_instruction());
-  diff_result.AddChangedInstruction(
-      module_l->entry_computation()->parameter_instruction(0),
-      module_r->entry_computation()->parameter_instruction(1));
-  diff_result.AddUnmatchedInstruction(
-      module_l->entry_computation()->parameter_instruction(1), nullptr);
-  diff_result.AddUnmatchedInstruction(
-      nullptr, module_r->entry_computation()->parameter_instruction(0));
+  diff_result.unchanged_instructions.insert(
+      {module_l->entry_computation()->root_instruction(),
+       module_r->entry_computation()->root_instruction()});
+  diff_result.changed_instructions.insert(
+      {module_l->entry_computation()->parameter_instruction(0),
+       module_r->entry_computation()->parameter_instruction(1)});
+  diff_result.left_module_unmatched_instructions.insert(
+      module_l->entry_computation()->parameter_instruction(1));
+  diff_result.right_module_unmatched_instructions.insert(
+      module_r->entry_computation()->parameter_instruction(0));
 
   DiffResultProto proto = diff_result.ToProto();
   DiffResult diff_result_from_proto =
       DiffResult::FromProto(proto, *module_l, *module_r);
-  TF_ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<const DiffSummary> diff_summary,
-      ConstructDiffSummary(*module_l, *module_r, diff_result_from_proto));
-  TF_ASSERT_OK_AND_ASSIGN(
-      std::unique_ptr<const DiffSummary> expected_diff_summary,
-      ConstructDiffSummary(*module_l, *module_r, diff_result));
+  std::unique_ptr<const DiffSummary> diff_summary =
+      ConstructDiffSummary(*module_l, *module_r, diff_result_from_proto);
+  std::unique_ptr<const DiffSummary> expected_diff_summary =
+      ConstructDiffSummary(*module_l, *module_r, diff_result);
   EXPECT_THAT(diff_summary->computation_summary,
               UnorderedPointwise(EqualsComputationSummaryMapElement(),
                                  expected_diff_summary->computation_summary));
@@ -622,118 +547,6 @@ TEST_F(HloDiffTest, DiffSummaryFromDiffResultProtoWorks) {
       diff_summary->computation_diff_patterns,
       UnorderedPointwise(EqualsComputationDiffPattern(),
                          expected_diff_summary->computation_diff_patterns));
-}
-
-TEST_F(HloDiffTest, DiffSummaryToProtoWorks) {
-  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<xla::VerifiedHloModule> module_l,
-                          ParseAndReturnVerifiedModule(R"(
-  HloModule module, is_scheduled=true
-
-  ENTRY entry {
-    parameter.0 = f32[] parameter(0)
-    parameter.1 = f32[] parameter(1)
-    add.0 = f32[] add(parameter.0, parameter.1)
-  }
-  )"));
-  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<const HloGumgraph> graph_l,
-                          HloGumgraph::Create(module_l.get()));
-
-  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<xla::VerifiedHloModule> module_r,
-                          ParseAndReturnVerifiedModule(R"(
-  HloModule module, is_scheduled=true
-
-  ENTRY entry {
-    parameter.0 = f32[] parameter(0)
-    parameter.1 = f32[] parameter(1)
-    add.0 = f32[] add(parameter.1, parameter.0)
-  }
-  )"));
-  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<const HloGumgraph> graph_r,
-                          HloGumgraph::Create(module_r.get()));
-  HloGumgraphMappings mappings;
-  ASSERT_NO_FATAL_FAILURE(OverwriteMapInstructions(
-      GetNodeByName(*graph_l, "add.0"), GetNodeByName(*graph_r, "add.0"),
-      mappings, true));
-  std::unique_ptr<const DiffResult> diff_result =
-      ConstructDiffResult(*graph_l, *graph_r, mappings);
-  std::unique_ptr<const DiffSummary> diff_summary =
-      ConstructDiffSummary(*graph_l, *graph_r, *diff_result);
-
-  DiffSummaryProto proto = diff_summary->ToProto();
-
-  EXPECT_THAT(
-      proto.computation_diff_patterns(),
-      ElementsAre(AllOf(
-          Property(&ComputationDiffPatternProto::fingerprint,
-                   11934792681379436682U),
-          Property(
-              &ComputationDiffPatternProto::computation_group,
-              ElementsAre(AllOf(
-                  Property(
-                      &ComputationGroupProto::left_computations,
-                      ElementsAre(AllOf(
-                          Property(&ComputationDetailsProto::name, "entry"),
-                          Property(&ComputationDetailsProto::instructions,
-                                   ElementsAre("parameter.0", "parameter.1",
-                                               "add.0"))))),
-                  Property(
-                      &ComputationGroupProto::right_computations,
-                      ElementsAre(AllOf(
-                          Property(&ComputationDetailsProto::name, "entry"),
-                          Property(&ComputationDetailsProto::instructions,
-                                   ElementsAre("parameter.0", "parameter.1",
-                                               "add.0")))))))),
-          Property(&ComputationDiffPatternProto::changed_instruction_count, 0),
-          Property(
-              &ComputationDiffPatternProto::left_unmatched_instruction_count,
-              2),
-          Property(
-              &ComputationDiffPatternProto::right_unmatched_instruction_count,
-              2))));
-}
-
-TEST_F(HloDiffTest, DiffSummaryFromProtoWorks) {
-  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<xla::VerifiedHloModule> module_l,
-                          ParseAndReturnVerifiedModule(R"(
-  HloModule module, is_scheduled=true
-
-  ENTRY entry {
-    parameter.0 = f32[] parameter(0)
-    parameter.1 = f32[] parameter(1)
-    add.0 = f32[] add(parameter.0, parameter.1)
-  }
-  )"));
-  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<const HloGumgraph> graph_l,
-                          HloGumgraph::Create(module_l.get()));
-
-  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<xla::VerifiedHloModule> module_r,
-                          ParseAndReturnVerifiedModule(R"(
-  HloModule module, is_scheduled=true
-
-  ENTRY entry {
-    parameter.0 = f32[] parameter(0)
-    parameter.1 = f32[] parameter(1)
-    add.0 = f32[] add(parameter.1, parameter.0)
-  }
-  )"));
-  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<const HloGumgraph> graph_r,
-                          HloGumgraph::Create(module_r.get()));
-  HloGumgraphMappings mappings;
-  ASSERT_NO_FATAL_FAILURE(OverwriteMapInstructions(
-      GetNodeByName(*graph_l, "add.0"), GetNodeByName(*graph_r, "add.0"),
-      mappings, true));
-  std::unique_ptr<const DiffResult> diff_result =
-      ConstructDiffResult(*graph_l, *graph_r, mappings);
-  std::unique_ptr<const DiffSummary> diff_summary =
-      ConstructDiffSummary(*graph_l, *graph_r, *diff_result);
-
-  DiffSummaryProto proto = diff_summary->ToProto();
-  DiffSummary summary_from_proto =
-      DiffSummary::FromProto(proto, *module_l, *module_r);
-
-  EXPECT_THAT(summary_from_proto.computation_diff_patterns,
-              UnorderedPointwise(EqualsComputationDiffPattern(),
-                                 diff_summary->computation_diff_patterns));
 }
 
 }  // namespace

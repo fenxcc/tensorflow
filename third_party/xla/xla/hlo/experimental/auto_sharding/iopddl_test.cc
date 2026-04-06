@@ -16,15 +16,19 @@ limitations under the License.
 
 #include "xla/hlo/experimental/auto_sharding/iopddl.h"
 
+#include <string>
+
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include "absl/status/status.h"
-#include "absl/status/status_matchers.h"
 #include "absl/time/time.h"
 #include "xla/hlo/experimental/auto_sharding/solver.h"
+#include "xla/tsl/platform/status_matchers.h"
 
 namespace iopddl {
 namespace {
+
+using ::tsl::testing::IsOkAndHolds;
 
 Problem GetExampleProblem() {
   return {
@@ -69,7 +73,7 @@ TEST(EvaluateTest, LegalSolution) {
   // Node costs: 15 + 65 + 35 + 85 + 95 = 295
   // Edge costs: 40 + 40 + 20 + 30 + 70 = 200
   EXPECT_THAT(Evaluate(GetExampleProblem(), {0, 1, 2, 0, 0}),
-              absl_testing::IsOkAndHolds(495));
+              IsOkAndHolds(495));
 }
 
 TEST(EvaluateTest, LegalSolutionNoUsageLimit) {
@@ -77,8 +81,7 @@ TEST(EvaluateTest, LegalSolutionNoUsageLimit) {
   problem.usage_limit.reset();
   // Node costs: 15 + 55 + 45 + 75 + 95 = 285
   // Edge costs: 30 + 10 + 10 + 20 + 60 = 130
-  EXPECT_THAT(Evaluate(problem, {0, 0, 1, 1, 0}),
-              absl_testing::IsOkAndHolds(415));
+  EXPECT_THAT(Evaluate(problem, {0, 0, 1, 1, 0}), IsOkAndHolds(415));
 }
 
 TEST(EvaluateTest, IllegalSolutionEclipsesUsageLimit) {
@@ -108,7 +111,7 @@ TEST(EvaluateTest, IllegalSolutionHasBogusStrategyIndex) {
 
 TEST(SolveTest, FindsOptimalSolution) {
   EXPECT_THAT(Solver().Solve(GetExampleProblem(), absl::Seconds(1)),
-              absl_testing::IsOkAndHolds(Solution{0, 0, 2, 1, 0}));
+              IsOkAndHolds(Solution{0, 0, 2, 1, 0}));
 }
 
 TEST(SolveTest, NoSolutionFound) {

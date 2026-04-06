@@ -23,19 +23,17 @@ limitations under the License.
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "xla/backends/cpu/codegen/target_machine_features.h"
-#include "xla/backends/cpu/onednn_support.h"
+#include "xla/backends/cpu/onednn_fusion.h"
 #include "xla/backends/cpu/transforms/library_matcher.h"
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/ir/hlo_opcode.h"
-#include "tsl/platform/protobuf.h"
 
 namespace xla::cpu {
 
 class OneDnnMatcher : public LibraryMatcher {
  public:
-  explicit OneDnnMatcher(const TargetMachineFeatures* target_machine_features,
-                         const tsl::protobuf::RepeatedField<int>* fusion_types)
-      : LibraryMatcher(target_machine_features, fusion_types) {}
+  explicit OneDnnMatcher(const TargetMachineFeatures* target_machine_features)
+      : LibraryMatcher(target_machine_features) {}
   ~OneDnnMatcher() override = default;
 
   // Returns the set of supported HLO instructions.
@@ -51,27 +49,12 @@ class OneDnnMatcher : public LibraryMatcher {
     if (!SupportedOps().contains(instr->opcode())) {
       return false;
     }
-    if (instr->opcode() == HloOpcode::kDot) {
-      return IsOneDnnDotSupported(
-          instr->dot_dimension_numbers(), instr->operand(0)->shape(),
-          instr->operand(1)->shape(), instr->shape(), target_machine_features_);
-    }
-
-    return IsOneDnnSupportedDType(instr->shape().element_type(),
-                                  target_machine_features_) &&
+    // Assume all ops are supported as long as all inputs and output are F32.
+    return instr->shape().element_type() == F32 &&
            std::all_of(instr->operands().begin(), instr->operands().end(),
-                       [this](const HloInstruction* operand) {
-                         return IsOneDnnSupportedDType(
-                             operand->shape().element_type(),
-                             target_machine_features_);
+                       [](const HloInstruction* operand) {
+                         return operand->shape().element_type() == F32;
                        });
-  }
-
-  // Returns true if we should start a new fusion containing just the given HLO
-  // instruction.
-  bool ShouldCreateFusion(const HloInstruction* instr) override {
-    // Policy: Only dots can start a fusion for now.
-    return instr->opcode() == HloOpcode::kDot;
   }
 
   // Returns a prefix string for the fusion op's name.

@@ -15,7 +15,6 @@ limitations under the License.
 
 #include "xla/service/while_loop_all_reduce_code_motion.h"
 
-#include <cstdint>
 #include <memory>
 #include <optional>
 #include <stack>
@@ -24,13 +23,7 @@ limitations under the License.
 
 #include "absl/algorithm/container.h"
 #include "absl/container/flat_hash_map.h"
-#include "absl/container/flat_hash_set.h"
-#include "absl/container/inlined_vector.h"
-#include "absl/log/check.h"
-#include "absl/log/log.h"
 #include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "xla/hlo/analysis/hlo_replication_analysis.h"
 #include "xla/hlo/analysis/while_loop_analysis.h"
@@ -107,18 +100,17 @@ bool IsValueReplicatedWithinEachAllReduceGroup(
           << " all_reduce_group_mode: "
           << CollectiveOpGroupModeToString(all_reduce_group_mode);
   switch (all_reduce_group_mode) {
-    case CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_CROSS_REPLICA: {
+    case CollectiveOpGroupMode::kCrossReplica: {
       return cross_replica_replication_analysis == nullptr ||
              cross_replica_replication_analysis->HloInstructionIsReplicatedAt(
                  &instruction, index, replica_groups);
     }
-    case CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_CROSS_PARTITION: {
+    case CollectiveOpGroupMode::kCrossPartition: {
       return cross_partition_replication_analysis == nullptr ||
              cross_partition_replication_analysis->HloInstructionIsReplicatedAt(
                  &instruction, index, replica_groups);
     }
-    case CollectiveOpGroupMode::
-        COLLECTIVE_OP_GROUP_MODE_CROSS_REPLICA_AND_PARTITION: {
+    case CollectiveOpGroupMode::kCrossReplicaAndPartition: {
       return (cross_replica_replication_analysis == nullptr ||
               cross_replica_replication_analysis->HloInstructionIsReplicatedAt(
                   &instruction, index, replica_groups)) &&
@@ -126,7 +118,7 @@ bool IsValueReplicatedWithinEachAllReduceGroup(
               cross_partition_replication_analysis
                   ->HloInstructionIsReplicatedAt(&instruction, index));
     }
-    case CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_FLATTENED_ID: {
+    case CollectiveOpGroupMode::kFlattenedID: {
       if (num_replicas == 1) {
         return cross_partition_replication_analysis == nullptr ||
                cross_partition_replication_analysis
@@ -144,10 +136,6 @@ bool IsValueReplicatedWithinEachAllReduceGroup(
              (cross_partition_replication_analysis == nullptr ||
               cross_partition_replication_analysis
                   ->HloInstructionIsReplicatedAt(&instruction, index));
-    }
-    default: {
-      LOG(FATAL) << "Unsupported all-reduce group mode: "
-                 << CollectiveOpGroupModeToString(all_reduce_group_mode);
     }
   }
 }
@@ -273,7 +261,7 @@ std::optional<MovableAllReduceContext> MatchDynamicUpdateSliceContext(
       VLOG(5) << "DUS update must contain the all-reduce result.";
       return std::nullopt;
     }
-    int size = dus->shape().dimensions().size();
+    int size = dus->shape().dimensions_size();
     context.update_slice_offsets.resize(size, 0);
     for (int i = 0; i < size; ++i) {
       const HloInstruction* index_op =
@@ -400,14 +388,12 @@ MovableAllReduceContext IsAllReduceMovable(
     return MovableAllReduceContext{};
   }
 
-  // TODO(b/433921585): Re-enable dynamic update slice context matching after
-  // the bug is fixed.
-  // // Try matching dynamic update slice context.
-  // if (auto update_slice_context = MatchDynamicUpdateSliceContext(
-  //         all_reduce, while_instructions, call_graph);
-  //     update_slice_context.has_value()) {
-  //   return std::move(*update_slice_context);
-  // }
+  // Try matching dynamic update slice context.
+  if (auto update_slice_context = MatchDynamicUpdateSliceContext(
+          all_reduce, while_instructions, call_graph);
+      update_slice_context.has_value()) {
+    return std::move(*update_slice_context);
+  }
 
   // We only support numerical types for accumulation.
   const absl::InlinedVector<PrimitiveType, 12> kSupportedTypes{
@@ -606,6 +592,8 @@ MovableAllReduceContext IsAllReduceMovable(
           accumulation.accumulation_instruction;
       int64_t tuple_index = accumulation.param_tuple_index;
       std::stack<HloInstruction*> to_visit;
+      // TODO(b/176437845): simplify the logic below by using
+      // TuplePointsToAnalysis.
 
       // Iterate over all users of the while body parameter and find all
       // instructions that use the accumulation buffer, as specified by
@@ -1232,7 +1220,7 @@ absl::StatusOr<HloInstruction*> AddSinkedAllReducesAndReplaceWhile(
 
 }  // namespace
 
-absl::StatusOr<bool> WhileLoopAllReduceCodeMotion::RunImpl(
+absl::StatusOr<bool> WhileLoopAllReduceCodeMotion::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   bool is_changed = false;

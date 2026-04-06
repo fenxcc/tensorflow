@@ -13,6 +13,7 @@ limitations under the License.
 #ifndef XLA_BACKENDS_GPU_RUNTIME_NVSHMEM_COLLECTIVE_THUNK_H_
 #define XLA_BACKENDS_GPU_RUNTIME_NVSHMEM_COLLECTIVE_THUNK_H_
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 
@@ -21,6 +22,7 @@ limitations under the License.
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/synchronization/mutex.h"
+#include "xla/backends/gpu/collectives/gpu_clique_key.h"
 #include "xla/backends/gpu/collectives/gpu_collectives.h"
 #include "xla/backends/gpu/runtime/collective_thunk.h"
 #include "xla/backends/gpu/runtime/thunk.h"
@@ -42,7 +44,8 @@ class NvshmemCollectiveThunk : public Thunk {
  public:
   NvshmemCollectiveThunk(Kind kind, ThunkInfo thunk_info, bool is_sync);
 
-  absl::Status Prepare(const PrepareParams& params) override;
+  absl::Status Prepare(const PrepareParams& params,
+                       ResourceRequestsInterface& resource_requests) override;
 
   absl::Status Initialize(const InitializeParams& params) override;
 
@@ -65,12 +68,18 @@ class NvshmemCollectiveThunk : public Thunk {
                                             se::Stream& stream) = 0;
   virtual const CollectiveConfig& config() const = 0;
   virtual AsyncStreamKind GetAsyncStreamKind() const {
-    return AsyncStreamKind::ASYNC_STREAM_KIND_COLLECTIVE;
+    return AsyncStreamKind::kCollective;
   }
 
  private:
   bool IsAsync() const { return async_events_ != nullptr; }
   std::shared_ptr<CollectiveThunk::AsyncEvents> async_events_;
+
+  // The nvshmem barrier needs to be called by the very first nvshmem collective
+  // of each iteration of running an executable to make sure the buffers are
+  // ready. We will call barrier in thunk init and set it back to false after
+  // execution.
+  bool barrier_called_;
 };
 
 //===----------------------------------------------------------------------===//
@@ -92,8 +101,7 @@ class NvshmemCollectiveDoneThunk : public Thunk {
 
  private:
   std::shared_ptr<CollectiveThunk::AsyncEvents> async_events_;
-  AsyncStreamKind async_stream_kind_ =
-      AsyncStreamKind::ASYNC_STREAM_KIND_COLLECTIVE;
+  AsyncStreamKind async_stream_kind_ = AsyncStreamKind::kCollective;
 };
 
 //===----------------------------------------------------------------------===//

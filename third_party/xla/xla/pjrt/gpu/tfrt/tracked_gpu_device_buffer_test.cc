@@ -36,6 +36,7 @@ limitations under the License.
 #include "xla/pjrt/gpu/tfrt/gpu_event.h"
 #include "xla/pjrt/pjrt_client.h"
 #include "xla/pjrt/pjrt_common.h"
+#include "xla/pjrt/pjrt_future.h"
 #include "xla/service/shaped_buffer.h"
 #include "xla/shape.h"
 #include "xla/shape_util.h"

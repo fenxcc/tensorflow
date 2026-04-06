@@ -14,20 +14,14 @@ limitations under the License.
 ==============================================================================*/
 
 #include <cstdint>
-#include <functional>
 #include <utility>
 
-#include "absl/status/status_matchers.h"
 #include "xla/hlo/testlib/test.h"
-#include "xla/literal.h"
 #include "xla/literal_util.h"
 #include "xla/tests/hlo_pjrt_test_base.h"
 
 namespace xla {
 namespace {
-
-using ::absl_testing::IsOkAndHolds;
-using ::testing::Eq;
 
 using TrivialAllReduceTest = HloPjRtTestBase;
 
@@ -51,9 +45,8 @@ TEST_F(TrivialAllReduceTest, OneOperand) {
   auto module =
       ParseAndReturnVerifiedModule(module_str, GetModuleConfigForTest())
           .value();
-  const Literal literal = LiteralUtil::CreateR1<float>({1, 2, 3});
-  EXPECT_THAT(Execute(std::move(module), {&literal}),
-              IsOkAndHolds(Eq(std::ref(literal))));
+  auto literal = LiteralUtil::CreateR1<float>({1, 2, 3});
+  EXPECT_EQ(literal, ExecuteAndTransfer(std::move(module), {&literal}));
 }
 
 TEST_F(TrivialAllReduceTest, MultipleOperands) {
@@ -76,9 +69,8 @@ TEST_F(TrivialAllReduceTest, MultipleOperands) {
           .value();
   auto literal0 = LiteralUtil::CreateR1<float>({1, 2, 3});
   auto literal1 = LiteralUtil::CreateR1<float>({10, 20});
-  const Literal expected = LiteralUtil::MakeTuple({&literal0, &literal1});
-  EXPECT_THAT(Execute(std::move(module), {&literal0, &literal1}),
-              IsOkAndHolds(Eq(std::ref(expected))));
+  EXPECT_EQ(LiteralUtil::MakeTuple({&literal0, &literal1}),
+            ExecuteAndTransfer(std::move(module), {&literal0, &literal1}));
 }
 
 // On the GPU backend, constants get special handling.  Someone might pass a
@@ -104,9 +96,8 @@ TEST_F(TrivialAllReduceTest, ConstantOperand) {
           .value();
   auto literal0 = LiteralUtil::CreateR1<float>({1, 2, 3});
   auto literal1 = LiteralUtil::CreateR1<float>({10, 20});
-  const Literal expected = LiteralUtil::MakeTuple({&literal0, &literal1});
-  EXPECT_THAT(Execute(std::move(module), {&literal0}),
-              IsOkAndHolds(Eq(std::ref(expected))));
+  EXPECT_EQ(LiteralUtil::MakeTuple({&literal0, &literal1}),
+            ExecuteAndTransfer(std::move(module), {&literal0}));
 }
 
 TEST_F(TrivialAllReduceTest, AllReduceU8) {
@@ -146,9 +137,8 @@ ENTRY %test_computation {
           .value();
   auto literal_in = LiteralUtil::CreateR0<float>(0);
   auto literal0 = LiteralUtil::CreateR1<uint8_t>({1, 0, 0, 0, 0, 0, 0, 0});
-  const Literal expected = LiteralUtil::MakeTuple({&literal0});
-  EXPECT_THAT(Execute(std::move(module), {&literal_in}),
-              IsOkAndHolds(Eq(std::ref(expected))));
+  EXPECT_EQ(LiteralUtil::MakeTuple({&literal0}),
+            ExecuteAndTransfer(std::move(module), {&literal_in}));
 }
 
 TEST_F(TrivialAllReduceTest, AllReduceS32) {
@@ -189,9 +179,8 @@ ENTRY %test_computation {
           .value();
   auto literal_in = LiteralUtil::CreateR0<float>(0);
   auto literal0 = LiteralUtil::CreateR1<int32_t>({1, 0, 0, 0, 0, 0, 0, 0});
-  const Literal expected = LiteralUtil::MakeTuple({&literal0});
-  EXPECT_THAT(Execute(std::move(module), {&literal_in}),
-              IsOkAndHolds(Eq(std::ref(expected))));
+  EXPECT_EQ(LiteralUtil::MakeTuple({&literal0}),
+            ExecuteAndTransfer(std::move(module), {&literal_in}));
 }
 
 }  // namespace

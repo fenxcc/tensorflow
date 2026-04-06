@@ -26,7 +26,6 @@ limitations under the License.
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "xla/hlo/analysis/alias_info.h"
 #include "xla/hlo/analysis/hlo_reachability.h"
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/ir/hlo_module.h"
@@ -54,10 +53,16 @@ namespace xla {
 //  instruction fusion.
 class MultiOutputFusion : public HloModulePass {
  public:
-  explicit MultiOutputFusion(const AliasInfo* alias_info)
-      : alias_info_(alias_info) {}
+  MultiOutputFusion() = default;
 
   absl::string_view name() const override { return "multi_output_fusion"; }
+
+  // Run multi-output fusion on the given module. Returns whether the module
+  // was changed.
+  using HloPassInterface::Run;
+  absl::StatusOr<bool> Run(
+      HloModule* module,
+      const absl::flat_hash_set<absl::string_view>& execution_threads) override;
 
  protected:
   // Main entry for the optimization. Returns true if the optimization happens.
@@ -159,14 +164,6 @@ class MultiOutputFusion : public HloModulePass {
   // computation.
   virtual void CreateFusionWorkListForCurrentComputation();
 
-  // Run multi-output fusion on the given module. Returns whether the module
-  // was changed.
-  absl::StatusOr<bool> RunImpl(
-      HloModule* module,
-      const absl::flat_hash_set<absl::string_view>& execution_threads) override;
-
-  const AliasInfo* alias_info_;
-
  private:
   // The pair of candidates to be fused and the profit score.
   struct ToBeFused {
@@ -241,7 +238,7 @@ class MultiOutputFusion : public HloModulePass {
       all_fusion_candidates_;
 
   // Computation for the pass.
-  HloComputation* computation_ = nullptr;
+  HloComputation* computation_;
 };
 
 }  // namespace xla

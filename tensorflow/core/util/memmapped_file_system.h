@@ -64,63 +64,58 @@ class MemmappedFileSystem : public FileSystem {
 
   TF_USE_FILESYSTEM_METHODS_WITH_NO_TRANSACTION_SUPPORT;
 
-  absl::Status FileExists(const std::string& fname,
+  absl::Status FileExists(const string& fname,
                           TransactionToken* token) override;
   absl::Status NewRandomAccessFile(
-      const std::string& filename, TransactionToken* token,
+      const string& filename, TransactionToken* token,
       std::unique_ptr<RandomAccessFile>* result) override;
   absl::Status NewReadOnlyMemoryRegionFromFile(
-      const std::string& filename, TransactionToken* token,
+      const string& filename, TransactionToken* token,
       std::unique_ptr<ReadOnlyMemoryRegion>* result) override;
 
   // All these functions return Unimplemented error, the memmapped storage is
   // read only.
-  absl::Status NewWritableFile(const std::string& fname,
-                               TransactionToken* token,
+  absl::Status NewWritableFile(const string& fname, TransactionToken* token,
                                std::unique_ptr<WritableFile>* result) override;
   absl::Status NewAppendableFile(
-      const std::string& fname, TransactionToken* token,
+      const string& fname, TransactionToken* token,
       std::unique_ptr<WritableFile>* result) override;
-  absl::Status GetChildren(const std::string& dir, TransactionToken* token,
-                           std::vector<std::string>* r) override;
-  absl::Status GetMatchingPaths(const std::string& pattern,
-                                TransactionToken* token,
-                                std::vector<std::string>* results) override;
-  absl::Status DeleteFile(const std::string& f,
-                          TransactionToken* token) override;
-  absl::Status CreateDir(const std::string& d,
-                         TransactionToken* token) override;
-  absl::Status DeleteDir(const std::string& d,
-                         TransactionToken* token) override;
-  absl::Status RenameFile(const std::string& s, const std::string& t,
+  absl::Status GetChildren(const string& dir, TransactionToken* token,
+                           std::vector<string>* r) override;
+  absl::Status GetMatchingPaths(const string& pattern, TransactionToken* token,
+                                std::vector<string>* results) override;
+  absl::Status DeleteFile(const string& f, TransactionToken* token) override;
+  absl::Status CreateDir(const string& d, TransactionToken* token) override;
+  absl::Status DeleteDir(const string& d, TransactionToken* token) override;
+  absl::Status RenameFile(const string& s, const string& t,
                           TransactionToken* token) override;
 
   // These functions are implemented.
-  absl::Status GetFileSize(const std::string& f, TransactionToken* token,
-                           uint64_t* s) override;
+  absl::Status GetFileSize(const string& f, TransactionToken* token,
+                           uint64* s) override;
   // Currently just returns size.
-  absl::Status Stat(const std::string& fname, TransactionToken* token,
+  absl::Status Stat(const string& fname, TransactionToken* token,
                     FileStatistics* stat) override;
 
   // Initializes filesystem from a file in memmapped format.
-  absl::Status InitializeFromFile(Env* env, const std::string& filename);
+  absl::Status InitializeFromFile(Env* env, const string& filename);
 
   // Checks if the filename has a correct prefix.
-  static bool IsMemmappedPackageFilename(const std::string& filename);
+  static bool IsMemmappedPackageFilename(const string& filename);
 
-  static bool IsWellFormedMemmappedPackageFilename(const std::string& filename);
+  static bool IsWellFormedMemmappedPackageFilename(const string& filename);
 
  private:
   struct FileRegion {
-    FileRegion(uint64_t o, uint64_t l) : offset(o), length(l) {}
+    FileRegion(uint64 o, uint64 l) : offset(o), length(l) {}
 
-    uint64_t offset;  // Offset from the beginning of the file.
-    uint64_t length;  // Length of the region.
+    uint64 offset;  // Offset from the beginning of the file.
+    uint64 length;  // Length of the region.
   };
 
-  using DirectoryType = std::unordered_map<std::string, FileRegion>;
+  using DirectoryType = std::unordered_map<string, FileRegion>;
 
-  const void* GetMemoryWithOffset(uint64_t offset) const;
+  const void* GetMemoryWithOffset(uint64 offset) const;
 
   std::unique_ptr<ReadOnlyMemoryRegion> mapped_memory_;
   DirectoryType directory_;
@@ -133,11 +128,11 @@ class MemmappedEnv : public EnvWrapper {
  public:
   explicit MemmappedEnv(Env* env);
   ~MemmappedEnv() override = default;
-  absl::Status GetFileSystemForFile(const std::string& fname,
+  absl::Status GetFileSystemForFile(const string& fname,
                                     FileSystem** result) override;
   absl::Status GetRegisteredFileSystemSchemes(
-      std::vector<std::string>* schemes) override;
-  absl::Status InitializeFromFile(const std::string& filename);
+      std::vector<string>* schemes) override;
+  absl::Status InitializeFromFile(const string& filename);
 
  protected:
   std::unique_ptr<MemmappedFileSystem> memmapped_file_system_;

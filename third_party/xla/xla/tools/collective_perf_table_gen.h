@@ -94,21 +94,16 @@ class CollectivePerfTableGen {
   // content (but not deduplicating).
   absl::Status Dump(const DeviceHloInstructionProfiles& table);
 
-  // Merges all of the profile files, deduplicates them
-  // based on fingerprint and writes them to a single
-  // `DeviceHloInstructionProfiles` proto.
-  DeviceHloInstructionProfiles Merge(const std::vector<std::string>& files);
-
   // Merges all of the profiled files under `merge_path`, deduplicates them
   // based on fingerprint and writes them to a single
   // `DeviceHloInstructionProfiles` proto.
   DeviceHloInstructionProfiles Merge(absl::string_view merge_path);
 
  private:
-  explicit CollectivePerfTableGen(Config config) : config_(std::move(config)) {}
-
-  PjRtEnvironment& GetPjRtEnv();
-  Backend& GetBackend();
+  explicit CollectivePerfTableGen(Config config, PjRtEnvironment&& pjrt_env)
+      : config_(std::move(config)),
+        backend_(std::move(Backend::CreateDefaultBackend().value())),
+        pjrt_env_(std::move(pjrt_env)) {}
 
   ProfilingData Profile(std::unique_ptr<HloModule> module);
 
@@ -119,7 +114,7 @@ class CollectivePerfTableGen {
 
   Config config_;
   std::unique_ptr<Backend> backend_;
-  std::unique_ptr<PjRtEnvironment> pjrt_env_;
+  PjRtEnvironment pjrt_env_;
 };
 
 }  // namespace xla::gpu

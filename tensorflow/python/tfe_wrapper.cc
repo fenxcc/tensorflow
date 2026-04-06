@@ -1,6 +1,6 @@
 /* Copyright 2019 The TensorFlow Authors. All Rights Reserved.
 
-Licensed under the Apache License, Version 2.0 (the "License");
+Licensed under the Apache License, Version 2.0 (the "License");;
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
@@ -168,7 +168,7 @@ TFE_InputTensorHandles InputTFE_InputTensorHandles(
           // This is a subclass of EagerTensor that we don't support.
           PyErr_Clear();
           tensorflow::ThrowTypeError(
-              absl::StrCat(
+              tensorflow::strings::StrCat(
                   "Saw an object that is an instance of a strict subclass of "
                   "EagerTensor, which is not supported.  Item ",
                   i, " is type: ", elem->ob_type->tp_name)
@@ -236,9 +236,10 @@ TFE_InputTensorHandles InputTFE_InputTensorHandles(
                 .c_str());
       } else {
         tensorflow::ThrowTypeError(
-            absl::StrCat("provided list of inputs contains objects other "
-                         "than 'EagerTensor'. Item ",
-                         i, " is type: ", elem->ob_type->tp_name)
+            tensorflow::strings::StrCat(
+                "provided list of inputs contains objects other "
+                "than 'EagerTensor'. Item ",
+                i, " is type: ", elem->ob_type->tp_name)
                 .c_str());
       }
     }
@@ -270,14 +271,16 @@ TFE_OutputTensorHandles InputTFE_OutputTensorHandles(
 #endif
   // PyLong_AsLong might throw an error if an overflow occurs.
   if (PyErr_Occurred()) {
-    PyErr_SetString(PyExc_ValueError,
-                    absl::StrCat("Number of outputs is too big: ", sz).c_str());
+    PyErr_SetString(PyExc_ValueError, tensorflow::strings::StrCat(
+                                          "Number of outputs is too big: ", sz)
+                                          .c_str());
     throw py::error_already_set();
   }
   // We can't handle more than int32 sizes for number of outputs.
   if (static_cast<long>(static_cast<int32_t>(sz)) != sz) {  // NOLINT
-    PyErr_SetString(PyExc_ValueError,
-                    absl::StrCat("Number of outputs is too big: ", sz).c_str());
+    PyErr_SetString(PyExc_ValueError, tensorflow::strings::StrCat(
+                                          "Number of outputs is too big: ", sz)
+                                          .c_str());
     throw py::error_already_set();
   }
   if (sz > 0) {
@@ -377,7 +380,7 @@ py::object TFE_Py_ExecuteCancelable_wrapper(
 }
 
 static py::object TF_ListPhysicalDevices() {
-  std::vector<std::string> devices;
+  std::vector<string> devices;
   absl::Status s = tensorflow::DeviceFactory::ListAllPhysicalDevices(&devices);
   MaybeRaiseRegisteredFromStatus(s);
   PyObject* result = PyList_New(devices.size());
@@ -391,7 +394,7 @@ static py::object TF_ListPhysicalDevices() {
 }
 
 static py::object TF_ListPluggablePhysicalDevices() {
-  std::vector<std::string> devices;
+  std::vector<string> devices;
   absl::Status s =
       tensorflow::DeviceFactory::ListPluggablePhysicalDevices(&devices);
   MaybeRaiseRegisteredFromStatus(s);
@@ -405,10 +408,9 @@ static py::object TF_ListPluggablePhysicalDevices() {
   return tensorflow::PyoOrThrow(result.release());
 }
 
-static std::unordered_map<std::string, std::string> TF_GetDeviceDetails(
-    int index) {
+static std::unordered_map<string, string> TF_GetDeviceDetails(int index) {
   tensorflow::Safe_TF_StatusPtr status = tensorflow::make_safe(TF_NewStatus());
-  std::unordered_map<std::string, std::string> device_details;
+  std::unordered_map<string, string> device_details;
   absl::Status s =
       tensorflow::DeviceFactory::GetAnyDeviceDetails(index, &device_details);
   tensorflow::Set_TF_Status_from_Status(status.get(), s);
@@ -495,8 +497,9 @@ static py::bytes TFE_GetCompilerIr(py::handle& ctx,
       return CompilerArgSource::CONCRETE_INPUT;
     } else {
       ThrowValueError(
-          absl::StrCat("Only accept tf.TensorSpec or tf.Tensor but got type ",
-                       elem->ob_type->tp_name)
+          tensorflow::strings::StrCat(
+              "Only accept tf.TensorSpec or tf.Tensor but got type ",
+              elem->ob_type->tp_name)
               .c_str());
     }
   }();

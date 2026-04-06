@@ -131,22 +131,21 @@ TEST(OptimizedFunctionGraphUtilsTest,
      FromProtoProducesReturnsErrorIfGraphInvalid) {
   OptimizedFunctionGraph proto;
   // Invalid proto because no device specified for node B.
-  google::protobuf::TextFormat::ParseFromString(
+  proto2::TextFormat::ParseFromString(
       R"pb(
         name: "test_func",
         function_graph { node { name: 'B' op: 'OneOutput' } $0 }
       )pb",
       &proto);
 
-  EXPECT_THAT(
-      OptimizedFunctionGraphInfo::FromProto(std::move(proto)),
-      absl_testing::StatusIs(tsl::error::INVALID_ARGUMENT,
-                             "Node 'B' is missing a device specification"));
+  EXPECT_THAT(OptimizedFunctionGraphInfo::FromProto(std::move(proto)),
+              StatusIs(tsl::error::INVALID_ARGUMENT,
+                       "Node 'B' is missing a device specification"));
 }
 
 TEST(OptimizedFunctionGraphUtilsTest, FromProtoProducesCorrectResult) {
   OptimizedFunctionGraph proto;
-  google::protobuf::TextFormat::ParseFromString(
+  proto2::TextFormat::ParseFromString(
       absl::Substitute(
           R"pb(
             name: "test_func",
@@ -192,7 +191,7 @@ TEST(OptimizedFunctionGraphUtilsTest, FromProtoProducesCorrectResult) {
 TEST(OptimizedFunctionGraphUtilsTest,
      FromProtoProducesCorrectResultWithFunctionCall) {
   OptimizedFunctionGraph proto;
-  google::protobuf::TextFormat::ParseFromString(
+  proto2::TextFormat::ParseFromString(
       absl::Substitute(
           R"pb(
             name: "test_func",

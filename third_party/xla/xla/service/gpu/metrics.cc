@@ -114,7 +114,7 @@ void RecordGpuCompilerStacktrace() {
   stack.pop_front();
   stack.pop_back();
 
-  const int kMaxStackDepth = 15;
+  const int kMaxStackDepth = 10;
   if (stack.size() > kMaxStackDepth) {
     stack.resize(kMaxStackDepth);
   }

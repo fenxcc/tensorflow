@@ -132,7 +132,7 @@ void MergeOutgoingDataEdges(const Scope& s, Node* old_node, Node* new_node,
     if (merged_output.node() == nullptr) {
       Output new_output(new_node, oidx);
       if (debugging_opts.print_outputs) {
-        std::string cpu_device = "/job:localhost/replica:0/task:0/device:CPU:0";
+        string cpu_device = "/job:localhost/replica:0/task:0/device:CPU:0";
         ops::Print print_op(s.WithOpName("print_", oidx)
                                 .WithDevice(cpu_device)
                                 .WithAssignedDevice(cpu_device),
@@ -298,8 +298,7 @@ absl::StatusOr<Node*> ReplaceFunctionCallWithPartitionedCall(
     const GraphOptimizationPassOptions& options,
     const FunctionLibraryDefinition& flib_def, Node* n, Graph* g,
     const NameAttrList& func, const Scope& root) {
-  std::string config_string =
-      options.session_options->config.SerializeAsString();
+  string config_string = options.session_options->config.SerializeAsString();
 
   int input_count = absl::c_count_if(
       n->in_edges(), [](const Edge* e) { return !e->IsControlEdge(); });
@@ -347,8 +346,7 @@ absl::StatusOr<Node*> ReplaceFunctionCallWithPartitionedCall(
 
 absl::StatusOr<jit::DeviceId> InferDeviceForCluster(
     jit::DeviceInfoCache* device_info_cache, Node* n,
-    const std::string& function_name,
-    const FunctionLibraryDefinition& flib_def) {
+    const string& function_name, const FunctionLibraryDefinition& flib_def) {
   const FunctionDef* func_def = flib_def.Find(function_name);
   TF_RET_CHECK(func_def) << "Could not find " << function_name;
 
@@ -487,8 +485,7 @@ absl::Status ReplaceNodeWithXlaCompileAndXlaRun(
     requires_compilation = true;
   }
 
-  std::string device_name_str =
-      std::string(device_info_cache->GetNameFor(device));
+  string device_name_str = string(device_info_cache->GetNameFor(device));
 
   absl::Status status;
   Scope root = NewInternalScope(g, &status, /*refiner=*/nullptr)

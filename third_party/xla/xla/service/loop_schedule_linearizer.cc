@@ -164,7 +164,7 @@ static absl::StatusOr<bool> AddControlEdgesForLoopWrites(
   return changed;
 }
 
-absl::StatusOr<bool> LoopScheduleLinearizer::RunImpl(
+absl::StatusOr<bool> LoopScheduleLinearizer::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   // Constructing HloAliasAnalysis is expensive, so don't do it until we find at

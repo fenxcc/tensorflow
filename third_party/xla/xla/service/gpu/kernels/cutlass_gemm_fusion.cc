@@ -248,7 +248,8 @@ std::optional<CustomKernelFusionPattern::Match>
 CutlassGemmWithDynamicUpdateSlicePattern::TryMatch(
     const se::DeviceDescription& device, HloInstruction* instr) const {
   // This pattern is disabled for VOLTA. See b/380087823.
-  if (device.gpu_compute_capability().IsCuda()) {
+  if (std::holds_alternative<se::CudaComputeCapability>(
+          device.gpu_compute_capability())) {
     if (device.cuda_compute_capability().major ==
         se::CudaComputeCapability::CudaComputeCapabilities::kVolta) {
       return std::nullopt;

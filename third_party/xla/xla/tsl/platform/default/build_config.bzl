@@ -7,19 +7,17 @@ load("@com_github_grpc_grpc//bazel:cc_grpc_library.bzl", "cc_grpc_library")
 load("@com_github_grpc_grpc//bazel:python_rules.bzl", "py_grpc_library")
 load("@com_google_protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
 load("@com_google_protobuf//bazel:py_proto_library.bzl", "py_proto_library")
-load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
-load("@rules_cc//cc:cc_test.bzl", _cc_test = "cc_test")
+load(
+    "@local_xla//xla/tsl:tsl.bzl",
+    "clean_dep",
+    "if_tsl_link_protobuf",
+)
+load("@local_xla//xla/tsl/platform:build_config_root.bzl", "if_static")
 load("@rules_python//python:py_library.bzl", "py_library")
 
 # IMPORTANT: Do not remove this load statement. We rely on that //xla/tsl doesn't exist in g3
 # to prevent g3 .bzl files from loading this file.
 load("//xla/tsl:package_groups.bzl", "DEFAULT_LOAD_VISIBILITY")
-load(
-    "//xla/tsl:tsl.bzl",
-    "clean_dep",
-    "if_tsl_link_protobuf",
-)
-load("//xla/tsl/platform:build_config_root.bzl", "if_static")
 
 visibility(DEFAULT_LOAD_VISIBILITY)
 
@@ -129,10 +127,10 @@ def pyx_library(
     for src in pyx_srcs:
         stem = src.split(".")[0]
         shared_object_name = stem + ".so"
-        cc_binary(
+        native.cc_binary(
             name = shared_object_name,
             srcs = [stem + ".cpp"],
-            deps = cc_deps + [Label("//third_party/python_runtime:headers")],
+            deps = cc_deps + ["@local_xla//third_party/python_runtime:headers"],
             linkshared = 1,
             testonly = testonly,
             copts = copts,
@@ -231,11 +229,7 @@ def tf_proto_library(
     native.proto_library(
         name = name,
         srcs = srcs,
-        deps = deps + protodeps + [
-            proto_lib
-            for proto_lib in well_known_proto_libs()
-            if proto_lib not in protodeps
-        ],
+        deps = deps + protodeps + well_known_proto_libs(),
         exports = exports,
         compatible_with = compatible_with,
         visibility = visibility,
@@ -311,7 +305,7 @@ def tf_proto_library(
             generate_mocks = True,
             visibility = visibility,
             compatible_with = compatible_with,
-            deps = [":{}".format(cc_proto_name), "@com_github_grpc_grpc//:grpc++"],
+            deps = [":{}".format(cc_proto_name)],
             plugin_flags = ["services_namespace=grpc"],
             grpc_only = True,
         )
@@ -321,13 +315,15 @@ def tf_additional_lib_hdrs():
         clean_dep("//xla/tsl/platform/default:casts.h"),
         clean_dep("//xla/tsl/platform/default:context.h"),
         clean_dep("//xla/tsl/platform/default:criticality.h"),
+        clean_dep("//xla/tsl/platform/default:integral_types.h"),
+        clean_dep("//xla/tsl/platform/default:logging.h"),
         clean_dep("//xla/tsl/platform/default:stacktrace.h"),
         clean_dep("//xla/tsl/platform/default:status.h"),
         clean_dep("//xla/tsl/platform/default:statusor.h"),
         clean_dep("//xla/tsl/platform/default:tracing_impl.h"),
         clean_dep("//xla/tsl/platform/default:unbounded_work_queue.h"),
     ] + select({
-        clean_dep("//xla/tsl:windows"): [
+        clean_dep("@local_xla//xla/tsl:windows"): [
             clean_dep("//xla/tsl/platform/windows:intrinsics_port.h"),
             clean_dep("//xla/tsl/platform/windows:stacktrace.h"),
             clean_dep("//xla/tsl/platform/windows:subprocess.h"),
@@ -379,11 +375,11 @@ def tf_additional_lib_deps():
 
 def tf_additional_core_deps():
     return select({
-        clean_dep("//xla/tsl:android"): [],
-        clean_dep("//xla/tsl:ios"): [],
-        clean_dep("//xla/tsl:linux_s390x"): [],
+        clean_dep("@local_xla//xla/tsl:android"): [],
+        clean_dep("@local_xla//xla/tsl:ios"): [],
+        clean_dep("@local_xla//xla/tsl:linux_s390x"): [],
         "//conditions:default": [
-            clean_dep("//xla/tsl/platform/cloud:gcs_file_system"),
+            clean_dep("@local_xla//xla/tsl/platform/cloud:gcs_file_system"),
         ],
     })
 
@@ -391,7 +387,7 @@ def tf_lib_proto_parsing_deps():
     return [
         ":protos_all_cc",
         clean_dep("@eigen_archive//:eigen3"),
-        clean_dep("//xla/tsl/protobuf:protos_all_cc"),
+        clean_dep("@local_xla//xla/tsl/protobuf:protos_all_cc"),
     ]
 
 def tf_py_clif_cc(name, visibility = None, **_kwargs):
@@ -419,28 +415,18 @@ def tf_fingerprint_deps():
         "@farmhash_archive//:farmhash",
     ]
 
-def _protobuf_deps():
-    return [
-        clean_dep("@com_google_protobuf//:delimited_message_util"),
-        clean_dep("@com_google_protobuf//:differencer"),
-        clean_dep("@com_google_protobuf//:json_util"),
-        clean_dep("@com_google_protobuf//:type_resolver"),
-        clean_dep("@com_google_protobuf//:protobuf"),
-        clean_dep("@com_google_protobuf//:protobuf_lite"),
-        clean_dep("@com_google_protobuf//src/google/protobuf/io"),
-        clean_dep("@com_google_protobuf//src/google/protobuf/io:tokenizer"),
-    ]
-
 def tf_protobuf_deps():
     return if_static(
-        _protobuf_deps(),
+        [
+            clean_dep("@com_google_protobuf//:protobuf"),
+        ],
         otherwise = [clean_dep("@com_google_protobuf//:protobuf_headers")],
     )
 
 # TODO(b/356020232): remove completely after migration is done
 # Link protobuf, unless the tsl_link_protobuf build flag is explicitly set to false.
 def tsl_protobuf_deps():
-    return if_tsl_link_protobuf(_protobuf_deps(), [clean_dep("@com_google_protobuf//:protobuf_headers")])
+    return if_tsl_link_protobuf([clean_dep("@com_google_protobuf//:protobuf")], [clean_dep("@com_google_protobuf//:protobuf_headers")])
 
 def strict_cc_test(
         name,
@@ -448,7 +434,7 @@ def strict_cc_test(
         shuffle_tests = True,
         args = None,
         fail_if_no_test_linked = True,
-        fail_if_no_test_selected = False,
+        fail_if_no_test_selected = True,
         **kwargs):
     """A drop-in replacement for cc_test that enforces some good practices by default.
 
@@ -482,10 +468,11 @@ def strict_cc_test(
         # cases. Local builds are exempt from this enforcement to allow for development with
         # --gtest_filter.
         args = args + select({
-            clean_dep("//xla/tsl:is_ci_build"): ["--gtest_fail_if_no_test_selected"],
+            clean_dep("@local_xla//xla/tsl:is_ci_build"): ["--gtest_fail_if_no_test_selected"],
             "//conditions:default": [],
         })
-    _cc_test(
+
+    native.cc_test(
         name = name,
         linkstatic = linkstatic,
         args = args,
@@ -521,9 +508,9 @@ def tsl_cc_test(
                 clean_dep("@com_google_protobuf//:protobuf"),
                 # TODO(ddunleavy) remove these and add proto deps to tests
                 # granularly
-                clean_dep("//xla/tsl/protobuf:error_codes_proto_impl_cc_impl"),
-                clean_dep("//xla/tsl/protobuf:histogram_proto_cc_impl"),
-                clean_dep("//xla/tsl/protobuf:status_proto_cc_impl"),
+                clean_dep("@local_xla//xla/tsl/protobuf:error_codes_proto_impl_cc_impl"),
+                clean_dep("@local_xla//xla/tsl/protobuf:histogram_proto_cc_impl"),
+                clean_dep("@local_xla//xla/tsl/protobuf:status_proto_cc_impl"),
                 clean_dep("//tsl/profiler/protobuf:xplane_proto_cc_impl"),
                 clean_dep("//tsl/profiler/protobuf:profiler_options_proto_cc_impl"),
             ],
@@ -532,7 +519,7 @@ def tsl_cc_test(
     )
 
 def tf_portable_proto_lib():
-    return ["//tensorflow/core:protos_all_cc_impl", clean_dep("//xla/tsl/protobuf:protos_all_cc_impl")]
+    return ["//tensorflow/core:protos_all_cc_impl", clean_dep("@local_xla//xla/tsl/protobuf:protos_all_cc_impl")]
 
 def tf_protobuf_compiler_deps():
     return if_static(
@@ -544,8 +531,8 @@ def tf_protobuf_compiler_deps():
 
 def tf_windows_aware_platform_deps(name):
     return select({
-        clean_dep("//xla/tsl:windows"): [
-            clean_dep("//xla/tsl/platform/windows:" + name),
+        clean_dep("@local_xla//xla/tsl:windows"): [
+            clean_dep("@local_xla//xla/tsl/platform/windows:" + name),
         ],
         "//conditions:default": [
             clean_dep("//xla/tsl/platform/default:" + name),
@@ -560,6 +547,9 @@ def tf_stream_executor_deps(name, platform_dir = "@local_xla//xla/tsl/platform/"
 
 def tf_platform_alias(name, platform_dir = "@local_xla//xla/tsl/platform/"):
     return [platform_dir + "default:" + name]
+
+def tf_logging_deps():
+    return [clean_dep("//xla/tsl/platform/default:logging")]
 
 def tf_error_logging_deps():
     return [clean_dep("//xla/tsl/platform/default:error_logging")]

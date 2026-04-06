@@ -49,11 +49,10 @@ int GetFirstElementIndexWithPredicate(const Predicate& predicate,
 }
 
 // Adds a node to the graph.
-NodeDef* AddNode(
-    absl::string_view name, absl::string_view op,
-    const std::vector<std::string>& inputs,
-    const std::vector<std::pair<std::string, AttrValue>>& attributes,
-    MutableGraphView* graph);
+NodeDef* AddNode(absl::string_view name, absl::string_view op,
+                 const std::vector<string>& inputs,
+                 const std::vector<std::pair<string, AttrValue>>& attributes,
+                 MutableGraphView* graph);
 
 // Adds Placeholder node for given type.
 NodeDef* AddScalarPlaceholder(DataType dtype, MutableGraphView* graph);
@@ -135,7 +134,7 @@ absl::Status GetDatasetOutputTypesAttr(const NodeDef& node,
 
 // Returns the list of indices of all nodes with the given op or empty list if
 // no such node exists.
-std::vector<int> FindAllGraphNodesWithOp(const std::string& op,
+std::vector<int> FindAllGraphNodesWithOp(const string& op,
                                          const GraphDef& graph);
 
 // Sets the node name using `prefix` as a prefix while guaranteeing the name
@@ -151,14 +150,13 @@ void SetUniqueGraphFunctionName(absl::string_view prefix,
 
 // Copies attribute having name `attribute_name` from node `from` to node
 // `to_node`.
-void CopyAttribute(const std::string& attribute_name, const NodeDef& from,
+void CopyAttribute(const string& attribute_name, const NodeDef& from,
                    NodeDef* to_node);
 
 // Concatenates list attribute having name `attribute_name` from `first` and
 // `second` node, setting it to `to_node`.
-void ConcatAttributeList(const std::string& attribute_name,
-                         const NodeDef& first, const NodeDef& second,
-                         NodeDef* to_node);
+void ConcatAttributeList(const string& attribute_name, const NodeDef& first,
+                         const NodeDef& second, NodeDef* to_node);
 
 // Checks that all nodes in the graphs have unique names, and sets their names
 // to be unique if they are not already.  This is necessary as Graph does not
@@ -197,13 +195,13 @@ void MaybeSetFusedMetadata(const NodeDef& node1, const NodeDef& node2,
 bool CopyShapesAndTypesAttrs(const NodeDef& from, NodeDef* to_node);
 
 // Checks whether the op has a "sloppy" attribute.
-bool HasSloppyAttr(const std::string& op);
+bool HasSloppyAttr(const string& op);
 
 // Checks whether the op has a "replicate_on_split" attribute.
-bool HasReplicateOnSplitAttr(const std::string& op);
+bool HasReplicateOnSplitAttr(const string& op);
 
 // Checks whether the op has a "deterministic" attribute.
-bool HasDeterministicAttr(const std::string& op);
+bool HasDeterministicAttr(const string& op);
 
 // Sets the `name` as the metadata name of the `node`. It returns an error if
 // the `node` already has a metadata name.

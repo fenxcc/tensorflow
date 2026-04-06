@@ -21,8 +21,6 @@ limitations under the License.
 #include <functional>
 #include <memory>
 #include <optional>
-#include <tuple>
-#include <utility>
 #include <vector>
 
 #include "absl/base/thread_annotations.h"
@@ -34,12 +32,10 @@ limitations under the License.
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
-#include "absl/synchronization/notification.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "llvm/Support/ExtensibleRTTI.h"
 #include "xla/literal.h"
-#include "xla/pjrt/distributed/client.h"
 #include "xla/pjrt/distributed/key_value_store_interface.h"
 #include "xla/pjrt/pjrt_client.h"
 #include "xla/pjrt/pjrt_common.h"
@@ -53,6 +49,7 @@ limitations under the License.
 #include "xla/python/ifrt/device.h"
 #include "xla/python/ifrt/device_list.h"
 #include "xla/python/ifrt/dtype.h"
+#include "xla/python/ifrt/future.h"
 #include "xla/python/ifrt/memory.h"
 #include "xla/python/ifrt/remap_plan.h"
 #include "xla/python/ifrt/shape.h"
@@ -64,12 +61,9 @@ limitations under the License.
 #include "xla/python/pjrt_ifrt/pjrt_compiler.h"
 #include "xla/python/pjrt_ifrt/transfer_server_interface.h"
 #include "xla/shape.h"
-#include "xla/tsl/concurrency/future.h"
 #include "xla/tsl/concurrency/ref_count.h"
-#include "xla/tsl/platform/env.h"
 #include "xla/tsl/platform/logging.h"
 #include "xla/xla_data.pb.h"
-#include "tsl/platform/unbounded_work_queue.h"
 
 namespace xla {
 namespace ifrt {
@@ -92,32 +86,10 @@ class PjRtCompatibleClient
   // operations.
   virtual xla::PjRtClient* pjrt_client() = 0;
   virtual std::shared_ptr<xla::PjRtClient> shared_ptr_pjrt_client() = 0;
-
-  // Creates an IFRT `PjRtCompatibleArray` from `PjRtBuffer`(s).
-  //
-  // Most array properties will be inferred from the input `PjRtBuffer`(s),
-  // except for the layout's defaultness that is absent information at the PjRt
-  // level.
-  //
-  // `has_custom_layout` indicates that the layout of the input `PjRtBuffer`(s)
-  // is intended to be a user-chosen custom layout, and
-  // `PjRtCompatibleArray::pjrt_layout()` should return a non-null value.
-  // Treating a default layout as a custom layout is typically allowed in PjRt
-  // if their concrete layouts match, but it may not pass a strict check that
-  // unconditionally says a default layout != any non-default layout designed
-  // for portability. Thus, it is useful for the caller to provide as accurate
-  // information as possible.
   virtual absl::StatusOr<tsl::RCReference<PjRtCompatibleArray>> CreatePjRtArray(
-      std::shared_ptr<PjRtBuffer> pjrt_buffer, bool has_custom_layout) = 0;
+      std::shared_ptr<PjRtBuffer> pjrt_buffer) = 0;
   virtual absl::StatusOr<tsl::RCReference<PjRtCompatibleArray>> CreatePjRtArray(
-      Shape shape, PjRtBuffers pjrt_buffers, bool has_custom_layout) = 0;
-
-  // Temporary overloads for API transition.
-  absl::StatusOr<tsl::RCReference<PjRtCompatibleArray>> CreatePjRtArray(
-      std::shared_ptr<PjRtBuffer> pjrt_buffer);
-  absl::StatusOr<tsl::RCReference<PjRtCompatibleArray>> CreatePjRtArray(
-      Shape shape, PjRtBuffers pjrt_buffers);
-
+      Shape shape, PjRtBuffers pjrt_buffers) = 0;
   virtual absl::StatusOr<PjRtCompatibleDevice*> LookupPjRtDevice(
       xla::PjRtDevice* pjrt_device) const = 0;
   virtual absl::StatusOr<PjRtCompatibleMemory*> LookupPjRtMemory(
@@ -132,9 +104,6 @@ class PjRtClient final
  public:
   struct CreateOptions {
     std::shared_ptr<xla::PjRtClient> pjrt_client;
-
-    // TODO: mwhittaker - Remove kv_store; it is subsumed by distributed_client.
-    std::shared_ptr<xla::DistributedRuntimeClient> distributed_client = nullptr;
 
     // KV store for coordinating cross-host device transfers and sharing
     // topology information. If present and `use_kv_store_for_topology_exchange`
@@ -201,9 +170,9 @@ class PjRtClient final
     return pjrt_client_;
   }
   absl::StatusOr<tsl::RCReference<PjRtCompatibleArray>> CreatePjRtArray(
-      std::shared_ptr<PjRtBuffer> pjrt_buffer, bool has_custom_layout) override;
+      std::shared_ptr<PjRtBuffer> pjrt_buffer) override;
   absl::StatusOr<tsl::RCReference<PjRtCompatibleArray>> CreatePjRtArray(
-      Shape shape, PjRtBuffers pjrt_buffers, bool has_custom_layout) override;
+      Shape shape, PjRtBuffers pjrt_buffers) override;
 
   // Client implementation.
 
@@ -220,15 +189,17 @@ class PjRtClient final
       const void* data, DType dtype, Shape shape,
       std::optional<absl::Span<const int64_t>> byte_strides,
       ShardingRef sharding, HostBufferSemantics semantics,
-      std::function<void()> on_done_with_host_buffer) override;
+      std::function<void()> on_done_with_host_buffer,
+      tsl::RCReference<UserContext> user_context) override;
 
   absl::StatusOr<std::vector<ArrayRef>> MakeArraysFromHostBufferShards(
       absl::Span<MakeArraysFromHostBufferShardsSpec> specs,
-      HostBufferSemantics semantics) override;
+      HostBufferSemantics semantics,
+      tsl::RCReference<UserContext> user_context) override;
 
   absl::StatusOr<std::vector<ArrayRef>> MakeErrorArrays(
-      const absl::Status& error,
-      absl::Span<const ArraySpec> array_specs) override;
+      const absl::Status& error, absl::Span<const ArraySpec> array_specs,
+      tsl::RCReference<UserContext> user_context) override;
 
   absl::StatusOr<ArrayRef> AssembleArrayFromSingleDeviceArrays(
       DType dtype, Shape shape, ShardingRef sharding,
@@ -244,11 +215,7 @@ class PjRtClient final
       const RemapPlan& plan, absl::Span<xla::ifrt::ArrayRef> arrays,
       ArrayCopySemantics semantics) override;
 
-  absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> ReshardArrays(
-      absl::Span<ArrayRef> arrays, absl::Span<const ArraySpec> specs,
-      ArrayCopySemantics semantics) override;
-
-  tsl::Future<> GetReadyFuture(absl::Span<const ValueRef> values) override;
+  Future<> GetReadyFuture(absl::Span<const ValueRef> values) override;
 
   absl::StatusOr<tsl::RCReference<Tuple>> MakeTuple(
       absl::Span<ValueRef> values) override;
@@ -304,7 +271,7 @@ class PjRtClient final
   absl::StatusOr<Device*> LookupAddressableDevice(
       int local_hardware_id) const override;
 
-  absl::StatusOr<DeviceListRef> MakeDeviceList(
+  DeviceListRef MakeDeviceList(
       absl::Span<Device* const> devices) const override;
 
   Compiler* GetDefaultCompiler() override {
@@ -349,9 +316,6 @@ class PjRtClient final
     return tsl::RCReference<UserContext>();
   }
 
-  // Returns the latest set of incarnation ids for every task.
-  absl::StatusOr<absl::flat_hash_map<int, IncarnationId>> Incarnations() const;
-
   static char ID;  // NOLINT
 
  private:
@@ -378,13 +342,6 @@ class PjRtClient final
   absl::flat_hash_map<xla::PjRtMemorySpace*, PjRtMemory*> memory_map_;
   absl::flat_hash_map<DeviceId, PjRtDevice*> device_id_map_;
 
-  // Cached concrete default layouts.
-  mutable absl::Mutex default_layout_cache_mu_;
-  mutable absl::flat_hash_map<
-      std::tuple<DType, std::vector<int64_t>, MemoryKind>,
-      absl::StatusOr<std::shared_ptr<const xla::PjRtLayout>>>
-      default_layout_cache_ ABSL_GUARDED_BY(default_layout_cache_mu_);
-
   // Copies arrays from source to destination devices when at least one of the
   // (source, destination) pairs is cross-host.
   absl::StatusOr<std::vector<ArrayRef>> CopyArraysForCrossHost(
@@ -400,7 +357,7 @@ class PjRtClient final
   // from a cross-host send onto device.
   absl::StatusOr<PjRtBuffers> CrossHostReceiveBuffers(
       absl::Span<const xla::Shape> shapes, xla::PjRtDevice* device,
-      std::vector<int64_t> keys);
+      const std::vector<int64_t>& keys);
 
   // Copies arrays from source to destination devices when at least one of the
   // (source, destination) pairs is cross-host using an experimental DCN
@@ -418,10 +375,7 @@ class PjRtClient final
   // If true, the backend implements the cross-host transfer APIs.
   bool pjrt_supports_cross_host_transfers_ = false;
 
-  absl::Status WatchGlobalProcessInfo(tsl::CoordinationServiceAgent& agent);
-
   std::atomic<int64_t> next_transfer_key_ = 0;
-  std::shared_ptr<xla::DistributedRuntimeClient> distributed_client_;
   std::shared_ptr<xla::KeyValueStoreInterface> kv_store_;
   absl::Duration cross_host_transfer_timeout_;
   absl::Mutex transfer_server_mu_;
@@ -431,17 +385,6 @@ class PjRtClient final
   std::optional<std::unique_ptr<TransferServerInterface>> transfer_server_;
   absl::Status InitializeTransferServer()
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(transfer_server_mu_);
-
-  // Note that global_process_info_thread_'s destructor will block until the
-  // thread has stopped. Because it is the last field, we know the thread won't
-  // access any other fields that have already been destructed.
-  absl::Mutex shutting_down_mu_;
-  bool shutting_down_ ABSL_GUARDED_BY(shutting_down_mu_) = false;
-  std::unique_ptr<tsl::Thread> global_process_info_thread_;
-
-  // A work queue for dispatching background work. Enqueued work items can
-  // access the members of this class, so work_queue_ should be built last.
-  std::unique_ptr<tsl::UnboundedWorkQueue> work_queue_;
 
   friend class PjRtClientPeer;
 };

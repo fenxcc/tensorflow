@@ -37,13 +37,24 @@ limitations under the License.
 #include "xla/pjrt/pjrt_executable.h"
 #include "xla/shape.h"
 #include "xla/tools/multihost_hlo_runner/hlo_input_output_format.h"
-#include "xla/tools/multihost_hlo_runner/profiler_interface.h"
 #include "xla/xla.pb.h"
 #include "xla/xla_data.pb.h"
 #include "tsl/profiler/lib/profiler_session.h"
 #include "tsl/profiler/protobuf/xplane.pb.h"
 
 namespace xla {
+
+// Interface for profiler plugins. If being set in RunningOptions, profiling
+// session will be created for the last run of the HLO module.
+class ProfilerInterface {
+ public:
+  virtual ~ProfilerInterface() = default;
+  // Creates profiling session while running HLO module.
+  virtual void CreateSession() = 0;
+  // Uploads profiling session data after finishing running HLO module.
+  virtual void UploadSession() = 0;
+};
+
 // Interface that may optionally returns an XSpace proto after UploadSession()
 // is called. This can be used by caller to get a programmatic handler of the
 // profile data.
@@ -234,9 +245,6 @@ struct RawCompileOptions {
   std::optional<int> num_slices = std::nullopt;
   // A directory to dump xla debug data to.
   std::string xla_dump_to = "";
-  // When user runs HLO runner with hlo_config provided and
-  // XLA_FLAGS=--xla_dump_to=dir we want to respect the xla_dump_to field.
-  bool preserve_xla_dump_to = false;
   XlaTextDumpMode xla_text_dump_mode = XlaTextDumpMode::kNotDumpAsText;
   XlaProtoDumpMode xla_proto_dump_mode = XlaProtoDumpMode::kNotDumpAsProto;
   // A directory to dump xspace data to (GPU profiler only).
@@ -252,13 +260,6 @@ struct RunningOptions {
   ModuleOutputMode module_output_mode = ModuleOutputMode::kReturnOutputs;
   // Repeatedly execute the HLO for this many times.
   size_t num_repeats = 1;
-  // The last `num_repeats_with_profiler` repeats out of `num_repeats` will be
-  // profiled. Default is 1, i.e., the last repeat will be profiled.
-  size_t num_repeats_with_profiler = 1;
-  // If true, we recreate the profiler session between repeats when profiling
-  // more than one repeat.
-  bool recreate_profiler_session_between_repeats = false;
-  size_t base_run_id = 0;
   // If true, we recreate the buffers between repeats to reset of effect of
   // buffer donation.
   bool recreate_buffers_between_repeats = false;
@@ -317,8 +318,7 @@ absl::Status LoadAndRunAndDump(
     const xla::FunctionalHloRunner::RunningOptions& running_options,
     absl::string_view hlo_file, InputFormat input_format,
     std::string dump_output_to = "", int task_id = 0, int num_nodes = 1,
-    std::shared_ptr<xla::KeyValueStoreInterface> kv_store = nullptr,
-    std::minstd_rand0* engine = nullptr);
+    std::shared_ptr<xla::KeyValueStoreInterface> kv_store = nullptr);
 
 // Loads an HLO module from hlo_file according to input_format and run it.
 // The HLO module is run with the provided arguments if the arguments map is

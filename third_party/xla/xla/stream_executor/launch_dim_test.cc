@@ -18,15 +18,16 @@ limitations under the License.
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include "absl/status/status.h"
-#include "absl/status/status_matchers.h"
-#include "google/protobuf/text_format.h"
-#include "xla/stream_executor/launch_dim.pb.h"
+#include "xla/tsl/platform/status_matchers.h"
 #include "xla/tsl/platform/statusor.h"
 #include "xla/tsl/util/proto/proto_matchers.h"
+#include "tsl/platform/protobuf.h"
 
 namespace stream_executor {
 namespace {
 using ::tsl::proto_testing::EqualsProto;
+using ::tsl::testing::IsOkAndHolds;
+using ::tsl::testing::StatusIs;
 
 TEST(Dim3DTest, ToProto) {
   Dim3D dimensions{1, 2, 3};
@@ -47,25 +48,25 @@ TEST(Dim3DTest, FromProto) {
 
   proto.set_x(-1);
   EXPECT_THAT(Dim3D::FromProto(proto),
-              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
+              StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(ThreadDimTest, ToAndFromProto) {
   ThreadDim thread_dimensions{2, 4, 6};
   EXPECT_THAT(ThreadDim::FromProto(thread_dimensions.ToProto()),
-              absl_testing::IsOkAndHolds(thread_dimensions));
+              IsOkAndHolds(thread_dimensions));
 }
 
 TEST(BlockDimTest, ToAndFromProto) {
   BlockDim block_dimensions{2, 4, 6};
   EXPECT_THAT(BlockDim::FromProto(block_dimensions.ToProto()),
-              absl_testing::IsOkAndHolds(block_dimensions));
+              IsOkAndHolds(block_dimensions));
 }
 
 TEST(ClusterDimTest, ToAndFromProto) {
   ClusterDim cluster_dimensions{2, 4, 6};
   EXPECT_THAT(ClusterDim::FromProto(cluster_dimensions.ToProto()),
-              absl_testing::IsOkAndHolds(cluster_dimensions));
+              IsOkAndHolds(cluster_dimensions));
 }
 
 TEST(ThreadDimTest, FromAndToProto) {

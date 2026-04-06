@@ -21,14 +21,15 @@ limitations under the License.
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/SMLoc.h"
 #include "llvm/Support/SourceMgr.h"
+#include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/DialectRegistry.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/OwningOpRef.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
 #include "mlir/Support/LogicalResult.h"
+#include "stablehlo/dialect/Register.h"
 #include "xla/hlo/translate/mhlo_to_hlo/translate.h"
-#include "xla/hlo/translate/register.h"
 #include "xla/mlir_hlo/mhlo/transforms/passes.h"
 
 namespace xla {
@@ -80,7 +81,8 @@ mlir::LogicalResult StablehloToHloTextMain(
   source_mgr->AddNewSourceBuffer(std::move(buffer), llvm::SMLoc());
 
   mlir::DialectRegistry registry;
-  xla::RegisterMlirToHloDependentDialects(registry);
+  mlir::stablehlo::registerAllDialects(registry);
+  registry.insert<mlir::func::FuncDialect>();
 
   mlir::MLIRContext context(registry);
   mlir::OwningOpRef<mlir::ModuleOp> module =

@@ -37,7 +37,6 @@ cc_library(
         "//tensorflow/core:core_cpu_internal",
         "//tensorflow/core:framework",
         "//tensorflow/core:framework_internal",
-        "//tensorflow/core:lib",
         "//tensorflow/core:protos_all_cc",
         "//tensorflow/core/common_runtime/eager:context",
         "//tensorflow/core/common_runtime/eager:eager_operation",
@@ -153,7 +152,6 @@ tf_cc_test(
         "//tensorflow/core/distributed_runtime/rpc:rpc_rendezvous_mgr",
         "//tensorflow/core/protobuf:eager_service_proto_cc",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/types:optional",
         "@com_google_absl//absl/types:variant",
     ],
@@ -232,7 +230,6 @@ cc_library(
         "//tensorflow/core/common_runtime/eager:eager_executor",
         "//tensorflow/core/common_runtime/eager:eager_operation",
         "//tensorflow/core/common_runtime/eager:tensor_handle",
-        "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/types:optional",
     ],
 )

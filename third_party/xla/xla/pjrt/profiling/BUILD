@@ -1,5 +1,3 @@
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
-
 # Device runtime profiling.
 load(
     "//xla/tsl:tsl.bzl",

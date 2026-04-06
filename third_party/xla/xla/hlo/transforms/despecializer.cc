@@ -22,22 +22,15 @@ limitations under the License.
 
 #include "absl/algorithm/container.h"
 #include "absl/container/flat_hash_set.h"
-#include "absl/log/check.h"
 #include "absl/log/log.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "xla/hlo/ir/hlo_casting_utils.h"
-#include "xla/hlo/ir/hlo_computation.h"
-#include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/ir/hlo_instructions.h"
-#include "xla/hlo/ir/hlo_module.h"
-#include "xla/hlo/ir/hlo_opcode.h"
 #include "xla/hlo/transforms/defuser.h"
 #include "xla/hlo/transforms/simplifiers/float_normalization.h"
 #include "xla/hlo/transforms/simplifiers/hlo_memory_scheduler.h"
 #include "xla/hlo/transforms/simplifiers/sub_byte_normalization.h"
-#include "xla/shape.h"
-#include "xla/shape_util.h"
 #include "xla/xla_data.pb.h"
 
 namespace xla {
@@ -60,7 +53,7 @@ void Despecializer::AddReduceWindowToReduceBroadcastDeconstruct() {
   pipeline_.AddPass<DeconstructReduceWindowToReduceBroadcast>();
 }
 
-absl::StatusOr<bool> Despecializer::RunImpl(
+absl::StatusOr<bool> Despecializer::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   return pipeline_.Run(module, execution_threads);
@@ -73,7 +66,7 @@ absl::StatusOr<bool> Despecializer::RunImpl(
 // reference platform perspective, i.e., for testing, this custom-call should be
 // a copy since no optimizations are performed and runtime is not the criterion
 // while obtaining reference results.
-absl::StatusOr<bool> AssumeGatherIndicesInBoundRewriteToCopy::RunImpl(
+absl::StatusOr<bool> AssumeGatherIndicesInBoundRewriteToCopy::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   std::vector<HloInstruction*> candidates;
@@ -89,12 +82,12 @@ absl::StatusOr<bool> AssumeGatherIndicesInBoundRewriteToCopy::RunImpl(
     auto copy = computation->AddInstruction(
         HloInstruction::CreateUnary(gather_indices->shape(), HloOpcode::kCopy,
                                     gather_indices->mutable_operand(0)));
-    CHECK_OK(computation->ReplaceInstruction(gather_indices, copy));
+    TF_CHECK_OK(computation->ReplaceInstruction(gather_indices, copy));
   }
   return !candidates.empty();
 }
 
-absl::StatusOr<bool> DeconstructReduceWindowToReduceBroadcast::RunImpl(
+absl::StatusOr<bool> DeconstructReduceWindowToReduceBroadcast::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   bool changed = false;
@@ -195,8 +188,8 @@ absl::StatusOr<bool> DeconstructReduceWindowToReduceBroadcast::RunImpl(
     VLOG(2) << "reduce_window:" << reduce_window->ToString();
     VLOG(2) << "reduce:" << reduce_instr->ToString();
     VLOG(2) << "broadcast:" << broadcast_instr->ToString();
-    CHECK_OK(reduce_window->parent()->ReplaceInstruction(reduce_window,
-                                                         broadcast_instr));
+    TF_CHECK_OK(reduce_window->parent()->ReplaceInstruction(reduce_window,
+                                                            broadcast_instr));
     changed = true;
   }
   return changed;

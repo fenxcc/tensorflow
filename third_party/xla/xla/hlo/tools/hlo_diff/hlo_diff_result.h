@@ -17,7 +17,6 @@
 #ifndef XLA_HLO_TOOLS_HLO_DIFF_HLO_DIFF_RESULT_H_
 #define XLA_HLO_TOOLS_HLO_DIFF_HLO_DIFF_RESULT_H_
 
-#include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
@@ -32,8 +31,6 @@
 
 namespace xla {
 namespace hlo_diff {
-
-enum DiffType : uint8_t { kUnchanged, kChanged, kUnmatched, kMoved };
 
 // Result of diff'ng the left and right HLO modules. Contains the matched and
 // unmatched instructions in the two modules.
@@ -51,10 +48,6 @@ struct DiffResult {
   absl::flat_hash_set<const HloInstruction*>
       right_module_unmatched_instructions;
 
-  // Diff codes.
-  absl::flat_hash_map<const HloInstruction*, DiffType> left_diff_codes;
-  absl::flat_hash_map<const HloInstruction*, DiffType> right_diff_codes;
-
   // Debug info.
   absl::flat_hash_map<std::pair<const HloInstruction*, const HloInstruction*>,
                       MatcherType>
@@ -66,16 +59,6 @@ struct DiffResult {
       node_props_left;
   absl::flat_hash_map<const HloInstruction*, HloInstructionNodeProps>
       node_props_right;
-
-  // Methods to add diffs.
-  void AddUnchangedInstruction(const HloInstruction* left,
-                               const HloInstruction* right);
-  void AddChangedInstruction(const HloInstruction* left,
-                             const HloInstruction* right);
-  void AddMovedInstruction(const HloInstruction* left,
-                           const HloInstruction* right);
-  void AddUnmatchedInstruction(const HloInstruction* left,
-                               const HloInstruction* right);
 
   // Converts the diff result to a proto.
   DiffResultProto ToProto() const;

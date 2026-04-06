@@ -46,7 +46,7 @@ class ErrorCollector {
   static ErrorCollector* GetErrorCollector();
 
  private:
-  ErrorCollector() = default;
+  ErrorCollector() {}
 
   ConverterErrorDataSet collected_errors_;
 

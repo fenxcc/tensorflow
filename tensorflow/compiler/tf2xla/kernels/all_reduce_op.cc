@@ -94,9 +94,9 @@ class CollectiveReduceV2Op : public XlaOpKernel {
 
  private:
   DataType dtype_ = DT_INVALID;
-  std::string merge_op_name_;
-  std::string final_op_name_;
-  std::string communication_hint_;
+  string merge_op_name_;
+  string final_op_name_;
+  string communication_hint_;
 
   CollectiveReduceV2Op(const CollectiveReduceV2Op&) = delete;
   void operator=(const CollectiveReduceV2Op&) = delete;

@@ -21,16 +21,18 @@ limitations under the License.
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include "absl/status/status_matchers.h"
 #include "absl/strings/string_view.h"
 #include "third_party/cudnn_frontend/include/cudnn_frontend.h"
 #include "json/json.h"
 #include "xla/hlo/ir/hlo_computation.h"
 #include "xla/hlo/parser/hlo_parser.h"
+#include "tsl/platform/status_matchers.h"
 #include "tsl/platform/test.h"
 
 namespace stream_executor {
 namespace gpu {
+
+using tsl::testing::IsOk;
 
 TEST(CudnnSdpaScoreModTest, CompileFwd) {
   absl::string_view hlo = R"(
@@ -51,8 +53,7 @@ TEST(CudnnSdpaScoreModTest, CompileFwd) {
   auto next_uid = [&]() -> int64_t { return uid++; };
   Graph graph = std::make_shared<cudnn_frontend::graph::Graph>();
   auto score_mod = std::make_shared<ScoreModFunc>(comp, nullptr);
-  EXPECT_THAT(score_mod->UpdateCudnnMap(*graph, next_uid),
-              absl_testing::IsOk());
+  EXPECT_THAT(score_mod->UpdateCudnnMap(*graph, next_uid), IsOk());
   Tensor attn_score =
       graph->tensor(cudnn_frontend::graph::Tensor_attributes()
                         .set_dim({4, 4, 1024, 1024})
@@ -103,8 +104,7 @@ TEST(CudnnSdpaScoreModTest, CompileBwd) {
   auto next_uid = [&]() -> int64_t { return uid++; };
   Graph graph = std::make_shared<cudnn_frontend::graph::Graph>();
   auto score_mod = std::make_shared<ScoreModFunc>(fwd_comp, bwd_comp);
-  EXPECT_THAT(score_mod->UpdateCudnnMap(*graph, next_uid),
-              absl_testing::IsOk());
+  EXPECT_THAT(score_mod->UpdateCudnnMap(*graph, next_uid), IsOk());
   Tensor attn_score =
       graph->tensor(cudnn_frontend::graph::Tensor_attributes()
                         .set_dim({4, 4, 1024, 1024})

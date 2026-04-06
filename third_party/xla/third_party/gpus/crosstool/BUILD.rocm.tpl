@@ -35,7 +35,7 @@ cc_toolchain_suite(
 
 cc_toolchain(
     name = "cc-compiler-local",
-    all_files = "@local_config_rocm//rocm:all_files",
+    all_files = ":crosstool_wrapper_driver_is_not_gcc",
     compiler_files = ":crosstool_wrapper_driver_is_not_gcc",
     ar_files = ":crosstool_wrapper_driver_is_not_gcc",
     as_files = ":crosstool_wrapper_driver_is_not_gcc",
@@ -112,8 +112,6 @@ filegroup(
 
 filegroup(
   name = "crosstool_wrapper_driver_is_not_gcc",
-  srcs = [
-      ":clang/bin/crosstool_wrapper_driver_is_not_gcc", 
-      "@local_config_rocm//rocm:toolchain_data",
-  ],
+  srcs = [":clang/bin/crosstool_wrapper_driver_is_not_gcc"],
+  data = ["@local_config_rocm//rocm:all_files"],
 )

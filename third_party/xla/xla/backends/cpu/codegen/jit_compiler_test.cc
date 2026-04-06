@@ -38,7 +38,6 @@ limitations under the License.
 #include "llvm/ExecutionEngine/Orc/ThreadSafeModule.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/LLVMContext.h"
-#include "llvm/Support/CodeGen.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Target/TargetMachine.h"
@@ -46,8 +45,6 @@ limitations under the License.
 #include "xla/backends/cpu/codegen/ir_compiler.h"
 #include "xla/backends/cpu/codegen/kernel_api_ir_builder.h"
 #include "xla/backends/cpu/runtime/function_library.h"
-#include "xla/backends/cpu/target_machine_options.h"
-#include "xla/debug_options_flags.h"
 #include "xla/tsl/lib/core/status_test_util.h"
 #include "xla/tsl/platform/env.h"
 #include "xla/tsl/platform/errors.h"
@@ -71,10 +68,9 @@ static absl::StatusOr<llvm::orc::ThreadSafeModule> ParseModule(
     llvm::orc::ThreadSafeContext& context, absl::string_view ir,
     absl::string_view name) {
   llvm::SMDiagnostic diagnostic;
-  auto m = context.withContextDo([&](llvm::LLVMContext* ctxt) {
-    llvm::MemoryBufferRef ir_buffer(ir, name);
-    return llvm::parseAssembly(ir_buffer, diagnostic, *ctxt);
-  });
+  llvm::MemoryBufferRef ir_buffer(ir, name);
+
+  auto m = llvm::parseAssembly(ir_buffer, diagnostic, *context.getContext());
   if (m == nullptr) {
     return Internal("Failed to parse LLVM IR: %s",
                     diagnostic.getMessage().str());
@@ -100,12 +96,9 @@ TEST(JitCompilerTest, Compile) {
     thread_pool.Schedule(std::move(task));
   };
 
-  std::unique_ptr<IrCompiler> ir_compiler = IrCompiler::Create(
-      llvm::TargetOptions(),
-      IrCompiler::Options{/*opt_level=*/llvm::CodeGenOptLevel::None,
-                          /*optimize_for_size=*/false,
-                          TargetMachineOptions(GetDebugOptionsFromFlags())},
-      IrCompiler::CompilationHooks());
+  std::unique_ptr<IrCompiler> ir_compiler =
+      IrCompiler::Create(llvm::TargetOptions(), IrCompiler::Options(),
+                         IrCompiler::CompilationHooks());
 
   TF_ASSERT_OK_AND_ASSIGN(
       auto compiler,
@@ -199,12 +192,9 @@ TEST(JitCompilerTest, ExternalDefinitionGenerator) {
     return std::make_unique<ExternalDefinitionGenerator>();
   };
 
-  std::unique_ptr<IrCompiler> ir_compiler = IrCompiler::Create(
-      llvm::TargetOptions(),
-      IrCompiler::Options{/*opt_level=*/llvm::CodeGenOptLevel::None,
-                          /*optimize_for_size=*/false,
-                          TargetMachineOptions(GetDebugOptionsFromFlags())},
-      IrCompiler::CompilationHooks());
+  std::unique_ptr<IrCompiler> ir_compiler =
+      IrCompiler::Create(llvm::TargetOptions(), IrCompiler::Options(),
+                         IrCompiler::CompilationHooks());
 
   TF_ASSERT_OK_AND_ASSIGN(
       auto compiler,

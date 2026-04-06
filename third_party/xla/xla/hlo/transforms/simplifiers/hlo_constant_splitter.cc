@@ -114,7 +114,7 @@ absl::StatusOr<bool> DuplicateConstantExpressionPerUser(
 
 }  // namespace
 
-absl::StatusOr<bool> HloConstantSplitter::RunImpl(
+absl::StatusOr<bool> HloConstantSplitter::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   bool changed = false;

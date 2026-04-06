@@ -38,7 +38,8 @@ class TritonGemmTest : public GpuCodegenTest {
   }
 
   void SetUp() override {
-    if (GetGpuComputeCapability().IsRocm()) {
+    if (std::holds_alternative<se::RocmComputeCapability>(
+            GetGpuComputeCapability())) {
       GTEST_SKIP() << "Not supported on ROCm until Triton is re-enabled.";
     }
   }
@@ -67,30 +68,18 @@ ENTRY e {
   const char* kHloTextTest = R"(
 HloModule t
 
-lhs {
-  ROOT p0 = f16[65536,32800] parameter(0)
-}
-
-rhs {
-  ROOT p1 = f16[32800,32] parameter(0)
-}
-
-triton_dot_computation {
+triton_dot {
   p0 = f16[65536,32800] parameter(0)
   p1 = f16[32800,32] parameter(1)
-  lhs = f16[65536,32800] fusion(p0), kind=kCustom, calls=lhs,
-    backend_config="{\"fusion_backend_config\":{\"kind\":\"__triton_nested_gemm_fusion\",\"block_level_fusion_config\":{\"output_tiles\":[{\"sizes\":[\"32\",\"32\"]}]}}}"
-  rhs = f16[32800,32] fusion(p1), kind=kCustom, calls=rhs,
-    backend_config="{\"fusion_backend_config\":{\"kind\":\"__triton_nested_gemm_fusion\",\"block_level_fusion_config\":{\"output_tiles\":[{\"sizes\":[\"32\",\"32\"]}]}}}"
-  ROOT dot = f16[65536,32] dot(lhs, rhs),
+  ROOT dot = f16[65536,32] dot(p0, p1),
     lhs_contracting_dims={1}, rhs_contracting_dims={0}
 }
 
 ENTRY e {
   p0 = f16[65536,32800] parameter(0)
   p1 = f16[32800,32] parameter(1)
-  ROOT _ = f16[65536,32] fusion(p0, p1), kind=kCustom, calls=triton_dot_computation,
-    backend_config="{\"fusion_backend_config\":{\"kind\":\"__triton_nested_gemm_fusion\",\"block_level_fusion_config\":{\"output_tiles\":[{\"sizes\":[\"32\",\"32\"]}],\"num_stages\":1,\"num_warps\":1,\"num_ctas\":1}}}"
+  ROOT _ = f16[65536,32] fusion(p0, p1), kind=kCustom, calls=triton_dot,
+    backend_config="{\"fusion_backend_config\": {kind: \"__triton_gemm\", triton_gemm_config: {\"block_m\":\"32\",\"block_n\":\"32\",\"block_k\":\"32\",\"split_k\":\"1\",\"num_stages\":\"1\",\"num_warps\":\"1\",\"num_ctas\":\"1\"}}}"
 }
 )";
 

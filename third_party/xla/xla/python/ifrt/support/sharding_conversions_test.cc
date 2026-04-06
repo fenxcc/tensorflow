@@ -16,15 +16,14 @@ limitations under the License.
 #include "xla/python/ifrt/support/sharding_conversions.h"
 
 #include <memory>
+#include <numeric>
 #include <utility>
 #include <vector>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include "absl/algorithm/container.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
-#include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/types/span.h"
@@ -41,7 +40,9 @@ limitations under the License.
 #include "xla/python/ifrt/sharding.h"
 #include "xla/python/ifrt/test_util.h"
 #include "xla/shape.h"
+#include "xla/tsl/concurrency/ref_count.h"
 #include "xla/tsl/lib/core/status_test_util.h"
+#include "xla/tsl/platform/status_matchers.h"
 #include "xla/tsl/platform/statusor.h"
 #include "xla/xla_data.pb.h"
 
@@ -51,6 +52,7 @@ namespace support {
 namespace {
 
 using ::testing::Return;
+using ::tsl::testing::StatusIs;
 using xla::HloSharding;
 
 absl::StatusOr<HloSharding> ToHloShardingViaOpSharding(
@@ -108,7 +110,8 @@ class ShardingConversionsTest : public testing::TestWithParam<int> {
 
     TF_ASSERT_OK_AND_ASSIGN(const std::vector<IndexDomain> index_domains,
                             sharding->IndexDomains(shape));
-    ASSERT_EQ(index_domains.size(), hlo_sharding.num_devices());
+    ASSERT_EQ(index_domains.size(),
+              hlo_sharding.tile_assignment().num_elements());
     const xla::Shape xla_tile_shape = hlo_sharding.TileShape(xla_shape);
     for (int i = 0; i < index_domains.size(); ++i) {
       SCOPED_TRACE(absl::StrCat("on device ", i));
@@ -247,9 +250,8 @@ TEST_P(ShardingConversionsTest, ErrorOnDeviceAssignment) {
   TF_EXPECT_OK(sharding_param.verify());
   EXPECT_THAT(
       ToHloShardingViaOpSharding(sharding_param, GetDevices({6, 5, 4, 3, 2})),
-      absl_testing::StatusIs(
-          absl::StatusCode::kOutOfRange,
-          ::testing::HasSubstr("Can't map device with logical id 5")));
+      StatusIs(absl::StatusCode::kOutOfRange,
+               ::testing::HasSubstr("Can't map device with logical id 5")));
 }
 
 TEST_P(ShardingConversionsTest, ShardingParamFullySharded) {
@@ -330,7 +332,7 @@ TEST_P(HloShardingToShardingParamTest, HloShardingToShardingParam) {
   EXPECT_EQ(param.hlo_sharding, actual_hlo_sharding);
   // Verify that the conversion to OpSharding is also correct.
   std::vector<int> device_ids(param.num_devices);
-  absl::c_iota(device_ids, 0);
+  std::iota(device_ids.begin(), device_ids.end(), 0);
   TF_ASSERT_OK_AND_ASSIGN(
       auto hlo_via_op_sharding,
       ToHloShardingViaOpSharding(sharding_param,

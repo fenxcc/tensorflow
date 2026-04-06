@@ -17,7 +17,6 @@
 from tensorflow.python.framework import composite_tensor
 from tensorflow.python.framework import type_spec
 from tensorflow.python.framework import type_spec_registry
-from tensorflow.python.util.tf_export import tf_export
 
 
 # TODO(b/149584798): add tests for non-tf.data functionality.
@@ -30,7 +29,6 @@ class NoneTensor(composite_tensor.CompositeTensor):
 
 
 # TODO(b/149584798): add tests for non-tf.data functionality.
-@tf_export("NoneTensorSpec")
 @type_spec_registry.register("tf.NoneTensorSpec")
 class NoneTensorSpec(type_spec.BatchableTypeSpec):
   """Type specification for `None` value."""

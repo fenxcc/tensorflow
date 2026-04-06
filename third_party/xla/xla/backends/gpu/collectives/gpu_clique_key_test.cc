@@ -27,16 +27,16 @@ limitations under the License.
 #include <gtest/gtest.h>
 #include "absl/container/btree_map.h"
 #include "xla/core/collectives/clique_id.h"
-#include "xla/runtime/device_id.h"
+#include "xla/service/global_device_id.h"
 #include "xla/tsl/platform/test.h"
-#include "xla/xla_data.pb.h"
 
 namespace xla::gpu {
 
 static GpuCliqueKey GetBaseCliqueKey() {
   return GpuCliqueKey(/*devices=*/{GlobalDeviceId(0), GlobalDeviceId(1)},
                       /*num_local_participants=*/2,
-                      /*is_p2p=*/false,
+                      /*stream_id=*/CollectiveStreamId(0),
+                      /*stream_kind=*/AsyncStreamKind::kCollective,
                       /*participant_groups=*/
                       std::vector<std::vector<GlobalDeviceId>>{
                           {GlobalDeviceId(0), GlobalDeviceId(1)},
@@ -50,10 +50,14 @@ TEST(GpuCliqueKeyTest, IsSubsetOf) {
   GlobalDeviceId id2 = GlobalDeviceId(2);
   GlobalDeviceId id3 = GlobalDeviceId(3);
 
-  GpuCliqueKey key0({id0, id1}, /*num_local_participants=*/2, false);
-  GpuCliqueKey key1({id0, id1, id2, id3}, /*num_local_participants=*/4, false);
-  GpuCliqueKey key2({id0, id1, id2, id3}, /*num_local_participants=*/4, true);
-  GpuCliqueKey key3({id1, id2, id3}, /*num_local_participants=*/3, false);
+  GpuCliqueKey key0({id0, id1}, /*num_local_participants=*/2,
+                    CollectiveStreamId(0));
+  GpuCliqueKey key1({id0, id1, id2, id3}, /*num_local_participants=*/4,
+                    CollectiveStreamId(0));
+  GpuCliqueKey key2({id0, id1, id2, id3}, /*num_local_participants=*/4,
+                    CollectiveStreamId(1));
+  GpuCliqueKey key3({id1, id2, id3}, /*num_local_participants=*/3,
+                    CollectiveStreamId(0));
 
   EXPECT_TRUE(key0.IsSubsetOf(key1));
   EXPECT_FALSE(key0.IsSubsetOf(key2));
@@ -66,7 +70,8 @@ TEST(GpuCliqueKeyTest, GetSubKeys) {
   GlobalDeviceId id2 = GlobalDeviceId(2);
   GlobalDeviceId id3 = GlobalDeviceId(3);
 
-  GpuCliqueKey key({id0, id1, id2, id3}, /*num_local_participants=*/1, true);
+  GpuCliqueKey key({id0, id1, id2, id3}, /*num_local_participants=*/1,
+                   CollectiveStreamId(1));
   std::array<int64_t, 4> nroots{1, 2, 3, 4};
   std::vector<std::vector<GlobalDeviceId>> exp_root_devs{
       {id0}, {id0, id2}, {id0, id2, id3}, {id0, id1, id2, id3}};
@@ -78,7 +83,8 @@ TEST(GpuCliqueKeyTest, GetSubKeys) {
       GpuCliqueKey exp_subkey(
           /*devices=*/{id0, id1, id2, id3},
           /*num_local_participants=*/1,
-          /*is_p2p=*/true,
+          /*stream_id=*/CollectiveStreamId(1),
+          /*stream_kind=*/AsyncStreamKind::kCollective,
           /*participant_groups=*/{},
           /*root_device=*/exp_root_devs[ridx][kidx]);
       EXPECT_EQ(subkeys[kidx], exp_subkey);
@@ -92,11 +98,16 @@ TEST(GpuCliqueKeyTest, Compare) {
   GlobalDeviceId id2 = GlobalDeviceId(2);
   GlobalDeviceId id3 = GlobalDeviceId(3);
 
-  GpuCliqueKey key0({id0, id1}, /*num_local_participants=*/1);
-  GpuCliqueKey key1({id1, id2, id3}, /*num_local_participants=*/1);
+  GpuCliqueKey key0({id0, id1}, /*num_local_participants=*/1,
+                    CollectiveStreamId(0));
+  GpuCliqueKey key1({id1, id2, id3}, /*num_local_participants=*/1,
+                    CollectiveStreamId(0));
+  GpuCliqueKey key2({id1, id2, id3}, /*num_local_participants=*/1,
+                    CollectiveStreamId(1));
 
   EXPECT_LT(key0, key1);
   EXPECT_GT(key1, key0);
+  EXPECT_LT(key1, key2);
 }
 
 TEST(GpuCliqueKeyTest, CompareWithParticipantGroups) {
@@ -106,16 +117,20 @@ TEST(GpuCliqueKeyTest, CompareWithParticipantGroups) {
   GlobalDeviceId id3 = GlobalDeviceId(3);
 
   // The keys are not equal because the replica groups are different.
-  GpuCliqueKey key0({id0, id1}, /*num_local_participants=*/1, false,
+  GpuCliqueKey key0({id0, id1}, /*num_local_participants=*/1,
+                    CollectiveStreamId(0), AsyncStreamKind::kCollective,
                     std::vector<std::vector<GlobalDeviceId>>{{id0, id1}});
   GpuCliqueKey key1(
-      {id0, id1}, /*num_local_participants=*/1, false,
+      {id0, id1}, /*num_local_participants=*/1, CollectiveStreamId(0),
+      AsyncStreamKind::kCollective,
       std::vector<std::vector<GlobalDeviceId>>{{id0, id1}, {id2, id3}});
   EXPECT_FALSE(key0 == key1);
 
   // With no replica groups, the keys are equal
-  GpuCliqueKey key0_nogroups({id0, id1}, /*num_local_participants=*/1, false);
-  GpuCliqueKey key1_nogroups({id0, id1}, /*num_local_participants=*/1, false);
+  GpuCliqueKey key0_nogroups({id0, id1}, /*num_local_participants=*/1,
+                             CollectiveStreamId(0));
+  GpuCliqueKey key1_nogroups({id0, id1}, /*num_local_participants=*/1,
+                             CollectiveStreamId(0));
   EXPECT_EQ(key0_nogroups, key1_nogroups);
 }
 
@@ -128,16 +143,19 @@ TEST(GpuCliqueKeyTest, CompareWithPermutedParticipantGroups) {
   // The keys are equal because the replica groups are same up to permutation.
   GpuCliqueKey key0(
       {id0, id1},
-      /*num_local_participants=*/1, false,
+      /*num_local_participants=*/1, CollectiveStreamId(0),
+      AsyncStreamKind::kCollective,
       std::vector<std::vector<GlobalDeviceId>>{{id3, id2}, {id0, id1}});
   GpuCliqueKey key1(
       {id0, id1},
-      /*num_local_participants=*/1, false,
+      /*num_local_participants=*/1, CollectiveStreamId(0),
+      AsyncStreamKind::kCollective,
       std::vector<std::vector<GlobalDeviceId>>{{id0, id1}, {id2, id3}});
   EXPECT_EQ(key0, key1);
 
   GpuCliqueKey key_other(
-      {id0, id1}, /*num_local_participants=*/1, false,
+      {id0, id1}, /*num_local_participants=*/1, CollectiveStreamId(0),
+      AsyncStreamKind::kCollective,
       std::vector<std::vector<GlobalDeviceId>>{{id0, id2}, {id1, id3}});
   EXPECT_FALSE(key0 == key_other);
 }
@@ -148,9 +166,10 @@ TEST(GpuCliqueKeyTest, BtreeIterationOrder) {
   GlobalDeviceId id2 = GlobalDeviceId(2);
   GlobalDeviceId id3 = GlobalDeviceId(3);
 
-  GpuCliqueKey key0({id0, id2}, /*num_local_participants=*/1, false);
+  GpuCliqueKey key0({id0, id2}, /*num_local_participants=*/1,
+                    CollectiveStreamId(0));
   GpuCliqueKey key1({id0, id1, id2, id3},
-                    /*num_local_participants=*/1, false);
+                    /*num_local_participants=*/1, CollectiveStreamId(0));
 
   absl::btree_map<GpuCliqueKey, int64_t, std::greater<GpuCliqueKey>> map;
   map[key0] = 0;
@@ -173,13 +192,13 @@ TEST(GpuCliqueKeyGettersTest, Rank) {
   EXPECT_EQ(key.rank(GlobalDeviceId(3)), std::nullopt);
 }
 
-TEST(GpuCliqueKeyGettersTest, IsP2P) {
-  EXPECT_EQ(GetBaseCliqueKey().is_p2p(), false);
+TEST(GpuCliqueKeyGettersTest, StreamId) {
+  EXPECT_EQ(GetBaseCliqueKey().stream_id(), CollectiveStreamId(0));
 }
 
 TEST(GpuCliqueKeyGetterTest, ToString) {
   EXPECT_EQ(GetBaseCliqueKey().ToString(),
-            "devices=[0,1]; is_p2p=0; groups=[[0,1],[2,3]]; root_device=0; "
+            "devices=[0,1]; stream=0; groups=[[0,1],[2,3]]; root_device=0; "
             "num_local_participants=2; incarnations=[]");
 }
 
@@ -203,21 +222,19 @@ TEST(GpuCliqueIdStringTest, ToString) {
 
 TEST(GpuCliqueKeyTest, GetCollectiveStreamId) {
   EXPECT_EQ(GetCollectiveStreamId(false, CollectiveStreamId(0),
-                                  AsyncStreamKind::ASYNC_STREAM_KIND_P2P0),
+                                  AsyncStreamKind::kP2P0),
             CollectiveStreamId(0));
-  EXPECT_EQ(
-      GetCollectiveStreamId(true, CollectiveStreamId(0),
-                            AsyncStreamKind::ASYNC_STREAM_KIND_COLLECTIVE),
-      CollectiveStreamId(1));
   EXPECT_EQ(GetCollectiveStreamId(true, CollectiveStreamId(0),
-                                  AsyncStreamKind::ASYNC_STREAM_KIND_P2P0),
+                                  AsyncStreamKind::kCollective),
+            CollectiveStreamId(1));
+  EXPECT_EQ(GetCollectiveStreamId(true, CollectiveStreamId(0),
+                                  AsyncStreamKind::kP2P0),
             CollectiveStreamId(2));
-  EXPECT_EQ(
-      GetCollectiveStreamId(true, CollectiveStreamId(2),
-                            AsyncStreamKind::ASYNC_STREAM_KIND_COLLECTIVE),
-      CollectiveStreamId(2));
+  EXPECT_EQ(GetCollectiveStreamId(true, CollectiveStreamId(2),
+                                  AsyncStreamKind::kCollective),
+            CollectiveStreamId(2));
   EXPECT_EQ(GetCollectiveStreamId(true, CollectiveStreamId(1),
-                                  AsyncStreamKind::ASYNC_STREAM_KIND_P2P0),
+                                  AsyncStreamKind::kP2P0),
             CollectiveStreamId(1));
 }
 

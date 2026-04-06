@@ -24,13 +24,13 @@ namespace generator {
 namespace cpp {
 
 struct CppConfig {
-  std::string category;
-  std::string unit;
-  std::vector<std::string> namespaces;
+  string category;
+  string unit;
+  std::vector<string> namespaces;
 
   explicit CppConfig() = default;
-  explicit CppConfig(const std::string& category,
-                     const std::string& name_space = "tensorflow::ops");
+  explicit CppConfig(const string &category,
+                     const string &name_space = "tensorflow::ops");
 };
 
 }  // namespace cpp

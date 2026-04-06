@@ -27,7 +27,6 @@ limitations under the License.
 #include "absl/strings/string_view.h"
 #include "tensorflow/compiler/mlir/tfrt/transforms/ifrt/tf2hlo.h"
 #include "tensorflow/compiler/tf2xla/xla_helpers.h"
-#include "xla/pjrt/pjrt_executable.h"
 #include "xla/python/ifrt/array.h"
 #include "xla/python/ifrt/client.h"
 #include "xla/python/ifrt/executable.h"
@@ -64,22 +63,18 @@ class IfrtModelContext {
       std::shared_ptr<xla::ifrt::Client> client,
       IfrtServingCoreSelector* ifrt_serving_core_selector,
       tsl::thread::ThreadPool* thread_pool,
-      std::variant<std::unique_ptr<tsl::protobuf::Message>,
-                   xla::CompileOptions::EnvironmentOptionOverrides>
-          compilation_env_or_overrides)
+      std::unique_ptr<tsl::protobuf::Message> compilation_environment_proto)
       : client_(std::move(client)),
         ifrt_serving_core_selector_(ifrt_serving_core_selector),
         thread_pool_(*thread_pool),
-        compilation_env_or_overrides_(std::move(compilation_env_or_overrides)) {
-  }
+        compilation_environment_proto_(
+            std::move(compilation_environment_proto)) {}
   IfrtModelContext(
       std::shared_ptr<xla::ifrt::Client> client,
       IfrtServingCoreSelector* ifrt_serving_core_selector,
       tsl::thread::ThreadPool* thread_pool, tensorflow::DeviceMgr* device_mgr,
       tensorflow::XlaHelpers::ShapeRepresentationFn shape_representation_fn,
-      std::variant<std::unique_ptr<tsl::protobuf::Message>,
-                   xla::CompileOptions::EnvironmentOptionOverrides>
-          compilation_env_or_overrides,
+      std::unique_ptr<tsl::protobuf::Message> compilation_environment_proto,
       std::shared_ptr<const void> topology, TfToHloCompiler* tf_to_hlo_compiler,
       IfrtPersistentCompilationCache* persistent_compilation_cache = nullptr)
       : client_(std::move(client)),
@@ -88,7 +83,8 @@ class IfrtModelContext {
         thread_pool_(*thread_pool),
         device_mgr_(device_mgr),
         shape_representation_fn_(shape_representation_fn),
-        compilation_env_or_overrides_(std::move(compilation_env_or_overrides)),
+        compilation_environment_proto_(
+            std::move(compilation_environment_proto)),
         tf_to_hlo_compiler_(tf_to_hlo_compiler),
         persistent_compilation_cache_(persistent_compilation_cache) {}
 
@@ -145,27 +141,7 @@ class IfrtModelContext {
   }
 
   tsl::protobuf::Message* GetCompilationEnvironmentProto() const {
-    if (std::holds_alternative<std::unique_ptr<tsl::protobuf::Message>>(
-            compilation_env_or_overrides_)) {
-      return std::get<std::unique_ptr<tsl::protobuf::Message>>(
-                 compilation_env_or_overrides_)
-          .get();
-    }
-    return nullptr;
-  }
-
-  std::variant<tsl::protobuf::Message*,
-               xla::CompileOptions::EnvironmentOptionOverrides>
-  GetCompilationEnvOrOverrides() const {
-    if (std::holds_alternative<std::unique_ptr<tsl::protobuf::Message>>(
-            compilation_env_or_overrides_)) {
-      return std::get<std::unique_ptr<tsl::protobuf::Message>>(
-                 compilation_env_or_overrides_)
-          .get();
-    } else {
-      return std::get<xla::CompileOptions::EnvironmentOptionOverrides>(
-          compilation_env_or_overrides_);
-    }
+    return compilation_environment_proto_.get();
   }
 
   TfToHloCompiler* GetTfToHloCompiler() const { return tf_to_hlo_compiler_; }
@@ -192,9 +168,8 @@ class IfrtModelContext {
   tensorflow::DeviceMgr* device_mgr_ = nullptr;  // Not owned.
   tensorflow::XlaHelpers::ShapeRepresentationFn shape_representation_fn_ =
       tensorflow::IdentityShapeRepresentationFn();
-  std::variant<std::unique_ptr<tsl::protobuf::Message>,
-               xla::CompileOptions::EnvironmentOptionOverrides>
-      compilation_env_or_overrides_;
+  std::unique_ptr<tsl::protobuf::Message> compilation_environment_proto_ =
+      nullptr;
 
   // Dedicated work queue for heavy task such as variable tensor restoration.
   tfrt::ConcurrentWorkQueue* checkpoint_loader_queue_ = nullptr;

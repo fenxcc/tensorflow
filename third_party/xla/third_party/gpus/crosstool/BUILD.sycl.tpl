@@ -31,12 +31,12 @@ cc_toolchain_suite(
 
 cc_toolchain(
     name = "cc-compiler-local",
-    all_files = ":crosstool_wrapper_driver_sycl",
-    compiler_files = ":crosstool_wrapper_driver_sycl",
-    ar_files = ":crosstool_wrapper_driver_sycl",
-    as_files = ":crosstool_wrapper_driver_sycl",
+    all_files = ":crosstool_wrapper_driver_is_not_gcc",
+    compiler_files = ":crosstool_wrapper_driver_is_not_gcc",
+    ar_files = ":crosstool_wrapper_driver_is_not_gcc",
+    as_files = ":crosstool_wrapper_driver_is_not_gcc",
     dwp_files = ":empty",
-    linker_files = ":crosstool_wrapper_driver_sycl",
+    linker_files = ":crosstool_wrapper_driver_is_not_gcc",
     objcopy_files = ":empty",
     strip_files = ":empty",
     # To support linker flags that need to go to the start of command line
@@ -52,12 +52,12 @@ cc_toolchain_config(
     name = "cc-compiler-local-config",
     cpu = "local",
     builtin_include_directories = [%{cxx_builtin_include_directories}],
+    extra_no_canonical_prefixes_flags = [%{extra_no_canonical_prefixes_flags}],
     host_compiler_path = "%{host_compiler_path}",
     host_compiler_prefix = "%{host_compiler_prefix}",
     host_unfiltered_compile_flags = [%{unfiltered_compile_flags}],
     linker_bin_path = "%{linker_bin_path}",
     compiler = "unknown",
-    ar_path = "%{ar_path}",
 )
 
 filegroup(
@@ -66,6 +66,6 @@ filegroup(
 )
 
 filegroup(
-    name = "crosstool_wrapper_driver_sycl",
-    srcs = ["clang/bin/crosstool_wrapper_driver_sycl"]
+    name = "crosstool_wrapper_driver_is_not_gcc",
+    srcs = ["clang/bin/crosstool_wrapper_driver_is_not_gcc"]
 )

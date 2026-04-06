@@ -29,7 +29,7 @@ inline constexpr int64_t kMaxNumRaggedAllToAllOutputPtrs = 8;
 
 // Defines a trait for the RaggedAllToAll kernel that can be used to register
 // and look up the kernel in the GPU kernel registry.
-template <int64_t kVectorSize>
+template <typename ElementT>
 struct RaggedAllToAllKernel {
   using KernelType = stream_executor::TypedKernel<
       stream_executor::DeviceMemoryBase,

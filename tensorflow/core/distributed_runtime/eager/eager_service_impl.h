@@ -196,8 +196,8 @@ class EagerServiceImpl {
 
     string DebugString() const override {
       string out = "[ClientTensorHandleDeleteNode]";
-      absl::StrAppend(&out, " op_id: ", handle_to_delete_->op_id);
-      absl::StrAppend(&out, ", output_num: ", handle_to_delete_->output_num);
+      strings::StrAppend(&out, " op_id: ", handle_to_delete_->op_id);
+      strings::StrAppend(&out, ", output_num: ", handle_to_delete_->output_num);
       return out;
     }
 

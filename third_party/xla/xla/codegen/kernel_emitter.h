@@ -17,55 +17,39 @@ limitations under the License.
 #define XLA_CODEGEN_KERNEL_EMITTER_H_
 
 #include <memory>
+#include <string>
 
 #include "absl/status/statusor.h"
-#include "absl/strings/string_view.h"
 #include "xla/codegen/kernel_definition.h"
-#include "xla/codegen/kernel_source.h"
 #include "xla/tsl/platform/statusor.h"
 
 namespace xla {
 
-//===----------------------------------------------------------------------===//
-// KernelEmitterBase.
-//===----------------------------------------------------------------------===//
-
-// A base class for emitting XLA kernels.
 class KernelEmitterBase {
  public:
-  KernelEmitterBase() = default;
   virtual ~KernelEmitterBase() = default;
 
-  virtual absl::string_view name() const = 0;
-
   virtual absl::StatusOr<std::unique_ptr<KernelDefinitionBase>>
-  EmitKernelDefinitionBase() = 0;
-
- protected:
-  KernelEmitterBase(KernelEmitterBase&&) = default;
-  KernelEmitterBase& operator=(KernelEmitterBase&&) = default;
+  EmitBaseKernelDefinition() = 0;
 };
-
-//===----------------------------------------------------------------------===//
-// KernelEmitter.
-//===----------------------------------------------------------------------===//
 
 // KernelEmitter is an API that emits kernel definition from a given input
 // (i.e. it emits kernels compiled from HLO fusions).
-template <typename Source>
+template <typename KernelDefinitionType>
 class KernelEmitter : public KernelEmitterBase {
  public:
-  static_assert(std::is_base_of_v<KernelSource, Source>,
-                "Source must be a subclass of KernelSource");
+  virtual ~KernelEmitter() = default;
 
-  using KernelDefinition = ::xla::KernelDefinition<Source>;
-  virtual absl::StatusOr<KernelDefinition> EmitKernelDefinition() = 0;
+  virtual absl::StatusOr<KernelDefinitionType> EmitKernelDefinition() = 0;
+
+  virtual std::string name() const = 0;
 
  private:
   absl::StatusOr<std::unique_ptr<KernelDefinitionBase>>
-  EmitKernelDefinitionBase() final {
-    TF_ASSIGN_OR_RETURN(auto kernel_definition, EmitKernelDefinition());
-    return std::make_unique<KernelDefinition>(std::move(kernel_definition));
+  EmitBaseKernelDefinition() final {
+    TF_ASSIGN_OR_RETURN(KernelDefinitionType kernel_definition,
+                        EmitKernelDefinition());
+    return std::make_unique<KernelDefinitionType>(std::move(kernel_definition));
   }
 };
 

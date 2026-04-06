@@ -108,11 +108,9 @@ static std::optional<FoldableSelect> MatchFoldableSelect(
   // Match replica-id or partition-id.
   CollectiveOpGroupMode collective_mode;
   if (HloPredicateIsOp<HloOpcode::kReplicaId>(id_op)) {
-    collective_mode =
-        CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_CROSS_REPLICA;
+    collective_mode = CollectiveOpGroupMode::kCrossReplica;
   } else if (HloPredicateIsOp<HloOpcode::kPartitionId>(id_op)) {
-    collective_mode =
-        CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_CROSS_PARTITION;
+    collective_mode = CollectiveOpGroupMode::kCrossPartition;
   } else {
     return std::nullopt;
   }
@@ -212,7 +210,7 @@ static absl::StatusOr<bool> TryFoldColectivePermuteOfSelect(
   return true;
 }
 
-absl::StatusOr<bool> CollectiveSelectFolder::RunImpl(
+absl::StatusOr<bool> CollectiveSelectFolder::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   bool changed = false;

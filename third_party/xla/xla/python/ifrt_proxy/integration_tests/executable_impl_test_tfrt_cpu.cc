@@ -18,13 +18,12 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
+#include "xla/python/ifrt/test_util.h"
 
 int main(int argc, char** argv) {
   const std::string disabled[] = {
-      // Neither IFRT Proxy nor PjRt CPU does not support `GetHloModules`.
-      "*LoadedExecutableImplTest.GetHloModules*",
-      // CPU backend does not support serialization.
-      "*SerializeAndLoad*",
+      // Executable::IsDeleted always returns false with TFRT CPU backend.
+      "LoadedExecutableImplTest.IsDeleted",
   };
 
   const std::string filter = absl::StrCat("-", absl::StrJoin(disabled, ":"));

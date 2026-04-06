@@ -20,7 +20,6 @@ limitations under the License.
 
 #include "absl/algorithm/container.h"
 #include "absl/container/flat_hash_set.h"
-#include "absl/log/check.h"
 #include "absl/log/log.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
@@ -121,7 +120,7 @@ static absl::StatusOr<bool> PadForGemm(HloDotInstruction* dot,
 
   bool is_root = dot->user_count() == 0;
 
-  CHECK_OK(parent->ReplaceInstruction(dot, slice));
+  TF_CHECK_OK(parent->ReplaceInstruction(dot, slice));
 
   if (is_root) {
     parent->set_root_instruction(slice);
@@ -196,7 +195,7 @@ absl::StatusOr<std::vector<HloDotInstruction*>> GetRelevantDots(
 
 }  // namespace
 
-absl::StatusOr<bool> CublasPadForGemms::RunImpl(
+absl::StatusOr<bool> CublasPadForGemms::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   bool changed = false;

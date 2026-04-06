@@ -15,7 +15,6 @@ limitations under the License.
 
 #include "xla/tsl/distributed_runtime/coordination/key_value_store.h"
 
-#include <cstdint>
 #include <optional>
 #include <string>
 #include <utility>
@@ -24,16 +23,14 @@ limitations under the License.
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
-#include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
-#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 
 namespace tsl {
 
 KeyValueStore::~KeyValueStore() {
-  absl::MutexLock l(mu_);
+  absl::MutexLock l(&mu_);
 
   absl::Status cancelled = absl::CancelledError("KeyValueStore destructed");
   for (auto& [key, callbacks] : callbacks_) {
@@ -45,7 +42,7 @@ KeyValueStore::~KeyValueStore() {
 
 absl::Status KeyValueStore::Put(absl::string_view key, absl::string_view value,
                                 bool allow_overwrite) {
-  absl::MutexLock l(mu_);
+  absl::MutexLock l(&mu_);
 
   if (allow_overwrite) {
     data_[key] = value;
@@ -63,7 +60,7 @@ absl::Status KeyValueStore::Put(absl::string_view key, absl::string_view value,
 }
 
 std::optional<std::string> KeyValueStore::Get(absl::string_view key) {
-  absl::MutexLock l(mu_);
+  absl::MutexLock l(&mu_);
   auto it = data_.find(key);
   if (it == data_.end()) {
     return std::nullopt;
@@ -71,23 +68,9 @@ std::optional<std::string> KeyValueStore::Get(absl::string_view key) {
   return it->second;
 }
 
-absl::StatusOr<std::string> KeyValueStore::IncrementBy(absl::string_view key,
-                                                       int64_t increment) {
-  absl::MutexLock l(mu_);
-  auto [it, inserted] = data_.try_emplace(key, "0");
-  int val;
-  if (!absl::SimpleAtoi(it->second, &val)) {
-    return absl::FailedPreconditionError(absl::StrFormat(
-        "Failed to parse value \"%s\" as an integer.", it->second));
-  }
-  it->second = absl::StrCat(val + increment);
-  NotifyCallbacksForKey(key, it->second);
-  return it->second;
-}
-
 std::vector<tensorflow::KeyValueEntry> KeyValueStore::GetPrefix(
     absl::string_view prefix) {
-  absl::MutexLock l(mu_);
+  absl::MutexLock l(&mu_);
 
   std::vector<tensorflow::KeyValueEntry> entries;
   for (auto it = data_.lower_bound(prefix); it != data_.end(); ++it) {
@@ -104,12 +87,12 @@ std::vector<tensorflow::KeyValueEntry> KeyValueStore::GetPrefix(
 }
 
 void KeyValueStore::Delete(absl::string_view key) {
-  absl::MutexLock l(mu_);
+  absl::MutexLock l(&mu_);
   data_.erase(key);
 }
 
 void KeyValueStore::DeletePrefix(absl::string_view prefix) {
-  absl::MutexLock l(mu_);
+  absl::MutexLock l(&mu_);
 
   auto begin = data_.lower_bound(prefix);
   auto it = begin;
@@ -124,7 +107,7 @@ void KeyValueStore::DeletePrefix(absl::string_view prefix) {
 
 void KeyValueStore::AddCallbackForKey(absl::string_view key,
                                       Callback callback) {
-  absl::MutexLock l(mu_);
+  absl::MutexLock l(&mu_);
 
   if (auto it = data_.find(key); it != data_.end()) {
     callback(it->second);

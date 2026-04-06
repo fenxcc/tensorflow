@@ -19,20 +19,20 @@ limitations under the License.
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"
-#include "absl/log/check.h"
 #include "absl/status/status.h"
-#include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "xla/hlo/analysis/alias_info.h"
+#include "xla/hlo/analysis/hlo_dataflow_analysis.h"
 #include "xla/hlo/ir/dfs_hlo_visitor_with_default.h"
 #include "xla/hlo/ir/hlo_computation.h"
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/ir/hlo_opcode.h"
 #include "xla/service/float_support.h"
 #include "xla/shape_util.h"
-#include "xla/tsl/platform/errors.h"
 #include "xla/util.h"
 #include "xla/xla_data.pb.h"
+#include "tsl/platform/errors.h"
+#include "tsl/platform/logging.h"
+#include "tsl/platform/status.h"
 
 namespace xla {
 
@@ -40,11 +40,9 @@ class BFloat16ConversionFoldingVisitor : public DfsHloVisitorWithDefault {
  public:
   explicit BFloat16ConversionFoldingVisitor(
       HloComputation* computation, const FloatSupport* bfloat16_support,
-      const AliasInfo* alias_info,
       BFloat16ConversionFolding* bfloat16_conversion_folding)
       : computation_(computation),
         bfloat16_support_(bfloat16_support),
-        alias_info_(alias_info),
         bfloat16_conversion_folding_(bfloat16_conversion_folding) {}
 
   absl::Status DefaultAction(HloInstruction* hlo) override;
@@ -54,11 +52,10 @@ class BFloat16ConversionFoldingVisitor : public DfsHloVisitorWithDefault {
 
   static bool Run(HloComputation* computation,
                   const FloatSupport* bfloat16_support,
-                  const AliasInfo* alias_info,
                   BFloat16ConversionFolding* bfloat16_conversion_folding) {
-    BFloat16ConversionFoldingVisitor visitor(
-        computation, bfloat16_support, alias_info, bfloat16_conversion_folding);
-    CHECK_OK(computation->Accept(&visitor));
+    BFloat16ConversionFoldingVisitor visitor(computation, bfloat16_support,
+                                             bfloat16_conversion_folding);
+    TF_CHECK_OK(computation->Accept(&visitor));
     return visitor.changed_;
   }
 
@@ -80,7 +77,6 @@ class BFloat16ConversionFoldingVisitor : public DfsHloVisitorWithDefault {
 
   HloComputation* computation_;
   const FloatSupport* bfloat16_support_;
-  const AliasInfo* alias_info_;
   BFloat16ConversionFolding* bfloat16_conversion_folding_;
   bool changed_ = false;
 };
@@ -176,22 +172,20 @@ absl::Status BFloat16ConversionFoldingVisitor::DefaultAction(
   // Do not fold BF16 conversions for instructions related to tuples, entry and
   // exit of a computation, fusion, convert, side-effecting instructions,
   // in-place operations and control flow.
-  if (hlo->opcode() == HloOpcode::kTuple ||                     //
-      hlo->opcode() == HloOpcode::kGetTupleElement ||           //
-      hlo->opcode() == HloOpcode::kConstant ||                  //
-      hlo->opcode() == HloOpcode::kParameter ||                 //
-      hlo->opcode() == HloOpcode::kFusion ||                    //
-      hlo->opcode() == HloOpcode::kBitcast ||                   //
-      hlo->opcode() == HloOpcode::kBitcastConvert ||            //
-      hlo->opcode() == HloOpcode::kConvert ||                   //
-      hlo->opcode() == HloOpcode::kCall ||                      //
-      hlo->opcode() == HloOpcode::kCustomCall ||                //
-      hlo->opcode() == HloOpcode::kWhile ||                     //
-      hlo->opcode() == HloOpcode::kConditional ||               //
-      hlo->opcode() == HloOpcode::kAsyncStart ||                //
-      hlo->opcode() == HloOpcode::kAsyncDone ||                 //
-      hlo->opcode() == HloOpcode::kOptimizationBarrier ||       //
-      !alias_info_->GetInPlaceInputOutputPairs(hlo).empty() ||  //
+  if (hlo->opcode() == HloOpcode::kTuple ||                             //
+      hlo->opcode() == HloOpcode::kGetTupleElement ||                   //
+      hlo->opcode() == HloOpcode::kConstant ||                          //
+      hlo->opcode() == HloOpcode::kParameter ||                         //
+      hlo->opcode() == HloOpcode::kFusion ||                            //
+      hlo->opcode() == HloOpcode::kBitcastConvert ||                    //
+      hlo->opcode() == HloOpcode::kConvert ||                           //
+      hlo->opcode() == HloOpcode::kCall ||                              //
+      hlo->opcode() == HloOpcode::kCustomCall ||                        //
+      hlo->opcode() == HloOpcode::kWhile ||                             //
+      hlo->opcode() == HloOpcode::kConditional ||                       //
+      hlo->opcode() == HloOpcode::kAsyncStart ||                        //
+      hlo->opcode() == HloOpcode::kAsyncDone ||                         //
+      !HloDataflowAnalysis::GetInPlaceInputOutputPairs(hlo).empty() ||  //
       hlo->HasSideEffectNoRecurse()) {
     return absl::OkStatus();
   }
@@ -272,20 +266,19 @@ absl::Status BFloat16ConversionFoldingVisitor::HandleAllReduce(
   return absl::OkStatus();
 }
 
-absl::StatusOr<bool> BFloat16ConversionFolding::RunImpl(
+absl::StatusOr<bool> BFloat16ConversionFolding::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
-  XLA_VLOG_LINES(2, "BFloat16ConversionFolding::RunImpl(), before:\n" +
-                        module->ToString());
+  XLA_VLOG_LINES(
+      2, "BFloat16ConversionFolding::Run(), before:\n" + module->ToString());
   bool changed = false;
   for (auto* comp : module->MakeNonfusionComputations(execution_threads)) {
-    if (BFloat16ConversionFoldingVisitor::Run(comp, bfloat16_support_,
-                                              alias_info_, this)) {
+    if (BFloat16ConversionFoldingVisitor::Run(comp, bfloat16_support_, this)) {
       changed = true;
     }
   }
   XLA_VLOG_LINES(
-      2, "BFloat16ConversionFolding::RunImpl(), after:\n" + module->ToString());
+      2, "BFloat16ConversionFolding::Run(), after:\n" + module->ToString());
   return changed;
 }
 

@@ -41,12 +41,11 @@ class ReduceScatterDecomposerTest : public HloHardwareIndependentTestBase {
   };
   void RunPass(
       absl::string_view hlo_module, PassAction action,
-      CollectiveOpGroupMode mode =
-          CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_CROSS_REPLICA,
+      CollectiveOpGroupMode mode = CollectiveOpGroupMode::kCrossReplica,
       int64_t shard_size = 0, int64_t shard_dimension = 0,
       int64_t replica_count = 2,
-      std::function<bool(const HloInstruction*)> should_decompose =
-          [](const HloInstruction*) { return true; },
+      std::function<bool(const HloInstruction *)> should_decompose =
+          [](const HloInstruction *) { return true; },
       std::optional<std::pair<std::string, std::string>> attribute =
           std::nullopt) {
     const int64_t partition_count = 2;
@@ -67,22 +66,19 @@ class ReduceScatterDecomposerTest : public HloHardwareIndependentTestBase {
     Literal multiplier = LiteralUtil::CreateR0<uint32_t>(shard_size);
     ::testing::Matcher<const ::xla::HloInstruction *> id_matcher = [&]() {
       switch (mode) {
-        case CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_CROSS_PARTITION:
+        case CollectiveOpGroupMode::kCrossPartition:
           return op::PartitionId();
-        case CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_CROSS_REPLICA:
+        case CollectiveOpGroupMode::kCrossReplica:
           return op::ReplicaId();
-        case CollectiveOpGroupMode::
-            COLLECTIVE_OP_GROUP_MODE_CROSS_REPLICA_AND_PARTITION:
+        case CollectiveOpGroupMode::kCrossReplicaAndPartition:
           return op::ReplicaId();
-        case CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_FLATTENED_ID: {
+        case CollectiveOpGroupMode::kFlattenedID: {
           return op::Add(
               op::Multiply(op::ReplicaId(),
                            op::Constant(LiteralUtil::CreateR0<uint32_t>(
                                partition_count))),
               op::PartitionId());
         }
-        default:
-          LOG(FATAL) << "Unsupported mode: " << static_cast<int>(mode);
       }
     }();
     auto root = module->entry_computation()->root_instruction();
@@ -92,8 +88,7 @@ class ReduceScatterDecomposerTest : public HloHardwareIndependentTestBase {
     if (action == PassAction::kTableLookup) {
       slice_index = op::Reshape(op::DynamicSlice(op::Constant(), id_matcher));
     }
-    if (mode == CollectiveOpGroupMode::
-                    COLLECTIVE_OP_GROUP_MODE_CROSS_REPLICA_AND_PARTITION) {
+    if (mode == CollectiveOpGroupMode::kCrossReplicaAndPartition) {
       slice_index = op::Add(
           op::Multiply(
               slice_index,
@@ -133,7 +128,7 @@ ENTRY main {
 }
 )";
   RunPass(hlo_string, PassAction::kTrivialGroups,
-          CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_CROSS_REPLICA,
+          CollectiveOpGroupMode::kCrossReplica,
           /*shard_size=*/4);
 }
 
@@ -153,7 +148,7 @@ ENTRY main {
 }
 )";
   RunPass(hlo_string, PassAction::kTableLookup,
-          CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_CROSS_REPLICA,
+          CollectiveOpGroupMode::kCrossReplica,
           /*shard_size=*/4);
 }
 
@@ -169,14 +164,13 @@ sum {
 
 ENTRY main {
   p0 = f32[4, 8] parameter(0)
-  // In this mode, the participants are the given replicas across all partitions.
+  // Tn this mode, the participants are the given replicas across all partitions.
   // Here, we have 2 replicas and 2 partitions, so 4 total shards.
   ROOT rs = f32[4, 2] reduce-scatter(p0), replica_groups={{0, 1}}, channel_id=1, dimensions={1}, to_apply=sum
 }
 )";
   RunPass(hlo_string, PassAction::kTrivialGroups,
-          CollectiveOpGroupMode::
-              COLLECTIVE_OP_GROUP_MODE_CROSS_REPLICA_AND_PARTITION,
+          CollectiveOpGroupMode::kCrossReplicaAndPartition,
           /*shard_size=*/2, /*shard_dimension=*/1);
 }
 
@@ -193,7 +187,7 @@ sum {
 
 ENTRY main {
   p0 = f32[4, 8] parameter(0)
-  // In this mode, the participants are the given replicas across all partitions.
+  // Tn this mode, the participants are the given replicas across all partitions.
   // Here, we have 1 replicas and 2 partitions, so 2 total shards.
   ROOT rs = f32[4, 4] reduce-scatter(p0), frontend_attributes={_scheduling_group_id="1"}, replica_groups={{0}}, channel_id=1, dimensions={1}, to_apply=sum
 }
@@ -202,9 +196,9 @@ ENTRY main {
   // partition_id will be simplified by the pass to just partition_id
   RunPass(
       hlo_string, PassAction::kTrivialGroups,
-      CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_CROSS_PARTITION,
+      CollectiveOpGroupMode::kCrossPartition,
       /*shard_size=*/4, /*shard_dimension=*/1, /*replica_count=*/1,
-      /*should_decompose =*/[](const HloInstruction*) { return true; },
+      /*should_decompose =*/[](const HloInstruction *) { return true; },
       std::make_pair("_scheduling_group_id", "1"));
 }
 
@@ -224,7 +218,7 @@ ENTRY main {
 }
 )";
   RunPass(hlo_string, PassAction::kTableLookup,
-          CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_FLATTENED_ID,
+          CollectiveOpGroupMode::kFlattenedID,
           /*shard_size=*/2, /*shard_dimension=*/1);
 }
 
@@ -262,9 +256,9 @@ ENTRY main {
 }
 )";
   RunPass(hlo_string, PassAction::kNoChange,
-          CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_CROSS_REPLICA,
+          CollectiveOpGroupMode::kCrossReplica,
           /*shard_size=*/0, /*shard_dimension=*/0,
-          /*replica_count=*/2, [](const HloInstruction*) { return false; });
+          /*replica_count=*/2, [](const HloInstruction *) { return false; });
 }
 
 }  // namespace

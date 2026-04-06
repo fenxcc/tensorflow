@@ -23,9 +23,7 @@ limitations under the License.
 #include <string>
 #include <utility>
 
-#include "absl/base/nullability.h"
 #include "absl/base/optimization.h"
-#include "xla/tsl/concurrency/executor.h"
 #include "xla/tsl/platform/env.h"
 #include "xla/tsl/platform/logging.h"
 #include "xla/tsl/platform/threadpool_interface.h"
@@ -122,8 +120,7 @@ ThreadPool::ThreadPool(Env* env, const ThreadOptions& thread_options,
 
 ThreadPool::ThreadPool(Env* env, const ThreadOptions& thread_options,
                        const std::string& name, int num_threads,
-                       bool low_latency_hint, Eigen::Allocator* allocator)
-    : executor_(this) {
+                       bool low_latency_hint, Eigen::Allocator* allocator) {
   CHECK_GE(num_threads, 1);
 
 #ifdef DNNL_AARCH64_USE_ACL
@@ -149,8 +146,7 @@ ThreadPool::ThreadPool(Env* env, const ThreadOptions& thread_options,
       underlying_threadpool_, num_threads, allocator);
 }
 
-ThreadPool::ThreadPool(thread::ThreadPoolInterface* user_threadpool)
-    : executor_(this) {
+ThreadPool::ThreadPool(thread::ThreadPoolInterface* user_threadpool) {
   underlying_threadpool_ = user_threadpool;
   threadpool_device_ = std::make_unique<Eigen::ThreadPoolDevice>(
       underlying_threadpool_, underlying_threadpool_->NumThreads(), nullptr);
@@ -283,19 +279,6 @@ void ThreadPool::ScheduleWithHint(std::function<void()> fn, int start,
 Eigen::ThreadPoolInterface* ThreadPool::AsEigenThreadPool() const {
   DCHECK(underlying_threadpool_ != nullptr);
   return underlying_threadpool_;
-}
-
-tsl::Executor* absl_nonnull ThreadPool::AsExecutor() { return &executor_; }
-
-ThreadPool::ThreadPoolExecutor::ThreadPoolExecutor(ThreadPool* thread_pool)
-    : thread_pool_(thread_pool) {}
-
-void ThreadPool::ThreadPoolExecutor::Execute(Task task) {
-  auto* task_ptr = new Task(std::move(task));
-  thread_pool_->Schedule([task_ptr] {
-    std::move((*task_ptr))();
-    delete task_ptr;
-  });
 }
 
 }  // namespace tsl::thread

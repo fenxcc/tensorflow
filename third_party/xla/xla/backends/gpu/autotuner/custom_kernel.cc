@@ -44,21 +44,24 @@ namespace se = ::stream_executor;
 
 using CustomKernelBackendConfig = AutotuneResult::CustomKernelFusionKey;
 
-bool CustomKernelBackend::IsSupported(const HloInstruction& instr) {
+namespace {
+bool IsSupported(const HloInstruction& instr) {
   if (instr.opcode() != HloOpcode::kFusion) {
-    VLOG(1) << "CustomKernelBackend doesn't support non-fusion instructions.";
+    LOG(ERROR)
+        << "CustomKernelBackend doesn't support non-fusion instructions.";
     return false;
   }
 
   if (instr.backend_config<GpuBackendConfig>()
           ->fusion_backend_config()
           .kind() != kCustomFusionKind) {
-    VLOG(1) << "CustomKernelBackend expected a custom fusion.";
+    LOG(ERROR) << "CustomKernelBackend expected a custom fusion.";
     return false;
   }
 
   return true;
 }
+}  // namespace
 
 absl::StatusOr<std::vector<CustomKernel>> LoadKernels(
     const HloInstruction* fusion_instruction,
@@ -101,11 +104,9 @@ CustomKernelBackend::GetSupportedConfigs(const HloInstruction& instr) {
   int num_kernels = kernels.size();
   configs.reserve(num_kernels);
   for (int i = 0; i < num_kernels; ++i) {
-    CustomKernelBackendConfig config;
-    config.set_kernel_index(i);
-    auto any = std::make_unique<google::protobuf::Any>();
-    any->PackFrom(config);
-    configs.push_back(std::move(any));
+    auto config = std::make_unique<CustomKernelBackendConfig>();
+    config->set_kernel_index(i);
+    configs.push_back(std::move(config));
   }
   return configs;
 }
@@ -117,11 +118,9 @@ CustomKernelBackend::GetDefaultConfig(const HloInstruction& instr) {
         "CustomKernelBackend does not support this instruction.");
   }
 
-  CustomKernelBackendConfig config;
-  config.set_kernel_index(0);
-  auto any = std::make_unique<google::protobuf::Any>();
-  any->PackFrom(config);
-  return any;
+  auto config = std::make_unique<CustomKernelBackendConfig>();
+  config->set_kernel_index(0);
+  return config;
 }
 
 absl::Status CustomKernelBackend::ApplyConfig(HloInstruction& instr,
@@ -131,11 +130,8 @@ absl::Status CustomKernelBackend::ApplyConfig(HloInstruction& instr,
         "CustomKernelBackend does not support this instruction.");
   }
 
-  CustomKernelBackendConfig custom_kernel_config;
-  if (!config.UnpackTo(&custom_kernel_config)) {
-    return absl::InvalidArgumentError(
-        "Failed to unpack CustomKernelBackendConfig from Any.");
-  }
+  const CustomKernelBackendConfig custom_kernel_config =
+      static_cast<const CustomKernelBackendConfig&>(config);
 
   TF_ASSIGN_OR_RETURN(GpuBackendConfig gpu_config,
                       instr.backend_config<GpuBackendConfig>());

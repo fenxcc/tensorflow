@@ -30,17 +30,16 @@ limitations under the License.
 
 namespace tensorflow {
 
-std::string WordWrap(absl::string_view prefix, absl::string_view str,
-                     int width) {
-  const std::string indent_next_line = "\n" + Spaces(prefix.size());
+string WordWrap(absl::string_view prefix, absl::string_view str, int width) {
+  const string indent_next_line = "\n" + Spaces(prefix.size());
   width -= prefix.size();
-  std::string result;
-  absl::StrAppend(&result, prefix);
+  string result;
+  strings::StrAppend(&result, prefix);
 
   while (!str.empty()) {
     if (static_cast<int>(str.size()) <= width) {
       // Remaining text fits on one line.
-      absl::StrAppend(&result, str);
+      strings::StrAppend(&result, str);
       break;
     }
     auto space = str.rfind(' ', width);
@@ -48,7 +47,7 @@ std::string WordWrap(absl::string_view prefix, absl::string_view str,
       // Rather make a too-long line and break at a space.
       space = str.find(' ');
       if (space == absl::string_view::npos) {
-        absl::StrAppend(&result, str);
+        strings::StrAppend(&result, str);
         break;
       }
     }
@@ -63,8 +62,8 @@ std::string WordWrap(absl::string_view prefix, absl::string_view str,
     }
 
     // Go on to the next line.
-    absl::StrAppend(&result, to_append);
-    if (!str.empty()) absl::StrAppend(&result, indent_next_line);
+    strings::StrAppend(&result, to_append);
+    if (!str.empty()) strings::StrAppend(&result, indent_next_line);
   }
 
   return result;
@@ -101,8 +100,8 @@ static bool SplitAt(char split_ch, absl::string_view* orig,
 
 // Does this line start with "<spaces><field>:" where "<field>" is
 // in multi_line_fields? Sets *colon_pos to the position of the colon.
-static bool StartsWithFieldName(
-    absl::string_view line, const std::vector<std::string>& multi_line_fields) {
+static bool StartsWithFieldName(absl::string_view line,
+                                const std::vector<string>& multi_line_fields) {
   absl::string_view up_to_colon;
   if (!SplitAt(':', &line, &up_to_colon)) return false;
   while (absl::ConsumePrefix(&up_to_colon, " "))
@@ -116,8 +115,8 @@ static bool StartsWithFieldName(
 }
 
 static bool ConvertLine(absl::string_view line,
-                        const std::vector<std::string>& multi_line_fields,
-                        std::string* ml) {
+                        const std::vector<string>& multi_line_fields,
+                        string* ml) {
   // Is this a field we should convert?
   if (!StartsWithFieldName(line, multi_line_fields)) {
     return false;
@@ -141,7 +140,7 @@ static bool ConvertLine(absl::string_view line,
   absl::string_view suffix = after_colon.substr(last_quote + 1);
   // We've now parsed line into '<up_to_colon>: "<escaped>"<suffix>'
 
-  std::string unescaped;
+  string unescaped;
   if (!absl::CUnescape(escaped, &unescaped, nullptr)) {
     // Error unescaping, abort the conversion.
     return false;
@@ -149,25 +148,24 @@ static bool ConvertLine(absl::string_view line,
   // No more errors possible at this point.
 
   // Find a string to mark the end that isn't in unescaped.
-  std::string end = "END";
-  for (int s = 0; unescaped.find(end) != std::string::npos; ++s) {
-    end = absl::StrCat("END", s);
+  string end = "END";
+  for (int s = 0; unescaped.find(end) != string::npos; ++s) {
+    end = strings::StrCat("END", s);
   }
 
   // Actually start writing the converted output.
   strings::StrAppend(ml, up_to_colon, ": <<", end, "\n", unescaped, "\n", end);
   if (!suffix.empty()) {
     // Output suffix, in case there was a trailing comment in the source.
-    absl::StrAppend(ml, suffix);
+    strings::StrAppend(ml, suffix);
   }
-  absl::StrAppend(ml, "\n");
+  strings::StrAppend(ml, "\n");
   return true;
 }
 
-std::string PBTxtToMultiline(
-    absl::string_view pbtxt,
-    const std::vector<std::string>& multi_line_fields) {
-  std::string ml;
+string PBTxtToMultiline(absl::string_view pbtxt,
+                        const std::vector<string>& multi_line_fields) {
+  string ml;
   // Probably big enough, since the input and output are about the
   // same size, but just a guess.
   ml.reserve(pbtxt.size() * (17. / 16));
@@ -177,7 +175,7 @@ std::string PBTxtToMultiline(
     SplitAt('\n', &pbtxt, &line);
     // Convert line or output it unchanged
     if (!ConvertLine(line, multi_line_fields, &ml)) {
-      absl::StrAppend(&ml, line, "\n");
+      strings::StrAppend(&ml, line, "\n");
     }
   }
   return ml;
@@ -186,21 +184,20 @@ std::string PBTxtToMultiline(
 // Given a single line of text `line` with first : at `colon`, determine if
 // there is an "<<END" expression after the colon and if so return true and set
 // `*end` to everything after the "<<".
-static bool FindMultiline(absl::string_view line, size_t colon,
-                          std::string* end) {
+static bool FindMultiline(absl::string_view line, size_t colon, string* end) {
   if (colon == absl::string_view::npos) return false;
   line.remove_prefix(colon + 1);
   while (absl::ConsumePrefix(&line, " ")) {
   }
   if (absl::ConsumePrefix(&line, "<<")) {
-    *end = std::string(line);
+    *end = string(line);
     return true;
   }
   return false;
 }
 
-std::string PBTxtFromMultiline(absl::string_view multiline_pbtxt) {
-  std::string pbtxt;
+string PBTxtFromMultiline(absl::string_view multiline_pbtxt) {
+  string pbtxt;
   // Probably big enough, since the input and output are about the
   // same size, but just a guess.
   pbtxt.reserve(multiline_pbtxt.size() * (33. / 32));
@@ -208,15 +205,15 @@ std::string PBTxtFromMultiline(absl::string_view multiline_pbtxt) {
   while (!multiline_pbtxt.empty()) {
     // Split multiline_pbtxt into its first line and everything after.
     if (!SplitAt('\n', &multiline_pbtxt, &line)) {
-      absl::StrAppend(&pbtxt, line);
+      strings::StrAppend(&pbtxt, line);
       break;
     }
 
-    std::string end;
+    string end;
     auto colon = line.find(':');
     if (!FindMultiline(line, colon, &end)) {
       // Normal case: not a multi-line string, just output the line as-is.
-      absl::StrAppend(&pbtxt, line, "\n");
+      strings::StrAppend(&pbtxt, line, "\n");
       continue;
     }
 
@@ -229,10 +226,10 @@ std::string PBTxtFromMultiline(absl::string_view multiline_pbtxt) {
     //     something: "xx\nyy"
 
     // Output everything up to the colon ("    something:").
-    absl::StrAppend(&pbtxt, line.substr(0, colon + 1));
+    strings::StrAppend(&pbtxt, line.substr(0, colon + 1));
 
     // Add every line to unescaped until we see the "END" string.
-    std::string unescaped;
+    string unescaped;
     bool first = true;
     while (!multiline_pbtxt.empty()) {
       SplitAt('\n', &multiline_pbtxt, &line);
@@ -242,7 +239,7 @@ std::string PBTxtFromMultiline(absl::string_view multiline_pbtxt) {
       } else {
         unescaped.push_back('\n');
       }
-      absl::StrAppend(&unescaped, line);
+      strings::StrAppend(&unescaped, line);
       line = absl::string_view();
     }
 
@@ -253,14 +250,13 @@ std::string PBTxtFromMultiline(absl::string_view multiline_pbtxt) {
   return pbtxt;
 }
 
-static void StringReplace(const std::string& from, const std::string& to,
-                          std::string* s) {
+static void StringReplace(const string& from, const string& to, string* s) {
   // Split *s into pieces delimited by `from`.
-  std::vector<std::string> split;
-  std::string::size_type pos = 0;
+  std::vector<string> split;
+  string::size_type pos = 0;
   while (pos < s->size()) {
     auto found = s->find(from, pos);
-    if (found == std::string::npos) {
+    if (found == string::npos) {
       split.push_back(s->substr(pos));
       break;
     } else {
@@ -275,10 +271,10 @@ static void StringReplace(const std::string& from, const std::string& to,
   *s = absl::StrJoin(split, to);
 }
 
-static void RenameInDocs(const std::string& from, const std::string& to,
+static void RenameInDocs(const string& from, const string& to,
                          ApiDef* api_def) {
-  const std::string from_quoted = absl::StrCat("`", from, "`");
-  const std::string to_quoted = absl::StrCat("`", to, "`");
+  const string from_quoted = strings::StrCat("`", from, "`");
+  const string to_quoted = strings::StrCat("`", to, "`");
   for (int i = 0; i < api_def->in_arg_size(); ++i) {
     if (!api_def->in_arg(i).description().empty()) {
       StringReplace(from_quoted, to_quoted,
@@ -463,11 +459,11 @@ absl::Status MergeApiDefs(ApiDef* base_api_def, const ApiDef& new_api_def) {
 
   if (!new_api_def.description_prefix().empty()) {
     description =
-        absl::StrCat(new_api_def.description_prefix(), "\n", description);
+        strings::StrCat(new_api_def.description_prefix(), "\n", description);
   }
   if (!new_api_def.description_suffix().empty()) {
     description =
-        absl::StrCat(description, "\n", new_api_def.description_suffix());
+        strings::StrCat(description, "\n", new_api_def.description_suffix());
   }
   base_api_def->set_description(description);
   return absl::OkStatus();
@@ -484,30 +480,30 @@ ApiDefMap::ApiDefMap(const OpList& op_list) {
 
 ApiDefMap::~ApiDefMap() {}
 
-absl::Status ApiDefMap::LoadFileList(
-    Env* env, const std::vector<std::string>& filenames) {
+absl::Status ApiDefMap::LoadFileList(Env* env,
+                                     const std::vector<string>& filenames) {
   for (const auto& filename : filenames) {
     TF_RETURN_IF_ERROR(LoadFile(env, filename));
   }
   return absl::OkStatus();
 }
 
-absl::Status ApiDefMap::LoadFile(Env* env, const std::string& filename) {
+absl::Status ApiDefMap::LoadFile(Env* env, const string& filename) {
   if (filename.empty()) return absl::OkStatus();
-  std::string contents;
+  string contents;
   TF_RETURN_IF_ERROR(ReadFileToString(env, filename, &contents));
   absl::Status status = LoadApiDef(contents);
   if (!status.ok()) {
     // Return failed status annotated with filename to aid in debugging.
     return errors::CreateWithUpdatedMessage(
-        status, absl::StrCat("Error parsing ApiDef file ", filename, ": ",
-                             status.message()));
+        status, strings::StrCat("Error parsing ApiDef file ", filename, ": ",
+                                status.message()));
   }
   return absl::OkStatus();
 }
 
-absl::Status ApiDefMap::LoadApiDef(const std::string& api_def_file_contents) {
-  const std::string contents = PBTxtFromMultiline(api_def_file_contents);
+absl::Status ApiDefMap::LoadApiDef(const string& api_def_file_contents) {
+  const string contents = PBTxtFromMultiline(api_def_file_contents);
   ApiDefs api_defs;
   TF_RETURN_IF_ERROR(
       proto_utils::ParseTextFormatFromString(contents, &api_defs));
@@ -526,7 +522,7 @@ void ApiDefMap::UpdateDocs() {
   for (auto& name_and_api_def : map_) {
     auto& api_def = name_and_api_def.second;
     CHECK_GT(api_def.endpoint_size(), 0);
-    const std::string canonical_name = api_def.endpoint(0).name();
+    const string canonical_name = api_def.endpoint(0).name();
     if (api_def.graph_op_name() != canonical_name) {
       RenameInDocs(api_def.graph_op_name(), canonical_name, &api_def);
     }
@@ -548,7 +544,7 @@ void ApiDefMap::UpdateDocs() {
   }
 }
 
-const tensorflow::ApiDef* ApiDefMap::GetApiDef(const std::string& name) const {
+const tensorflow::ApiDef* ApiDefMap::GetApiDef(const string& name) const {
   return gtl::FindOrNull(map_, name);
 }
 }  // namespace tensorflow

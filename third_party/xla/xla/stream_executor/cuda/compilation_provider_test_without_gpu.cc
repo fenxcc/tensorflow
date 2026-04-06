@@ -19,12 +19,11 @@ limitations under the License.
 namespace stream_executor::cuda {
 namespace {
 
-INSTANTIATE_TEST_SUITE_P(
-    CompilationProviderTest, CompilationProviderTest,
-    testing::Values(kSubprocessCompilationProviderName,
-                    kNvJitLinkCompilationProviderName,
-                    kNvptxcompilerCompilationProviderName,
-                    kCompositeNvptxCompilerAndNvJitLinkCompilationProviderName),
-    CompilationProviderTestParamNamePrinter());
+INSTANTIATE_TEST_SUITE_P(CompilationProviderTest, CompilationProviderTest,
+                         testing::Values(kSubprocessCompilationProviderName,
+                                         kNvJitLinkCompilationProviderName,
+                                         kNvptxcompilerCompilationProviderName),
+                         CompilationProviderTestParamNamePrinter());
+
 }
 }  // namespace stream_executor::cuda

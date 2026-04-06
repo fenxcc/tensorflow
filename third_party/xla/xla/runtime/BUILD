@@ -19,10 +19,8 @@ cc_library(
     srcs = ["buffer_use.cc"],
     hdrs = ["buffer_use.h"],
     deps = [
-        "//xla:shape_util",
         "//xla/service:buffer_assignment",
         "@com_google_absl//absl/algorithm:container",
-        "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/types:span",
     ],
@@ -33,11 +31,10 @@ xla_cc_test(
     srcs = ["buffer_use_test.cc"],
     deps = [
         ":buffer_use",
-        "//xla:shape_util",
         "//xla/service:buffer_assignment",
-        "@com_google_absl//absl/strings",
         "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
+        "@local_tsl//tsl/platform:test",
     ],
 )
 
@@ -50,7 +47,6 @@ cc_library(
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/memory",
-        "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/types:span",
     ],
 )
@@ -94,7 +90,6 @@ xla_cc_test(
         ":buffer_use",
         ":execution_graph",
         ":resource_use",
-        "//xla:shape_util",
         "//xla/service:buffer_assignment",
         "//xla/tsl/platform:statusor",
         "//xla/tsl/platform:test",
@@ -163,7 +158,6 @@ cc_library(
     name = "device_id",
     hdrs = ["device_id.h"],
     deps = [
-        "//xla/tsl/distributed_runtime/coordination:coordination_service",
         "//xla/tsl/lib/gtl:int_type",
     ],
 )

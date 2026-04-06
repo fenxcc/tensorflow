@@ -24,7 +24,7 @@ limitations under the License.
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"
-#include "absl/log/check.h"
+#include "absl/log/log.h"
 #include "absl/strings/ascii.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
@@ -41,6 +41,7 @@ limitations under the License.
 #include "xla/tsl/util/command_line_flags.h"
 #include "xla/xla_data.pb.h"
 #include "tsl/platform/init_main.h"
+#include "tsl/platform/protobuf.h"
 
 namespace {
 const char* const kUsage = R"(
@@ -123,9 +124,7 @@ int main(int argc, char** argv) {
   bool parse_ok = tsl::Flags::Parse(&argc, argv, flag_list);
   tsl::port::InitMain(kUsageString.c_str(), &argc, &argv);
   if (!parse_ok) {
-    // Print the usage using cerr to avoid truncation by LOG.
-    std::cerr << kUsageString;
-    return 1;
+    LOG(QFATAL) << kUsageString;
   }
 
   std::unique_ptr<xla::HloCostAnalysis> analysis;
@@ -139,7 +138,8 @@ int main(int argc, char** argv) {
   std::unique_ptr<xla::HloModule> module =
       *xla::LoadModuleFromFile(input, format, {});
 
-  CHECK_OK(module->entry_computation()->root_instruction()->Accept(&*analysis));
+  TF_CHECK_OK(
+      module->entry_computation()->root_instruction()->Accept(&*analysis));
 
   xla::PrintDots(*module);
 

@@ -16,21 +16,20 @@ limitations under the License.
 #ifndef TENSORFLOW_CORE_KERNELS_NUMERIC_OPTIONS_UTILS_H_
 #define TENSORFLOW_CORE_KERNELS_NUMERIC_OPTIONS_UTILS_H_
 
-#include "xla/stream_executor/engine_options.h"
+#include "xla/stream_executor/numeric_options.h"
 #include "xla/tsl/util/determinism.h"
 #include "tensorflow/core/util/env_var.h"
 #include "tsl/platform/tensor_float_32_utils.h"
 
 namespace tensorflow {
 
-inline stream_executor::EngineOptions GetNumericOptions() {
-  return stream_executor::EngineOptions{
+inline stream_executor::NumericOptions GetNumericOptions() {
+  return stream_executor::NumericOptions{
       /*require_determinism=*/tsl::OpDeterminismRequired(),
-      /*allow_tf32=*/tsl::tensor_float_32_execution_enabled(),
-      /*require_command_buffer=*/false};
+      /*allow_tf32=*/tsl::tensor_float_32_execution_enabled()};
 }
 
-inline stream_executor::EngineOptions GetNumericOptionsForCuDnn() {
+inline stream_executor::NumericOptions GetNumericOptionsForCuDnn() {
   static bool cudnn_deterministic_env_var = [] {
     bool cudnn_deterministic = false;
     TF_CHECK_OK(ReadBoolFromEnvVar("TF_CUDNN_DETERMINISTIC",
@@ -38,7 +37,7 @@ inline stream_executor::EngineOptions GetNumericOptionsForCuDnn() {
                                    &cudnn_deterministic));
     return cudnn_deterministic;
   }();
-  stream_executor::EngineOptions result = GetNumericOptions();
+  stream_executor::NumericOptions result = GetNumericOptions();
   result.require_determinism |= cudnn_deterministic_env_var;
   return result;
 }

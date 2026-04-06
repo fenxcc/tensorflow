@@ -35,8 +35,6 @@ limitations under the License.
 // TableGen'd op method definitions
 //===----------------------------------------------------------------------===//
 
-using namespace mlir;  // NOLINT
-
 namespace mlir {
 namespace TF {
 namespace {

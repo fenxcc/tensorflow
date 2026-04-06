@@ -15,7 +15,6 @@ limitations under the License.
 
 #include <cstddef>
 
-#include "absl/strings/ascii.h"
 #include "absl/strings/strip.h"
 #include "tensorflow/core/lib/core/stringpiece.h"
 #include "tensorflow/core/lib/strings/str_util.h"
@@ -28,11 +27,13 @@ namespace {
 bool IsDotOrIdentifierChar(char c) {
   if (c == '.') return true;
   if (c == '-') return true;
-  return absl::ascii_isalnum(c);
+  if (c >= 'A' && c <= 'Z') return true;
+  if (c >= 'a' && c <= 'z') return true;
+  if (c >= '0' && c <= '9') return true;
+  return false;
 }
 
-bool ConsumeDotSeparatedIdentifiers(absl::string_view* s,
-                                    const std::string& prefix,
+bool ConsumeDotSeparatedIdentifiers(absl::string_view* s, const string& prefix,
                                     absl::string_view* val) {
   if (!absl::ConsumePrefix(s, prefix)) return false;
   size_t i;
@@ -49,7 +50,7 @@ TEST(SemverTest, VersionStringFollowsSemver) {
   // Poor approximation of the semver 2.0 specification at www.semver.org.  Feel
   // free to refine further (for example, check for leading 0s in numbers), but
   // avoid adding dependencies.
-  uint64_t major, minor, patch;
+  uint64 major, minor, patch;
   absl::string_view prerelease, metadata;
   absl::string_view semver(TF_VERSION_STRING);
 

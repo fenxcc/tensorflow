@@ -31,8 +31,8 @@ namespace {
 TEST(TensorShapeUtilTest, TensorNameSliceToOrderedCode) {
   {
     TensorSlice s = TensorSlice::ParseOrDie("-:-:1,3:4,5");
-    std::string buffer = EncodeTensorNameSlice("foo", s);
-    std::string name;
+    string buffer = EncodeTensorNameSlice("foo", s);
+    string name;
     s.Clear();
     TF_CHECK_OK(DecodeTensorNameSlice(buffer, &name, &s));
     EXPECT_EQ("foo", name);

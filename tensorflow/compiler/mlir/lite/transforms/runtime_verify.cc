@@ -31,7 +31,7 @@ class RuntimeVerifyPass
  public:
   MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(RuntimeVerifyPass)
 
-  explicit RuntimeVerifyPass() = default;
+  explicit RuntimeVerifyPass() {}
 
  private:
   void runOnOperation() override;

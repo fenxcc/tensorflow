@@ -25,7 +25,6 @@ limitations under the License.
 #include <map>
 #include <memory>
 #include <optional>
-#include <string>
 #include <utility>
 #include <vector>
 
@@ -105,7 +104,7 @@ BFCAllocator::~BFCAllocator() {
   // Lock the mutex to make sure that all memory effects are safely published
   // and available to a thread running the destructor (i.e., deallocations
   // happened on a different thread right before the destructor).
-  absl::MutexLock l(mutex_);
+  absl::MutexLock l(&mutex_);
 
   // Return memory back.
   VLOG(2) << "Number of regions allocated: "
@@ -265,7 +264,7 @@ void* BFCAllocator::AllocateRawInternalWithRetry(
     static const int64_t kMaxMillisToWait = 10000;  // 10 seconds
     r = retry_helper_.AllocateRaw(
         [this, &allocation_attr](size_t a, size_t nb, bool v) {
-          uint64_t freed_by_count = 0;
+          uint64 freed_by_count = 0;
           if (allocation_attr.freed_by_func != nullptr) {
             freed_by_count = (*allocation_attr.freed_by_func)();
           }
@@ -447,7 +446,7 @@ void* BFCAllocator::AllocateRawInternal(size_t unused_alignment,
   // The BFC allocator tries to find the best fit first.
   BinNum bin_num = BinNumForSize(rounded_bytes);
 
-  absl::MutexLock l(mutex_);
+  absl::MutexLock l(&mutex_);
   if (!timestamped_chunks_.empty()) {
     // Merge timestamped chunks whose counts have become safe for general use.
     MergeTimestampedChunks(0);
@@ -704,7 +703,7 @@ void BFCAllocator::DeallocateRawInternal(void* ptr) {
     VLOG(2) << "tried to deallocate nullptr";
     return;
   }
-  absl::MutexLock l(mutex_);
+  absl::MutexLock l(&mutex_);
 
   // Find the chunk from the ptr.
   BFCAllocator::ChunkHandle h = region_manager_.get_handle(ptr);
@@ -948,7 +947,7 @@ bool BFCAllocator::TracksAllocationSizes() const { return true; }
 
 size_t BFCAllocator::RequestedSize(const void* ptr) const {
   CHECK(ptr);
-  absl::MutexLock l(mutex_);
+  absl::MutexLock l(&mutex_);
   BFCAllocator::ChunkHandle h = region_manager_.get_handle(ptr);
   CHECK(h != kInvalidChunkHandle)
       << "Asked for requested size of pointer we never allocated: " << ptr;
@@ -957,7 +956,7 @@ size_t BFCAllocator::RequestedSize(const void* ptr) const {
 }
 
 size_t BFCAllocator::AllocatedSize(const void* ptr) const {
-  absl::MutexLock l(mutex_);
+  absl::MutexLock l(&mutex_);
   BFCAllocator::ChunkHandle h = region_manager_.get_handle(ptr);
   CHECK(h != kInvalidChunkHandle)
       << "Asked for allocated size of pointer we never allocated: " << ptr;
@@ -966,7 +965,7 @@ size_t BFCAllocator::AllocatedSize(const void* ptr) const {
 }
 
 int64_t BFCAllocator::AllocationId(const void* ptr) const {
-  absl::MutexLock l(mutex_);
+  absl::MutexLock l(&mutex_);
   BFCAllocator::ChunkHandle h = region_manager_.get_handle(ptr);
   CHECK(h != kInvalidChunkHandle)
       << "Asked for allocation id of pointer we never allocated: " << ptr;
@@ -1000,9 +999,10 @@ void RenderRegion(char* rendered, const size_t resolution,
 
 }  // namespace
 
-std::string BFCAllocator::RenderOccupancy() {
+string BFCAllocator::RenderOccupancy() {
   // Make a buffer for the ASCII-art representation.
   const size_t resolution = 100;
+  char rendered[resolution];
 
   // Compute the total region size to render over
   size_t total_region_size = 0;
@@ -1015,7 +1015,8 @@ std::string BFCAllocator::RenderOccupancy() {
   }
 
   // Start out with everything empty
-  std::string rendered(resolution, '_');
+  RenderRegion(rendered, resolution, total_region_size, 0, nullptr, nullptr,
+               total_region_size, '_');
 
   size_t region_offset = 0;
   for (const auto& region : region_manager_.regions()) {
@@ -1027,21 +1028,20 @@ std::string BFCAllocator::RenderOccupancy() {
         // Render the wasted space
         size_t wasted = c->size - c->requested_size;
         if (wasted > 0) {
-          RenderRegion(rendered.data(), resolution, total_region_size,
+          RenderRegion(rendered, resolution, total_region_size,
                        region_offset + c->requested_size, region.ptr(), c->ptr,
                        wasted, 'x');
         }
         // Then the occupied space
-        RenderRegion(rendered.data(), resolution, total_region_size,
-                     region_offset, region.ptr(), c->ptr, c->requested_size,
-                     '*');
+        RenderRegion(rendered, resolution, total_region_size, region_offset,
+                     region.ptr(), c->ptr, c->requested_size, '*');
       }
       h = c->next;
     }
     region_offset += region.memory_size();
   }
 
-  return rendered;
+  return string(rendered, resolution);
 }
 
 void BFCAllocator::DumpMemoryLog(size_t num_bytes) {
@@ -1146,7 +1146,7 @@ void BFCAllocator::MaybeWriteMemoryMap() {
 }
 
 MemoryDump BFCAllocator::RecordMemoryMap() {
-  absl::MutexLock l(mutex_);
+  absl::MutexLock l(&mutex_);
   return RecordMemoryMapInternal();
 }
 
@@ -1217,12 +1217,12 @@ MemoryDump BFCAllocator::RecordMemoryMapInternal() {
 }
 
 std::optional<AllocatorStats> BFCAllocator::GetStats() {
-  absl::MutexLock l(mutex_);
+  absl::MutexLock l(&mutex_);
   return stats_;
 }
 
 bool BFCAllocator::ClearStats() {
-  absl::MutexLock l(mutex_);
+  absl::MutexLock l(&mutex_);
   stats_.num_allocs = 0;
   stats_.peak_bytes_in_use = stats_.bytes_in_use;
   stats_.largest_alloc_size = 0;

@@ -16,9 +16,7 @@ limitations under the License.
 #include "xla/backends/cpu/codegen/jit_compiler.h"
 
 #include <cstddef>
-#include <cstdint>
 #include <memory>
-#include <string>
 #include <utility>
 
 #include "absl/base/thread_annotations.h"
@@ -27,28 +25,24 @@ limitations under the License.
 #include "absl/status/statusor.h"
 #include "absl/synchronization/mutex.h"
 #include "absl/types/span.h"
-#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/Orc/Core.h"
 #include "llvm/ExecutionEngine/Orc/ExecutorProcessControl.h"
 #include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
 #include "llvm/ExecutionEngine/Orc/InProcessMemoryAccess.h"
 #include "llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h"
-#include "llvm/ExecutionEngine/Orc/Shared/ExecutorAddress.h"
-#include "llvm/ExecutionEngine/Orc/SymbolStringPool.h"
 #include "llvm/ExecutionEngine/Orc/TaskDispatch.h"
 #include "llvm/ExecutionEngine/Orc/ThreadSafeModule.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Mangler.h"
 #include "llvm/Support/Error.h"
-#include "llvm/Support/ErrorHandling.h"
 #include "llvm/Target/TargetMachine.h"
+#include "llvm/Target/TargetOptions.h"
 #include "llvm/TargetParser/Host.h"
 #include "xla/backends/cpu/codegen/execution_engine.h"
 #include "xla/backends/cpu/codegen/ir_compiler.h"
 #include "xla/backends/cpu/codegen/object_loader.h"
 #include "xla/backends/cpu/runtime/function_library.h"
-#include "xla/tsl/platform/errors.h"
 #include "xla/tsl/platform/statusor.h"
 #include "xla/util.h"
 #include "tsl/profiler/lib/traceme.h"
@@ -190,17 +184,13 @@ absl::StatusOr<std::unique_ptr<FunctionLibrary>> JitCompiler::Compile(
     return TraceMeEncode("JitCompiler::Compile",
                          {{"num_symbols", symbols.size()}});
   });
-
   ObjectLoader object_loader(std::move(execution_engine_));
-  auto symbol_map = object_loader.LookupSymbols(symbols);
-
-  // Wait for all dispatched compilation tasks to finish before returning from
-  // the function, to make sure we don't get use-after-free errors.
+  llvm::DataLayout data_layout = target_machine_->createDataLayout();
+  TF_ASSIGN_OR_RETURN(auto symbol_map, object_loader.LookupSymbols(symbols));
+  // Wait for all compilation tasks to finish.
   task_dispatcher_->shutdown();
-
-  TF_RETURN_IF_ERROR(symbol_map.status());
   return std::move(object_loader)
-      .CreateFunctionLibrary(std::move(symbols), *symbol_map);
+      .CreateFunctionLibrary(std::move(symbols), symbol_map);
 }
 
 JitCompiler::TaskDispatcher::TaskDispatcher(TaskRunner task_runner)
@@ -220,7 +210,7 @@ void JitCompiler::TaskDispatcher::dispatch(
   // dispatching the task to avoid deadlock, because `task_runner_` may choose
   // to execute the task in the current thread.
   {
-    absl::MutexLock lock(mu_);
+    absl::MutexLock lock(&mu_);
     ++num_dispatched_tasks_;
   }
 
@@ -234,7 +224,7 @@ void JitCompiler::TaskDispatcher::dispatch(
     task->run();
     task.reset();
 
-    absl::MutexLock lock(mu_);
+    absl::MutexLock lock(&mu_);
     --num_dispatched_tasks_;
   });
 }
@@ -243,7 +233,7 @@ void JitCompiler::TaskDispatcher::shutdown() {
   auto all_tasks_finished = [this]() ABSL_SHARED_LOCKS_REQUIRED(mu_) {
     return num_dispatched_tasks_ == 0;
   };
-  absl::MutexLock lock(mu_, absl::Condition(&all_tasks_finished));
+  absl::MutexLock lock(&mu_, absl::Condition(&all_tasks_finished));
 }
 
 }  // namespace xla::cpu

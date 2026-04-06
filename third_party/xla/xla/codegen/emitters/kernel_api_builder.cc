@@ -24,7 +24,6 @@ limitations under the License.
 
 #include "absl/algorithm/container.h"
 #include "absl/container/flat_hash_map.h"
-#include "absl/container/flat_hash_set.h"
 #include "absl/log/check.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
@@ -47,7 +46,6 @@ limitations under the License.
 #include "xla/codegen/emitters/ir/xla_ops.h"
 #include "xla/codegen/emitters/kernel_arguments.h"
 #include "xla/codegen/emitters/type_util.h"
-#include "xla/codegen/kernel_spec.h"
 #include "xla/hlo/analysis/indexing_map.h"
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/ir/hlo_opcode.h"
@@ -161,7 +159,7 @@ absl::StatusOr<mlir::func::FuncOp> EmitKernelApi(
     const auto& arg = args->args()[index];
     llvm::SmallVector<mlir::NamedAttribute> attrs;
     attrs.push_back(builder.getNamedAttr(
-        kXlaSliceIndexAttr, builder.getIndexAttr(arg.slice_index())));
+        kXlaSliceIndexAttr, builder.getIndexAttr(arg.llvm_arg_index())));
     attrs.push_back(
         builder.getNamedAttr(mlir::LLVM::LLVMDialect::getAlignAttrName(),
                              builder.getIndexAttr(arg.alignment())));
@@ -220,7 +218,7 @@ void SetIndexDataLayout(mlir::ModuleOp module,
 
 IndexingMap GetDefaultWorkItemIndexingMap(const WorkDimensions& work_dimensions,
                                           const Shape& shape,
-                                          mlir::MLIRContext* mlir_context) {
+                                          mlir::MLIRContext* ctx) {
   std::vector<mlir::AffineExpr> output_dims(shape.dimensions().size());
 
   const NumWorkItems& num_work_items = work_dimensions.num_work_items;
@@ -235,13 +233,13 @@ IndexingMap GetDefaultWorkItemIndexingMap(const WorkDimensions& work_dimensions,
       num_work_items.y * num_work_groups.y,
       num_work_items.z * num_work_groups.z};
 
-  mlir::AffineExpr c0 = mlir::getAffineConstantExpr(0, mlir_context);
+  mlir::AffineExpr c0 = mlir::getAffineConstantExpr(0, ctx);
   uint64_t stride = 1;
   mlir::AffineExpr linear_index = c0;
   // Reverse to get minor to major order.
   for (auto [idx, dim] : llvm::enumerate(llvm::reverse(work_tile_dimensions))) {
     uint64_t symbol_index = work_tile_dimensions.size() - idx;
-    auto tile_coord = mlir::getAffineSymbolExpr(symbol_index, mlir_context);
+    auto tile_coord = mlir::getAffineSymbolExpr(symbol_index, ctx);
     auto tile_component = tile_coord * stride;
 
     linear_index = linear_index + tile_component;
@@ -258,10 +256,9 @@ IndexingMap GetDefaultWorkItemIndexingMap(const WorkDimensions& work_dimensions,
   // loop emitter doesn't support. This is safe, since the latter CHECK fails
   // if its assumptions are not fulfilled.
   for (int i = 0; i < 3; ++i) {
-    auto coord =
-        mlir::getAffineDimExpr(kIndexingMapWorkItemDims[i], mlir_context) +
-        mlir::getAffineDimExpr(kIndexingMapWorkGroupDims[i], mlir_context) *
-            work_item_array[i];
+    auto coord = mlir::getAffineDimExpr(kIndexingMapWorkItemDims[i], ctx) +
+                 mlir::getAffineDimExpr(kIndexingMapWorkGroupDims[i], ctx) *
+                     work_item_array[i];
     auto linear_component = coord * stride;
     linear_index = linear_index + linear_component;
     stride *= total_item_array[i];
@@ -271,7 +268,7 @@ IndexingMap GetDefaultWorkItemIndexingMap(const WorkDimensions& work_dimensions,
   // chunk.
   uint64_t items_per_chunk = stride;
 
-  mlir::AffineExpr chunk_id = mlir::getAffineSymbolExpr(0, mlir_context);
+  mlir::AffineExpr chunk_id = mlir::getAffineSymbolExpr(0, ctx);
   linear_index = chunk_id * items_per_chunk + linear_index;
 
   // See IndexUtil::LinearIndexToMultidimensionalIndex.
@@ -295,14 +292,12 @@ IndexingMap GetDefaultWorkItemIndexingMap(const WorkDimensions& work_dimensions,
 
   size_t range_vars_size = range_vars.size();
 
-  IndexingMap indexing_map(mlir::AffineMap::get(/*dimCount=*/6,
-                                                /*symbolCount=*/range_vars_size,
-                                                output_dims, mlir_context),
-                           std::move(dim_vars), std::move(range_vars),
-                           /*rt_vars=*/{});
+  IndexingMap indexing_map(
+      mlir::AffineMap::get(/*dimCount=*/6,
+                           /*symbolCount=*/range_vars_size, output_dims, ctx),
+      std::move(dim_vars), std::move(range_vars), /*rt_vars=*/{});
   indexing_map.AddConstraint(linear_index, Interval{0, num_elements - 1});
   indexing_map.Simplify();
-  indexing_map.RemoveUnusedSymbols();
   return indexing_map;
 }
 
@@ -365,8 +360,7 @@ absl::StatusOr<CallTargetProvider> EmitPartitionedComputations(
     for (const auto& subgraph : comp.subgraphs()) {
       if (subgraph_to_mlir_fn.contains(&subgraph)) {
         TF_RETURN_IF_ERROR(SubgraphToMlirFunction(
-            comp, subgraph, subgraph_to_mlir_fn[&subgraph], call_targets,
-            computations.mlir_context()));
+            comp, subgraph, subgraph_to_mlir_fn[&subgraph], call_targets));
       }
     }
   }
@@ -378,58 +372,10 @@ absl::StatusOr<CallTargetProvider> EmitPartitionedComputations(
     }
     TF_RETURN_IF_ERROR(SubgraphToMlirFunction(
         computations.FindPartitionedComputation(fused_computation), epilogue,
-        subgraph_to_mlir_fn[&epilogue], call_targets,
-        computations.mlir_context()));
+        subgraph_to_mlir_fn[&epilogue], call_targets));
   }
 
   return call_targets;
-}
-
-absl::StatusOr<KernelSpec> GetKernelSpec(
-    absl::string_view entry_function_name,
-    const HloInstruction& hlo_instruction,
-    const BufferAssignment* buffer_assignment,
-    const WorkDimensions& work_dimensions) {
-  if (buffer_assignment == nullptr) {
-    return KernelSpec(entry_function_name, work_dimensions,
-                      KernelSpec::Buffers(), KernelSpec::Buffers(),
-                      absl::flat_hash_set<int64_t>());
-  }
-
-  KernelSpec::Buffers result_buffers;
-  for (auto& indexed : ShapeUtil::GetLeafShapes(hlo_instruction.shape())) {
-    TF_ASSIGN_OR_RETURN(
-        BufferAllocation::Slice slice,
-        buffer_assignment->GetUniqueSlice(&hlo_instruction, indexed.index));
-    result_buffers.push_back(std::move(slice));
-  }
-
-  KernelSpec::Buffers argument_buffers;
-  absl::flat_hash_set<int64_t> invariant_arguments;
-  int64_t operand_index = 0;
-  for (HloInstruction* operand : hlo_instruction.operands()) {
-    for (auto& indexed : ShapeUtil::GetLeafShapes(operand->shape())) {
-      TF_ASSIGN_OR_RETURN(
-          BufferAllocation::Slice slice,
-          buffer_assignment->GetUniqueSlice(operand, indexed.index));
-
-      bool invariant = absl::c_none_of(
-          result_buffers,
-          [&slice](const BufferAllocation::Slice& result_slice) {
-            return result_slice.OverlapsWith(slice);
-          });
-      if (invariant) {
-        invariant_arguments.insert(operand_index);
-      }
-
-      argument_buffers.push_back(std::move(slice));
-      ++operand_index;
-    }
-  }
-
-  return KernelSpec(entry_function_name, work_dimensions,
-                    std::move(argument_buffers), std::move(result_buffers),
-                    std::move(invariant_arguments));
 }
 
 }  // namespace xla::emitters

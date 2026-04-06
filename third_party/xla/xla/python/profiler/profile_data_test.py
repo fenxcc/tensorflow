@@ -1,4 +1,4 @@
-# Copyright 2025 The OpenXLA Authors.
+# Copyright 2024 The OpenXLA Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +15,8 @@
 """Unit tests for profile_data.py."""
 
 from absl.testing import absltest
-from jax import profiler as profile_data
+
+from xla.python.profiler import profile_data
 
 
 class ProfileDataTest(absltest.TestCase):

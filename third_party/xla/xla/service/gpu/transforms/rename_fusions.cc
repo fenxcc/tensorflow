@@ -73,7 +73,7 @@ void RenameFusion(HloModule* module, HloInstruction* instruction) {
 
 }  // namespace
 
-absl::StatusOr<bool> RenameFusions::RunImpl(
+absl::StatusOr<bool> RenameFusions::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   for (HloComputation* computation : module->MakeNonfusionComputations()) {

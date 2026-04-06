@@ -56,7 +56,7 @@ class MakeDeterministic : public TFDataOptimizerBase {
   MakeDeterministic() = default;
   ~MakeDeterministic() override = default;
 
-  std::string name() const override { return "make_deterministic"; };
+  string name() const override { return "make_deterministic"; };
 
   bool UsesFunctionLibrary() const override { return false; }
 

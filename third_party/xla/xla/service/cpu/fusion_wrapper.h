@@ -28,16 +28,12 @@ namespace cpu {
 // kick in.
 class FusionWrapper : public emitters::FusionWrapperBase {
  public:
-  explicit FusionWrapper(bool using_new_fusion_emitter)
-      : using_new_fusion_emitter_(using_new_fusion_emitter) {}
+  explicit FusionWrapper() = default;
   ~FusionWrapper() override = default;
 
   absl::string_view name() const override { return "fusion-wrapper"; }
 
-  bool MustWrapInstruction(const HloInstruction& instruction) override;
-
- private:
-  bool using_new_fusion_emitter_;
+  bool MustWrapInstruction(HloOpcode opcode) override;
 };
 
 }  // namespace cpu

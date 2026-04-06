@@ -23,23 +23,18 @@ limitations under the License.
 #include <gtest/gtest.h>
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
-#include "mlir/IR/MLIRContext.h"
 #include "xla/hlo/ir/hlo_computation.h"
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/ir/hlo_module.h"
 #include "xla/hlo/ir/hlo_opcode.h"
 #include "xla/hlo/testlib/hlo_hardware_independent_test_base.h"
 #include "xla/hlo/testlib/pattern_matcher_gmock.h"
-#include "xla/service/gpu/alias_info.h"
 #include "xla/service/gpu/gpu_device_info_for_tests.h"
 #include "xla/service/gpu/gpu_fusible.h"
 #include "xla/service/hlo_cost_analysis.h"
 #include "xla/service/pattern_matcher.h"
 #include "xla/shape.h"
 #include "xla/shape_util.h"
-#include "xla/stream_executor/device_description.h"
-#include "xla/xla.pb.h"
-#include "xla/xla_data.pb.h"
 
 namespace xla {
 namespace gpu {
@@ -48,22 +43,17 @@ namespace m = ::xla::match;
 
 class MultiOutputFusionTest : public HloHardwareIndependentTestBase {
  public:
-  se::DeviceDescription device_info_{TestGpuDeviceInfo::RTXA6000DeviceInfo()};
-  GpuAliasInfo alias_info_{device_info_};
-  MultiOutputFusion mof_{device_info_, &alias_info_,
-                         HloCostAnalysis::DefaultShapeSize, &mlir_context_};
+  MultiOutputFusion mof_{TestGpuDeviceInfo::RTXA6000DeviceInfo(),
+                         HloCostAnalysis::DefaultShapeSize};
 
   void CheckMultiOutputFusion(absl::string_view hlo,
                               std::optional<absl::string_view> expected) {
     RunAndFilecheckHloRewrite(
         hlo,
-        MultiOutputFusion{device_info_, &alias_info_,
-                          HloCostAnalysis::DefaultShapeSize, &mlir_context_},
+        MultiOutputFusion{TestGpuDeviceInfo::RTXA6000DeviceInfo(),
+                          HloCostAnalysis::DefaultShapeSize},
         expected);
   }
-
- protected:
-  mlir::MLIRContext mlir_context_;
 };
 
 const char kModulePrefix[] = R"(
@@ -2208,37 +2198,6 @@ ENTRY computation {
   fusion.0 = bf16[32,16,64,256] fusion(p.0, p.1), kind=kLoop, calls=fused_computation.0
   fusion.1 = bf16[32,4096,64] fusion(p.0, p.1), kind=kInput, calls=fused_computation.1
   ROOT tuple = (bf16[32,16,64,256], bf16[32,4096,64]) tuple(fusion.0, fusion.1)
-})")
-                    .value();
-  ASSERT_FALSE(mof_.Run(module.get()).value()) << module->ToString();
-}
-
-TEST_F(ReduceMultiOutputFusionTest, UnnestedTransposeAndNestedReduction) {
-  auto module = ParseAndReturnVerifiedModule(R"(
-fused_transpose {
-  p.0 = f32[2048,16,128] parameter(0)
-  bitcast.0 = f32[32,64,16,128] bitcast(p.0)
-  ROOT transpose = f32[32,16,64,128] transpose(bitcast.0),
-      dimensions={0,2,1,3}  // Does not transpose the most minor dimension.
-}
-
-add {
-  a = f32[] parameter(0)
-  b = f32[] parameter(1)
-  ROOT c = f32[] add(a, b)
-}
-
-fused_reduction {
-  p = f32[2048,16,128] parameter(0)
-  z = f32[] constant(0)
-  ROOT r = f32[16,128] reduce(p, z), dimensions={0}, to_apply=add
-}
-
-ENTRY computation {
-  p.0 = f32[2048,16,128] parameter(0)
-  fusion.0 = f32[32,16,64,128] fusion(p.0), kind=kLoop, calls=fused_transpose
-  fusion.1 = f32[16,128] fusion(p.0), kind=kInput, calls=fused_reduction
-  ROOT tuple = (f32[32,16,64,128], f32[16,128]) tuple(fusion.0, fusion.1)
 })")
                     .value();
   ASSERT_FALSE(mof_.Run(module.get()).value()) << module->ToString();

@@ -16,6 +16,7 @@ limitations under the License.
 #include "xla/hlo/experimental/auto_sharding/metrics.h"
 
 #include <cstdint>
+#include <string>
 
 #include "xla/tsl/lib/monitoring/counter.h"
 

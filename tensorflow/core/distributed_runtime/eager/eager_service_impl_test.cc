@@ -25,7 +25,6 @@ limitations under the License.
 #include <vector>
 
 #include "absl/status/status.h"
-#include "absl/synchronization/notification.h"
 #include "absl/types/optional.h"
 #include "absl/types/variant.h"
 #include "tensorflow/c/tf_tensor.h"
@@ -588,7 +587,7 @@ class EagerServiceImplFunctionTest : public EagerServiceImplTest {
 
     CallOptions call_opts;
     absl::Status status;
-    absl::Notification n;
+    Notification n;
     Env::Default()->SchedClosure([&] {
       status = eager_service_impl.Enqueue(&call_opts, &remote_enqueue_request,
                                           &remote_enqueue_response);
@@ -680,7 +679,7 @@ class EagerServiceImplFunctionTest : public EagerServiceImplTest {
         &run_comp_func_request);
 
     CallOptions call_opts;
-    absl::Notification n;
+    Notification n;
     absl::Status status;
     eager_service_impl.RunComponentFunction(
         &call_opts, &run_comp_func_request, &run_comp_func_response,
@@ -846,7 +845,7 @@ TEST_F(EagerServiceImplFunctionTest, ComponentNestedFunctionWithNameClashTest) {
         &run_comp_func_request);
 
     CallOptions call_opts;
-    absl::Notification n;
+    Notification n;
     absl::Status status;
     eager_service_impl.RunComponentFunction(
         &call_opts, &run_comp_func_request, &run_comp_func_response,
@@ -888,7 +887,7 @@ TEST_F(EagerServiceImplFunctionTest, ComponentNestedFunctionWithNameClashTest) {
         &run_comp_func_request);
 
     CallOptions call_opts;
-    absl::Notification n;
+    Notification n;
     absl::Status status;
     eager_service_impl.RunComponentFunction(
         &call_opts, &run_comp_func_request, &run_comp_func_response,
@@ -1087,7 +1086,7 @@ TEST_F(FunctionWithRemoteInputsTest, EagerPFLRTest) {
   FunctionLibraryRuntime::Options opts;
   const uint64 op_id = 2;
   opts.op_id = op_id;
-  absl::Notification done;
+  Notification done;
   absl::Status status;
   RemoteTensorHandle input;
   input.set_op_id(1);
@@ -1121,7 +1120,7 @@ TEST_F(FunctionWithRemoteInputsTest,
   FunctionLibraryRuntime::Handle handle;
   EXPECT_TRUE(MatMulHasAttrWithDefaultValue(fdef_));
   absl::Status status;
-  absl::Notification instantiate_done;
+  Notification instantiate_done;
   eager_cluster_flr_->Instantiate(
       fdef_.signature().name(), func_lib_def_, AttrSlice(&fdef_.attr()),
       FunctionLibraryRuntime::InstantiateOptions(), &handle,
@@ -1149,7 +1148,7 @@ TEST_F(FunctionWithRemoteInputsTest,
   // Send input_tensor to the remote device, execute MatMulFunction on the
   // remote device, and send the output back.
   FunctionLibraryRuntime::Options opts;
-  absl::Notification execute_done;
+  Notification execute_done;
   std::vector<Tensor> inputs = {*input_tensor};
   std::vector<Tensor> outputs;
   eager_cluster_flr_->Run(opts, handle, inputs, &outputs,
@@ -1269,7 +1268,7 @@ TEST_F(FunctionWithRemoteInputsTest, KernelAndDeviceFuncAsyncTest) {
   std::vector<FunctionRet> outputs;
 
   absl::Status status;
-  absl::Notification n;
+  Notification n;
   kernel->RunAsync(/*step_container=*/nullptr, inputs, &outputs,
                    /*cancellation_manager=*/nullptr,
                    /*eager_func_params=*/std::nullopt,

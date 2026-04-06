@@ -46,9 +46,6 @@ class ExecutionEngine {
       const llvm::DataLayout& data_layout,
       DefinitionGenerator definition_generator = nullptr);
 
-  ExecutionEngine(ExecutionEngine&& other) noexcept = default;
-  ExecutionEngine& operator=(ExecutionEngine&& other) = default;
-
   void AllocateDylibs(size_t num_dylibs);
 
   void RegisterJITEventListeners();
@@ -91,10 +88,10 @@ class ExecutionEngine {
   llvm::DataLayout data_layout_;
   DefinitionGenerator definition_generator_;
 
-  // GDB notification listener (not owned).
-  llvm::JITEventListener* gdb_listener_ = nullptr;
-  // Perf notification listener (not owned).
-  llvm::JITEventListener* perf_listener_ = nullptr;
+  /// GDB notification listener.
+  llvm::JITEventListener* gdb_listener_ = nullptr;  // not owned
+  /// Perf notification listener.
+  llvm::JITEventListener* perf_listener_ = nullptr;  // not owned
 };
 
 }  // namespace xla::cpu

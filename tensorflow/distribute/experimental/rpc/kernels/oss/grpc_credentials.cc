@@ -21,12 +21,12 @@ limitations under the License.
 namespace tensorflow {
 namespace rpc {
 
-// Returns insecure credentials for use when creating a gRPC server.
+// Returns LOAS credentials for use when creating a gRPC server inside Google.
 std::shared_ptr<::grpc::ServerCredentials> GetDefaultServerCredentials() {
   return ::grpc::InsecureServerCredentials();
 }
 
-// Returns insecure credentials for use when creating a gRPC channel.
+// Returns LOAS credentials for use when creating a gRPC channel.
 std::shared_ptr<::grpc::ChannelCredentials> GetDefaultChannelCredentials() {
   return ::grpc::InsecureChannelCredentials();
 }

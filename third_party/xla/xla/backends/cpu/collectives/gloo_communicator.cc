@@ -43,11 +43,11 @@ limitations under the License.
 #include "gloo/types.h"
 #include "xla/backends/cpu/collectives/cpu_collectives.h"
 #include "xla/core/collectives/rank_id.h"
-#include "xla/future.h"
 #include "xla/primitive_util.h"
 #include "xla/service/collective_ops_utils.h"
 #include "xla/status_macros.h"
 #include "xla/stream_executor/device_memory.h"
+#include "xla/tsl/concurrency/async_value_ref.h"
 #include "xla/tsl/platform/errors.h"
 #include "xla/tsl/platform/statusor.h"
 #include "xla/types.h"
@@ -103,11 +103,10 @@ static absl::Status SetAllReduceOptions(ReductionKind reduction_kind,
   return absl::OkStatus();
 }
 
-Future<> GlooCommunicator::AllReduce(se::DeviceMemoryBase send_buffer,
-                                     se::DeviceMemoryBase recv_buffer,
-                                     PrimitiveType dtype, size_t count,
-                                     ReductionKind reduction_kind,
-                                     const Executor& executor) {
+tsl::AsyncValueRef<GlooCommunicator::Event> GlooCommunicator::AllReduce(
+    se::DeviceMemoryBase send_buffer, se::DeviceMemoryBase recv_buffer,
+    PrimitiveType dtype, size_t count, ReductionKind reduction_kind,
+    const Executor& executor) {
   TF_ASSIGN_OR_RETURN(auto cpu_executor, CpuCollectives::TryCast(&executor));
 
   gloo::AllreduceOptions options(context_);
@@ -183,12 +182,12 @@ Future<> GlooCommunicator::AllReduce(se::DeviceMemoryBase send_buffer,
     return absl::UnknownError(
         absl::StrCat("Gloo all-reduce failed: ", e.what()));
   }
-  return absl::OkStatus();
+  return OkEvent();
 }
 
 static constexpr uint8_t kCollectivePermuteSlotPrefix = 0x40;
 
-Future<> GlooCommunicator::CollectivePermute(
+tsl::AsyncValueRef<GlooCommunicator::Event> GlooCommunicator::CollectivePermute(
     se::DeviceMemoryBase send_buffer, se::DeviceMemoryBase recv_buffer,
     PrimitiveType dtype, size_t count, std::optional<RankId> source_rank,
     absl::Span<const RankId> target_ranks, const Executor& executor) {
@@ -236,10 +235,10 @@ Future<> GlooCommunicator::CollectivePermute(
     return absl::UnknownError(
         absl::StrCat("Gloo collective permute failed: ", e.what()));
   }
-  return absl::OkStatus();
+  return OkEvent();
 }
 
-Future<> GlooCommunicator::AllToAll(
+tsl::AsyncValueRef<GlooCommunicator::Event> GlooCommunicator::AllToAll(
     absl::InlinedVector<se::DeviceMemoryBase, 4> send_buffers,
     absl::InlinedVector<se::DeviceMemoryBase, 4> recv_buffers,
     PrimitiveType dtype, size_t count, const Executor& executor) {
@@ -292,13 +291,12 @@ Future<> GlooCommunicator::AllToAll(
     return absl::UnknownError(
         absl::StrCat("Gloo all-to-all failed: ", e.what()));
   }
-  return absl::OkStatus();
+  return OkEvent();
 }
 
-Future<> GlooCommunicator::AllGather(se::DeviceMemoryBase send_buffer,
-                                     se::DeviceMemoryBase recv_buffer,
-                                     PrimitiveType dtype, size_t count,
-                                     const Executor& executor) {
+tsl::AsyncValueRef<GlooCommunicator::Event> GlooCommunicator::AllGather(
+    se::DeviceMemoryBase send_buffer, se::DeviceMemoryBase recv_buffer,
+    PrimitiveType dtype, size_t count, const Executor& executor) {
   uint32_t tag = 0;  // TODO(phawkins): use better tags.
 
   TF_ASSIGN_OR_RETURN(auto cpu_executor, CpuCollectives::TryCast(&executor));
@@ -317,7 +315,7 @@ Future<> GlooCommunicator::AllGather(se::DeviceMemoryBase send_buffer,
     return absl::UnknownError(
         absl::StrCat("Gloo AllGather failed: ", e.what()));
   }
-  return absl::OkStatus();
+  return OkEvent();
 }
 
 template <typename T>
@@ -369,11 +367,10 @@ absl::Status ReduceScatterHelper(std::shared_ptr<gloo::Context> context,
   return absl::OkStatus();
 }
 
-Future<> GlooCommunicator::ReduceScatter(se::DeviceMemoryBase send_buffer,
-                                         se::DeviceMemoryBase recv_buffer,
-                                         PrimitiveType dtype, size_t count,
-                                         ReductionKind reduction_kind,
-                                         const Executor& executor) {
+tsl::AsyncValueRef<GlooCommunicator::Event> GlooCommunicator::ReduceScatter(
+    se::DeviceMemoryBase send_buffer, se::DeviceMemoryBase recv_buffer,
+    PrimitiveType dtype, size_t count, ReductionKind reduction_kind,
+    const Executor& executor) {
   size_t chunk_bytes = count * primitive_util::ByteWidth(dtype);
   std::unique_ptr<char[]> temp(new char[chunk_bytes * context_->size]);
   std::memcpy(temp.get(), send_buffer.opaque(), chunk_bytes * context_->size);
@@ -439,7 +436,7 @@ Future<> GlooCommunicator::ReduceScatter(se::DeviceMemoryBase send_buffer,
       return absl::InvalidArgumentError("Unknown datatype in reducescatter");
   }
   std::memcpy(recv_buffer.opaque(), temp.get(), chunk_bytes);
-  return absl::OkStatus();
+  return OkEvent();
 }
 
 }  // namespace xla::cpu

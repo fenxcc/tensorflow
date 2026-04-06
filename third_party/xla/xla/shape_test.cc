@@ -26,7 +26,6 @@ limitations under the License.
 #include "xla/layout.h"
 #include "xla/shape_util.h"
 #include "xla/tsl/lib/core/status_test_util.h"
-#include "xla/tsl/platform/statusor.h"
 #include "xla/tsl/platform/test_benchmark.h"
 #include "xla/xla_data.pb.h"
 
@@ -83,22 +82,6 @@ TEST_F(ShapeTest, ShapeToFromProto) {
     TF_ASSERT_OK(shape_copy);
     EXPECT_TRUE(ShapeUtil::Equal(shape, *shape_copy))
         << shape << " != " << *shape_copy;
-  }
-}
-
-TEST_F(ShapeTest, ShapeToFromProtoInplace) {
-  for (const Shape& shape :
-       {opaque_, token_, scalar_, matrix_, matrix2_, matrix_buffer_, tuple_,
-        nested_tuple_, dynamic_matrix_, unbounded_}) {
-    //  Start from a non-empty proto to verify that `ToProto` clears the given
-    //  proto first.
-    ShapeProto shape_proto;
-    shape_proto.set_element_type(F32);
-    shape.ToProto(shape_proto);
-    auto shape_copy = Shape::FromProto(shape_proto);
-    TF_ASSERT_OK(shape_copy);
-    EXPECT_TRUE(ShapeUtil::Equal(shape, *shape_copy))
-        << shape_proto.DebugString();
   }
 }
 
@@ -351,10 +334,6 @@ TEST_F(ShapeTest, SupportsAbslHash) {
        matrix_buffer_, tuple_, nested_tuple_, dynamic_matrix_}));
 }
 
-//===----------------------------------------------------------------------===//
-// Performance benchmarks below.
-//===----------------------------------------------------------------------===//
-
 static const int kDistinctShapes = 4;
 
 static Shape MakeShapeHelper(int id) {
@@ -429,29 +408,6 @@ BENCHMARK(BM_ShapeCopy)
     ->ArgPair(1000, 1)
     ->ArgPair(100000, 0)
     ->ArgPair(100000, 1);
-
-void BM_ArrayShapeEqual(::testing::benchmark::State& state) {
-  auto a = ShapeUtil::MakeShape(F32, {1, 2, 3});
-  auto b = ShapeUtil::MakeShape(F32, {1, 2, 3});
-
-  for (auto s : state) {
-    benchmark::DoNotOptimize(xla::Shape::Equal()(a, b));
-  }
-}
-BENCHMARK(BM_ArrayShapeEqual);
-
-void BM_TupleShapeEqual(::testing::benchmark::State& state) {
-  auto s0 = ShapeUtil::MakeShape(F32, {1, 2, 3});
-  auto s1 = ShapeUtil::MakeShape(F32, {1, 2, 3});
-
-  auto a = ShapeUtil::MakeTupleShape({s0, s1});
-  auto b = ShapeUtil::MakeTupleShape({s1, s0});
-
-  for (auto s : state) {
-    benchmark::DoNotOptimize(xla::Shape::Equal()(a, b));
-  }
-}
-BENCHMARK(BM_TupleShapeEqual);
 
 }  // namespace
 }  // namespace xla

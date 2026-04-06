@@ -128,7 +128,7 @@ Tensor V(const float val) {
 // A int32 val -> Tensor<int32>
 Tensor VI(const int32_t val) {
   Tensor tensor(DT_INT32, TensorShape({}));
-  tensor.scalar<int32_t>()() = val;
+  tensor.scalar<int32>()() = val;
   return tensor;
 }
 
@@ -153,11 +153,10 @@ float V(const Tensor& tensor) {
   return tensor.scalar<float>()();
 }
 
-static uint64_t kIncarnation = 1;  // Uses in following tests.
+static uint64 kIncarnation = 1;  // Uses in following tests.
 
-Rendezvous::ParsedKey Key(const std::string& sender, const uint64_t incarnation,
-                          const std::string& receiver,
-                          const std::string& name) {
+Rendezvous::ParsedKey Key(const string& sender, const uint64 incarnation,
+                          const string& receiver, const string& name) {
   Rendezvous::ParsedKey result;
   CHECK(
       Rendezvous::ParseKey(Rendezvous::CreateKey(sender, incarnation, receiver,
@@ -509,8 +508,8 @@ static void BM_executor(::testing::benchmark::State& state) {
   Graph* g = new Graph(OpRegistry::Global());
   random::PhiloxRandom philox(1729, 17);
   random::SimplePhilox rand(&philox);
-  uint64_t cur = 0;
-  uint32_t r = 1 + rand.Rand32() % width;
+  uint64 cur = 0;
+  uint32 r = 1 + rand.Rand32() % width;
   std::vector<Node*> ready_nodes;
   for (int i = 0; i < r; ++i) {
     ready_nodes.push_back(test::graph::NoOp(g, {}));
@@ -538,7 +537,7 @@ static void BM_executor(::testing::benchmark::State& state) {
   FixupSourceAndSinkEdges(g);
   test::Benchmark("cpu", g, /*old_benchmark_api=*/false).Run(state);
 
-  state.SetLabel(absl::StrCat("Nodes = ", cur));
+  state.SetLabel(strings::StrCat("Nodes = ", cur));
   state.SetItemsProcessed(cur * static_cast<int64_t>(state.iterations()));
 }
 
@@ -567,7 +566,7 @@ static void BM_const_identity(::testing::benchmark::State& state) {
   }
   FixupSourceAndSinkEdges(g);
   test::Benchmark("cpu", g, /*old_benchmark_api=*/false).Run(state);
-  state.SetLabel(absl::StrCat("Nodes = ", (1 + outputs_per_const) * width));
+  state.SetLabel(strings::StrCat("Nodes = ", (1 + outputs_per_const) * width));
   state.SetItemsProcessed((1 + outputs_per_const) * width *
                           static_cast<int64_t>(state.iterations()));
 }
@@ -590,9 +589,9 @@ static void BM_FeedInputFetchOutput(::testing::benchmark::State& state) {
   Node* sum = test::graph::Add(g, x, y);
   Node* z = test::graph::Send(g, sum, "z", BOB, 1, ALICE);
 
-  std::string x_key = test::GetRendezvousKey(x);
-  std::string y_key = test::GetRendezvousKey(y);
-  std::string z_key = test::GetRendezvousKey(z);
+  string x_key = test::GetRendezvousKey(x);
+  string y_key = test::GetRendezvousKey(y);
+  string z_key = test::GetRendezvousKey(z);
 
   Tensor val(DT_FLOAT, TensorShape({}));
   val.scalar<float>()() = 3.14;
@@ -604,10 +603,9 @@ static void BM_FeedInputFetchOutput(::testing::benchmark::State& state) {
 BENCHMARK(BM_FeedInputFetchOutput);
 
 absl::Status ReplaceEdgeWithSendRecv(Graph* g, const Edge* edge,
-                                     const std::string& tensor,
-                                     const std::string& sender,
-                                     const uint64_t sender_incarnation,
-                                     const std::string& receiver) {
+                                     const string& tensor, const string& sender,
+                                     const uint64 sender_incarnation,
+                                     const string& receiver) {
   Node* send;
   NodeDef send_def;
   TF_CHECK_OK(NodeDefBuilder(g->NewName("n"), "_Send")
@@ -664,20 +662,20 @@ static void BM_WhileLoopHelper(::testing::benchmark::State& state,
   FunctionDefLibrary f_lib_proto;
 
   // Define the loop body as a function: `x = x + 1`.
-  const Tensor one_t = test::AsScalar<int32_t>(1);
+  const Tensor one_t = test::AsScalar<int32>(1);
 
-  std::vector<std::string> args;
+  std::vector<string> args;
   args.reserve(loop_vars);
   args.push_back("x: int32");
   for (int i = 1; i < loop_vars; ++i) {
-    args.push_back(absl::StrCat("x", i, ": int32"));
+    args.push_back(strings::StrCat("x", i, ": int32"));
   }
 
-  std::vector<std::string> body_rets;
+  std::vector<string> body_rets;
   body_rets.reserve(loop_vars);
   body_rets.push_back("y: int32");
   for (int i = 1; i < loop_vars; ++i) {
-    body_rets.push_back(absl::StrCat("y", i, ": int32"));
+    body_rets.push_back(strings::StrCat("y", i, ": int32"));
   }
 
   std::vector<FunctionDefHelper::Node> body_nodes;
@@ -686,9 +684,9 @@ static void BM_WhileLoopHelper(::testing::benchmark::State& state,
       {{"one"}, "Const", {}, {{"value", one_t}, {"dtype", DT_INT32}}});
   body_nodes.push_back({{"y"}, "Add", {"x", "one"}, {{"T", DT_INT32}}});
   for (int i = 1; i < loop_vars; ++i) {
-    body_nodes.push_back({{absl::StrCat("y", i)},
+    body_nodes.push_back({{strings::StrCat("y", i)},
                           "Relu",
-                          {absl::StrCat("x", i)},
+                          {strings::StrCat("x", i)},
                           {{"T", DT_INT32}}});
   }
 
@@ -705,7 +703,7 @@ static void BM_WhileLoopHelper(::testing::benchmark::State& state,
       body_nodes);
 
   // Define the loop condition as a function: `x < loop_iters`.
-  const Tensor loop_iters_t = test::AsScalar<int32_t>(loop_iters);
+  const Tensor loop_iters_t = test::AsScalar<int32>(loop_iters);
   *f_lib_proto.add_function() = FunctionDefHelper::Define(
       // Name
       "LessThanOrEqualToN",
@@ -777,7 +775,7 @@ static void BM_WhileLoopHelper(::testing::benchmark::State& state,
           if (edge->dst()->type_string() != "Switch") {
             continue;
           }
-          std::string tensor_name = absl::StrCat("c", edge->id());
+          string tensor_name = strings::StrCat("c", edge->id());
           TF_ASSERT_OK(ReplaceEdgeWithSendRecv(graph.get(), edge, tensor_name,
                                                BOB, 1, ALICE));
         }

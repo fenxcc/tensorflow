@@ -37,10 +37,6 @@ tf_module {
     mtype: "<type \'type\'>"
   }
   member {
-    name: "NoneTensorSpec"
-    mtype: "<type \'type\'>"
-  }
-  member {
     name: "Operation"
     mtype: "<type \'type\'>"
   }

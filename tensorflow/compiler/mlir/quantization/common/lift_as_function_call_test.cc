@@ -19,7 +19,6 @@ limitations under the License.
 #include <gtest/gtest.h>
 #include "absl/algorithm/container.h"
 #include "absl/status/status.h"
-#include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "llvm/ADT/SmallVector.h"
@@ -39,6 +38,7 @@ limitations under the License.
 #include "tensorflow/compiler/mlir/quantization/common/test_base.h"
 #include "tensorflow/compiler/mlir/quantization/stablehlo/quantization_config.pb.h"
 #include "tensorflow/compiler/mlir/tensorflow/ir/tf_ops.h"
+#include "xla/tsl/platform/status_matchers.h"
 #include "tsl/platform/protobuf.h"  // IWYU pragma: keep
 
 namespace mlir::quant {
@@ -50,6 +50,8 @@ using ::testing::NotNull;
 using ::testing::SizeIs;
 using ::testing::StrEq;
 using ::tsl::protobuf::util::MessageDifferencer;
+using ::tsl::testing::IsOk;
+using ::tsl::testing::StatusIs;
 
 using LiftAsFunctionCallTest = QuantizationTestBase;
 
@@ -185,7 +187,7 @@ TEST_F(LiftAsFunctionCallTest, GetQuantizationMethodSucceeds) {
   // `"no_quantization {}"`.
   const absl::StatusOr<Method> method =
       GetQuantizationMethod(*xla_call_module_ops.begin());
-  ASSERT_THAT(method, absl_testing::IsOk());
+  ASSERT_THAT(method, IsOk());
   EXPECT_TRUE(method->has_no_quantization());
 }
 
@@ -215,10 +217,10 @@ TEST_F(LiftAsFunctionCallTest,
   // because there is no `_quantization_method` attribute.
   const absl::StatusOr<Method> method =
       GetQuantizationMethod(*xla_call_module_ops.begin());
-  EXPECT_THAT(method,
-              absl_testing::StatusIs(
-                  absl::StatusCode::kInvalidArgument,
-                  HasSubstr("Attribute _quantization_method is not found")));
+  EXPECT_THAT(
+      method,
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("Attribute _quantization_method is not found")));
 }
 
 TEST_F(LiftAsFunctionCallTest,
@@ -245,9 +247,9 @@ TEST_F(LiftAsFunctionCallTest,
 
   const absl::StatusOr<Method> method =
       GetQuantizationMethod(*xla_call_module_ops.begin());
-  EXPECT_THAT(method, absl_testing::StatusIs(
-                          absl::StatusCode::kInternal,
-                          HasSubstr("Failed to parse Method from textproto")));
+  EXPECT_THAT(method,
+              StatusIs(absl::StatusCode::kInternal,
+                       HasSubstr("Failed to parse Method from textproto")));
 }
 
 constexpr absl::string_view kFunctionWithRegion =

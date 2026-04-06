@@ -1,5 +1,6 @@
 load("//xla:xla.default.bzl", "xla_cc_test")
 load("//xla/tsl:tsl.bzl", "if_oss", "internal_visibility")
+load("//xla/tsl:tsl.default.bzl", "tsl_grpc_cc_dependencies")
 load("//xla/tsl/platform:build_config.bzl", "tf_proto_library")
 load("//xla/tsl/platform:rules_cc.bzl", "cc_library")
 
@@ -28,7 +29,6 @@ cc_library(
         "//xla/tsl/distributed_runtime/rpc:async_service_interface",
         "//xla/tsl/distributed_runtime/rpc/coordination:grpc_coordination_service_impl",
         "//xla/tsl/protobuf:coordination_config_proto_cc",
-        "@com_github_grpc_grpc//:grpc++",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/memory",
@@ -39,7 +39,7 @@ cc_library(
         "@local_tsl//tsl/platform:env",
         "@local_tsl//tsl/platform:errors",
         "@local_tsl//tsl/platform:random",
-    ],
+    ] + tsl_grpc_cc_dependencies(),
 )
 
 xla_cc_test(
@@ -50,13 +50,14 @@ xla_cc_test(
         ":protocol_proto_cc",
         ":topology_util",
         "//xla/tsl/lib/core:status_test_util",
-        "//xla/tsl/platform:env",
-        "//xla/tsl/platform:statusor",
+        "//xla/tsl/platform:status_matchers",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:status_matchers",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
         "@com_google_googletest//:gtest_main",
+        "@local_tsl//tsl/platform:env",
+        "@local_tsl//tsl/platform:statusor",
+        "@local_tsl//tsl/platform:test",
     ],
 )
 
@@ -71,16 +72,11 @@ cc_library(
     deps = [
         ":key_value_store_interface",
         ":util",
-        "//xla/runtime:device_id",
         "//xla/tsl/distributed_runtime/coordination:coordination_client",
         "//xla/tsl/distributed_runtime/coordination:coordination_service_agent",
         "//xla/tsl/distributed_runtime/rpc/coordination:grpc_coordination_client",
-        "//xla/tsl/platform:env",
-        "//xla/tsl/platform:statusor",
         "//xla/tsl/protobuf:coordination_config_proto_cc",
         "//xla/tsl/protobuf:coordination_service_proto_cc",
-        "@com_github_grpc_grpc//:grpc++",
-        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -89,16 +85,15 @@ cc_library(
         "@com_google_absl//absl/types:span",
         "@local_tsl//tsl/platform:env",
         "@local_tsl//tsl/platform:statusor",
-    ],
+    ] + tsl_grpc_cc_dependencies(),
 )
 
 cc_library(
     name = "util",
     hdrs = ["util.h"],
     deps = [
-        "@com_github_grpc_grpc//:grpc++",
         "@com_google_absl//absl/status",
-    ],
+    ] + tsl_grpc_cc_dependencies(),
 )
 
 cc_library(
@@ -109,9 +104,8 @@ cc_library(
         ":client",
         ":service",
         "//xla/tsl/platform:grpc_credentials",
-        "@com_github_grpc_grpc//:grpc++",
         "@com_google_absl//absl/status:statusor",
-    ],
+    ] + tsl_grpc_cc_dependencies(),
 )
 
 cc_library(
@@ -122,12 +116,9 @@ cc_library(
         ":key_value_store_interface",
         ":protocol_proto_cc",
         "//xla:util",
+        "//xla/pjrt:pjrt_client",
         "//xla/pjrt:utils",
         "//xla/pjrt/gpu:gpu_topology_proto_cc",
-        "//xla/tsl/platform:env",
-        "//xla/tsl/platform:errors",
-        "//xla/tsl/platform:statusor",
-        "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/log:check",
@@ -137,6 +128,10 @@ cc_library(
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
+        "@local_tsl//tsl/platform:env",
+        "@local_tsl//tsl/platform:errors",
+        "@local_tsl//tsl/platform:logging",
+        "@local_tsl//tsl/platform:statusor",
     ],
 )
 
@@ -152,19 +147,12 @@ xla_cc_test(
         ":service",
         ":topology_util",
         "//xla:status_macros",
-        "//xla/runtime:device_id",
         "//xla/tsl/distributed_runtime/coordination:coordination_service_agent",
         "//xla/tsl/lib/core:status_test_util",
         "//xla/tsl/platform:env",
-        "//xla/tsl/platform:errors",
-        "//xla/tsl/platform:statusor",
-        "//xla/tsl/platform:test",
         "//xla/tsl/util/proto:proto_matchers",
-        "@com_github_grpc_grpc//:grpc++",
-        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:status_matchers",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
@@ -174,7 +162,7 @@ xla_cc_test(
         "@local_tsl//tsl/platform:errors",
         "@local_tsl//tsl/platform:statusor",
         "@local_tsl//tsl/platform:test",
-    ],
+    ] + tsl_grpc_cc_dependencies(),
 )
 
 cc_library(

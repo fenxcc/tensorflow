@@ -28,10 +28,10 @@ tf_proto_library(
     name = "test_log_proto",
     srcs = ["test_log.proto"],
     make_default_target_header_only = True,
-    protodeps = [
-        "@com_google_protobuf//:any_proto",
-        "@com_google_protobuf//:wrappers_proto",
-    ],
+    protodeps = if_google([
+        "@com_google_protobuf//:any",
+        "@com_google_protobuf//:wrappers",
+    ]),
     visibility = ["//visibility:public"],
 )
 
@@ -39,7 +39,7 @@ tf_proto_library(
     name = "dnn_proto",
     srcs = ["dnn.proto"],
     make_default_target_header_only = True,
-    protodeps = ["@com_google_protobuf//:wrappers_proto"],
+    protodeps = if_google(["@com_google_protobuf//:wrappers"]),
     visibility = ["//visibility:public"],
 )
 
@@ -73,7 +73,7 @@ tf_proto_library(
     create_java_proto = False,
     create_kotlin_proto = False,
     create_service = True,
-    protodeps = ["@com_google_protobuf//:any_proto"],
+    protodeps = if_google(["@com_google_protobuf//:any"]),
     visibility = ["//visibility:public"],
 )
 
@@ -103,7 +103,7 @@ tf_proto_library(
     name = "error_codes_proto_impl",
     srcs = ["error_codes.proto"],
     make_default_target_header_only = True,
-    protodeps = ["@com_google_protobuf//:any_proto"],
+    protodeps = if_google(["@com_google_protobuf//:any"]),
     visibility = ["//visibility:public"],
 )
 
@@ -123,7 +123,6 @@ tf_proto_library(
         ":rpc_options_proto",
         ":status_proto",
         ":test_log_proto",
-        "@com_google_protobuf//:any_proto",
-    ],
+    ] + if_google(["@com_google_protobuf//:any"]),
     visibility = ["//visibility:public"],
 )

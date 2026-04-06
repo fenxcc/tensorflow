@@ -41,7 +41,7 @@ TEST(WorkQueueTest, WorkQueuePartitions) {
   };
 
   {
-    WorkQueue queue(/*num_work_items=*/2, /*num_partitions=*/4);
+    WorkQueue queue(/*num_tasks=*/2, /*num_partitions=*/4);
     EXPECT_EQ(queue.partition_range(0), task_range(0, 1));
     EXPECT_EQ(queue.partition_range(1), task_range(1, 2));
     EXPECT_EQ(queue.partition_range(2), task_range(2, 2));
@@ -49,7 +49,7 @@ TEST(WorkQueueTest, WorkQueuePartitions) {
   }
 
   {
-    WorkQueue queue(/*num_work_items=*/4, /*num_partitions=*/4);
+    WorkQueue queue(/*num_tasks=*/4, /*num_partitions=*/4);
     EXPECT_EQ(queue.partition_range(0), task_range(0, 1));
     EXPECT_EQ(queue.partition_range(1), task_range(1, 2));
     EXPECT_EQ(queue.partition_range(2), task_range(2, 3));
@@ -57,7 +57,7 @@ TEST(WorkQueueTest, WorkQueuePartitions) {
   }
 
   {
-    WorkQueue queue(/*num_work_items=*/5, /*num_partitions=*/4);
+    WorkQueue queue(/*num_tasks=*/5, /*num_partitions=*/4);
     EXPECT_EQ(queue.partition_range(0), task_range(0, 2));
     EXPECT_EQ(queue.partition_range(1), task_range(2, 3));
     EXPECT_EQ(queue.partition_range(2), task_range(3, 4));
@@ -65,7 +65,7 @@ TEST(WorkQueueTest, WorkQueuePartitions) {
   }
 
   {
-    WorkQueue queue(/*num_work_items=*/9, /*num_partitions=*/4);
+    WorkQueue queue(/*num_tasks=*/9, /*num_partitions=*/4);
     EXPECT_EQ(queue.partition_range(0), task_range(0, 3));
     EXPECT_EQ(queue.partition_range(1), task_range(3, 5));
     EXPECT_EQ(queue.partition_range(2), task_range(5, 7));
@@ -73,7 +73,7 @@ TEST(WorkQueueTest, WorkQueuePartitions) {
   }
 
   {
-    WorkQueue queue(/*num_work_items=*/14, /*num_partitions=*/4);
+    WorkQueue queue(/*num_tasks=*/14, /*num_partitions=*/4);
     EXPECT_EQ(queue.partition_range(0), task_range(0, 4));
     EXPECT_EQ(queue.partition_range(1), task_range(4, 8));
     EXPECT_EQ(queue.partition_range(2), task_range(8, 11));
@@ -107,17 +107,17 @@ TEST(WorkQueueTest, WorkQueue) {
     for (size_t num_partitions : {1, 2, 3, 4, 5, 6, 7, 8}) {
       WorkQueue queue(size, num_partitions);
 
-      std::vector<size_t> expected_work_items(size);
-      absl::c_iota(expected_work_items, 0);
+      std::vector<size_t> expected_tasks(size);
+      absl::c_iota(expected_tasks, 0);
 
-      std::vector<size_t> work_items;
+      std::vector<size_t> tasks;
       for (size_t i = 0; i < num_partitions; ++i) {
-        while (std::optional<size_t> work_item = queue.Pop(i)) {
-          work_items.push_back(*work_item);
+        while (std::optional<size_t> task = queue.Pop(i)) {
+          tasks.push_back(*task);
         }
       }
 
-      EXPECT_EQ(work_items, expected_work_items);
+      EXPECT_EQ(tasks, expected_tasks);
     }
   }
 }
@@ -126,21 +126,21 @@ TEST(WorkQueueTest, Worker) {
   for (size_t size : {1, 2, 4, 8, 16, 32, 64}) {
     for (size_t num_partitions : {1, 2, 3, 4, 5, 6, 7, 8}) {
       // We check that no matter what is the initial partition, the worker
-      // processes all work items in the queue.
+      // processes all tasks in the queue.
       for (size_t i = 0; i < num_partitions; ++i) {
         WorkQueue queue(size, num_partitions);
         Worker worker(i, &queue);
 
-        std::vector<size_t> expected_work_items(size);
-        absl::c_iota(expected_work_items, 0);
+        std::vector<size_t> expected_tasks(size);
+        absl::c_iota(expected_tasks, 0);
 
-        std::vector<size_t> work_items;
-        while (std::optional<size_t> work_item = worker.Pop()) {
-          work_items.push_back(*work_item);
+        std::vector<size_t> tasks;
+        while (std::optional<size_t> task = worker.Pop()) {
+          tasks.push_back(*task);
         }
 
-        absl::c_sort(work_items);  // we pop work_items out of order
-        EXPECT_EQ(work_items, expected_work_items);
+        absl::c_sort(tasks);  // we pop tasks out of order
+        EXPECT_EQ(tasks, expected_tasks);
       }
     }
   }
@@ -154,22 +154,22 @@ TEST(WorkQueueTest, WorkerConcurrency) {
 
   WorkQueue queue(size, num_partitions);
 
-  // Check that we pop exactly `size` work_items.
-  std::atomic<size_t> num_work_items(0);
+  // Check that we pop exactly `size` tasks.
+  std::atomic<size_t> num_tasks(0);
 
   absl::BlockingCounter counter(num_partitions);
   for (size_t i = 0; i < num_partitions; ++i) {
     threads.Schedule([&, i] {
       Worker worker(i, &queue);
-      while (std::optional<size_t> work_item = worker.Pop()) {
-        ++num_work_items;
+      while (std::optional<size_t> task = worker.Pop()) {
+        ++num_tasks;
       }
       counter.DecrementCount();
     });
   }
 
   counter.Wait();
-  EXPECT_EQ(num_work_items.load(), size);
+  EXPECT_EQ(num_tasks.load(), size);
 }
 
 TEST(WorkQueueTest, WorkerParallelize) {
@@ -211,76 +211,39 @@ TEST(WorkQueueTest, WorkerParallelizeDeadlockProof) {
   EXPECT_EQ(data, expected);
 }
 
-TEST(WorkQueueTest, WorkerParallelizeVariousWorkerTaskRatios) {
-  tsl::thread::ThreadPool threads(tsl::Env::Default(), "test", 16);
-
-  struct TestCase {
-    size_t num_work_items;
-    size_t num_workers;
-  };
-
-  std::vector<TestCase> test_cases = {
-      {0, 1},     // Edge: no work_items
-      {1, 1},     // Edge: single task, single worker
-      {1, 8},     // Edge: single task, many workers
-      {8, 1},     // Serial execution
-      {8, 4},     // Fewer workers than work_items
-      {8, 8},     // Equal
-      {8, 16},    // More workers than work_items
-      {1024, 8},  // Many work_items, fewer workers
-      {1024, 64}  // Many work_items, many workers
-  };
-
-  for (const auto& test : test_cases) {
-    std::vector<size_t> data(test.num_work_items, 0);
-
-    auto event = Worker::Parallelize(
-        threads.AsEigenThreadPool(), test.num_workers, test.num_work_items,
-        [&](size_t task_index) { ++data[task_index]; });
-
-    tsl::BlockUntilReady(event);
-
-    // Verify that all work_items were executed once (if any exist)
-    std::vector<size_t> expected(test.num_work_items, 1);
-    EXPECT_EQ(data, expected)
-        << "Failed for num_work_items=" << test.num_work_items
-        << ", num_workers=" << test.num_workers;
-  }
-}
-
 //===----------------------------------------------------------------------===//
 // Performance benchmarks.
 //===----------------------------------------------------------------------===//
 
-static void BM_PopWorkItem(benchmark::State& state) {
+static void BM_PopTask(benchmark::State& state) {
   std::optional<WorkQueue> queue;
   std::optional<Worker> worker;
 
   size_t n = 0;
   for (auto _ : state) {
     if (n++ % (1024 * 10) == 0) {
-      queue.emplace(/*num_work_items=*/1024 * 10, /*num_partitions=*/10);
+      queue.emplace(/*num_tasks=*/1024 * 10, /*num_partitions=*/10);
       worker.emplace(0, &*queue);
     }
     worker->Pop();
   }
 }
 
-BENCHMARK(BM_PopWorkItem);
+BENCHMARK(BM_PopTask);
 
-static void BM_PopWorkItemMultiThreaded(benchmark::State& state) {
+static void BM_PopTaskMultiThreaded(benchmark::State& state) {
   size_t num_threads = state.range(0);
-  tsl::thread::ThreadPool threads(tsl::Env::Default(), "bench", num_threads);
+  tsl::thread::ThreadPool threads(tsl::Env::Default(), "benchmark",
+                                  num_threads);
 
   for (auto _ : state) {
     absl::BlockingCounter counter(num_threads);
-    WorkQueue queue(/*num_work_items=*/1024 * 10,
-                    /*num_partitions=*/num_threads);
+    WorkQueue queue(/*num_tasks=*/1024 * 10, /*num_partitions=*/num_threads);
 
     for (size_t i = 0; i < num_threads; ++i) {
       threads.Schedule([i, &queue, &counter] {
         Worker worker(i, &queue);
-        while (std::optional<size_t> work_item = worker.Pop()) {
+        while (std::optional<size_t> task = worker.Pop()) {
         }
         counter.DecrementCount();
       });
@@ -292,7 +255,7 @@ static void BM_PopWorkItemMultiThreaded(benchmark::State& state) {
   state.SetItemsProcessed(state.iterations() * 1024 * 10);
 }
 
-BENCHMARK(BM_PopWorkItemMultiThreaded)
+BENCHMARK(BM_PopTaskMultiThreaded)
     ->MeasureProcessCPUTime()
     ->Arg(2)
     ->Arg(4)

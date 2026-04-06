@@ -20,16 +20,17 @@ limitations under the License.
 
 #include <gmock/gmock.h>
 #include "absl/status/status.h"
-#include "absl/status/status_matchers.h"
+#include "absl/status/statusor.h"
 #include "xla/hlo/testlib/test.h"
 #include "xla/service/test_compilation_environment.pb.h"
 #include "xla/tsl/lib/core/status_test_util.h"
-#include "xla/tsl/platform/statusor.h"
 #include "xla/xla.pb.h"
 #include "tsl/platform/casts.h"
 #include "tsl/platform/protobuf.h"
 
 namespace xla {
+
+using ::tsl::testing::StatusIs;
 
 // In order to use TestCompilationEnvironment* with CompilationEnvironments, we
 // must define ProcessNewEnv for them.
@@ -171,7 +172,7 @@ TEST_F(CompilationEnvironmentsTest, ReplaceExistingEnv) {
     auto env2 = std::make_unique<TestCompilationEnvironment1>();
     env2->set_some_flag(6);
     ASSERT_THAT(envs.AddEnv(std::move(env2)),
-                absl_testing::StatusIs(absl::StatusCode::kAlreadyExists));
+                StatusIs(absl::StatusCode::kAlreadyExists));
   }
   envs.DeleteEnv<TestCompilationEnvironment1>();
   {

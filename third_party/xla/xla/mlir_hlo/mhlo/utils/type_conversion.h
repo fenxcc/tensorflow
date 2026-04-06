@@ -30,6 +30,15 @@ class RemoveSignTypeConverter : public TypeConverter {
   RemoveSignTypeConverter();
 };
 
+// Type converter which adds additional materializations (beyond signless)
+// that are needed as part of the HloToLinalg conversion patterns.
+// This is the type converter used by the test pass and is the sanctioned
+// way to use the underlying patterns.
+class LinalgTypeConverter : public RemoveSignTypeConverter {
+ public:
+  LinalgTypeConverter();
+};
+
 }  // namespace mhlo
 
 namespace stablehlo {
@@ -44,7 +53,6 @@ namespace stablehlo {
 //   * Index types (index).
 //   * Tensor types.
 //   * Tuple types.
-//   * Buffer types.
 // Types which are specific to individual dialects like !stablehlo.token
 // and !mhlo.token are handled in subclasses.
 class HloTypeConverter : public TypeConverter {

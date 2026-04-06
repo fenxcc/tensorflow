@@ -46,7 +46,6 @@ class CompositeCompilationProvider : public CompilationProvider {
       std::vector<std::unique_ptr<CompilationProvider>> providers);
 
   std::string name() const override;
-  absl::StatusOr<int> GetLatestPtxIsaVersion() const override;
   bool SupportsCompileToRelocatableModule() const override;
   bool SupportsCompileAndLink() const override;
 

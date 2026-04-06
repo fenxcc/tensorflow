@@ -189,8 +189,7 @@ TEST(SparseMatrixOpsTest, SparseMatrixAdd_ShapeFn) {
   op.input_resource_handle_shapes_and_types.push_back(nullptr);
   op.input_resource_handle_shapes_and_types.push_back(nullptr);
   auto set_shapes = [&a_shapes_and_types, &b_shapes_and_types](
-                        const std::string& a_shape,
-                        const std::string& b_shape) {
+                        const string& a_shape, const string& b_shape) {
     a_shapes_and_types[0].first = a_shape;
     b_shapes_and_types[0].first = b_shape;
   };
@@ -226,8 +225,7 @@ TEST(SparseMatrixOpsTest, SparseMatrixSparseMatMul_ShapeFn) {
   op.input_resource_handle_shapes_and_types.push_back(&a_shapes_and_types);
   op.input_resource_handle_shapes_and_types.push_back(&b_shapes_and_types);
   auto set_shapes = [&a_shapes_and_types, &b_shapes_and_types](
-                        const std::string& a_shape,
-                        const std::string& b_shape) {
+                        const string& a_shape, const string& b_shape) {
     a_shapes_and_types[0].first = a_shape;
     b_shapes_and_types[0].first = b_shape;
   };
@@ -325,8 +323,7 @@ TEST(SparseMatrixOpsTest, SparseMatrixSoftmaxGrad_ShapeFn) {
   op.input_resource_handle_shapes_and_types.push_back(&a_shapes_and_types);
   op.input_resource_handle_shapes_and_types.push_back(&b_shapes_and_types);
   auto set_shapes = [&a_shapes_and_types, &b_shapes_and_types](
-                        const std::string& a_shape,
-                        const std::string& b_shape) {
+                        const string& a_shape, const string& b_shape) {
     a_shapes_and_types[0].first = a_shape;
     b_shapes_and_types[0].first = b_shape;
   };

@@ -24,15 +24,13 @@ limitations under the License.
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include "absl/status/status.h"
-#include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
-#include "xla/stream_executor/cuda/compilation_provider.h"
-#include "xla/stream_executor/cuda/cuda_compute_capability.h"
 #include "xla/stream_executor/cuda/ptx_compiler_support.h"
+#include "xla/stream_executor/device_description.h"
 #include "xla/stream_executor/gpu/gpu_asm_opts.h"
-#include "xla/stream_executor/kernel_stats.h"
 #include "xla/stream_executor/semantic_version.h"
-#include "xla/tsl/platform/statusor.h"
+#include "tsl/platform/status_matchers.h"
+#include "tsl/platform/test.h"
 
 namespace {
 
@@ -159,11 +157,8 @@ absl::StatusOr<std::vector<uint8_t>> CompileHelper(
   stream_executor::GpuAsmOpts options(disable_gpuasm_optimizations,
                                       /*preferred_cuda_dir=*/"", extra_flags);
 
-  TF_ASSIGN_OR_RETURN(stream_executor::cuda::Assembly assembly,
-                      stream_executor::CompileGpuAsmUsingLibNvPtxCompiler(
-                          cc, ptx_input, options, cancel_if_reg_spill,
-                          /*dump_compilation_log=*/false));
-  return assembly.cubin;
+  return stream_executor::CompileGpuAsmUsingLibNvPtxCompiler(
+      cc, ptx_input, options, cancel_if_reg_spill);
 }
 
 class PtxCompilerTest : public ::testing::Test {
@@ -181,12 +176,12 @@ class PtxCompilerTest : public ::testing::Test {
 TEST_F(PtxCompilerTest, IdentifiesUnsupportedArchitecture) {
   EXPECT_THAT(
       CompileHelper(stream_executor::CudaComputeCapability{100, 0}, kSimplePtx),
-      absl_testing::StatusIs(absl::StatusCode::kUnimplemented));
+      tsl::testing::StatusIs(absl::StatusCode::kUnimplemented));
 }
 
 TEST_F(PtxCompilerTest, CanCompileSingleCompilationUnit) {
   EXPECT_THAT(CompileHelper(kDefaultComputeCapability, kSimplePtx),
-              absl_testing::IsOk());
+              tsl::testing::IsOk());
 }
 
 TEST_F(PtxCompilerTest, CancelsOnRegSpill) {
@@ -195,26 +190,13 @@ TEST_F(PtxCompilerTest, CancelsOnRegSpill) {
   EXPECT_THAT(CompileHelper(kDefaultComputeCapability, kSpillingPtx,
                             /*disable_gpuasm_optimizations=*/true,
                             /*cancel_if_reg_spill=*/true),
-              absl_testing::StatusIs(absl::StatusCode::kCancelled));
+              tsl::testing::StatusIs(absl::StatusCode::kCancelled));
 
   // We also test the converse to ensure our test case isn't broken.
   EXPECT_THAT(CompileHelper(kDefaultComputeCapability, kSpillingPtx,
                             /*disable_gpuasm_optimizations=*/true,
                             /*cancel_if_reg_spill=*/false),
-              absl_testing::IsOk());
-}
-
-TEST_F(PtxCompilerTest, RecordsRegisterSpillStats) {
-  TF_ASSERT_OK_AND_ASSIGN(
-      stream_executor::cuda::Assembly assembly,
-      CompileGpuAsmUsingLibNvPtxCompiler(
-          kDefaultComputeCapability, kSpillingPtx,
-          stream_executor::GpuAsmOpts(/*disable_gpuasm_optimizations=*/true),
-          /*cancel_if_reg_spill=*/false, /*dump_compilation_log=*/false));
-  ASSERT_EQ(assembly.module_stats.size(), 1);
-  KernelStats kernel_stats = assembly.module_stats.begin()->second;
-  EXPECT_GT(kernel_stats.store_bytes_spilled, 0);
-  EXPECT_GT(kernel_stats.load_bytes_spilled, 0);
+              tsl::testing::IsOk());
 }
 
 TEST_F(PtxCompilerTest, AcceptsExtraArguments) {
@@ -229,8 +211,8 @@ TEST_F(PtxCompilerTest, AcceptsExtraArguments) {
                     /*disable_gpuasm_optimizations=*/false,
                     /*cancel_if_reg_spill=*/false, {"--generate-line-info"});
 
-  EXPECT_THAT(reference_cubin, absl_testing::IsOk());
-  EXPECT_THAT(cubin_with_line_info, absl_testing::IsOk());
+  EXPECT_THAT(reference_cubin, tsl::testing::IsOk());
+  EXPECT_THAT(cubin_with_line_info, tsl::testing::IsOk());
   EXPECT_GT(cubin_with_line_info->size(), reference_cubin->size());
 
   // We also test whether invalid flags lead to a compilation error.
@@ -238,14 +220,14 @@ TEST_F(PtxCompilerTest, AcceptsExtraArguments) {
       CompileHelper(kDefaultComputeCapability, kSimplePtx,
                     /*disable_gpuasm_optimizations=*/false,
                     /*cancel_if_reg_spill=*/false, {"--flag-does-not-exist"}),
-      absl_testing::StatusIs(absl::StatusCode::kInternal));
+      tsl::testing::StatusIs(absl::StatusCode::kInternal));
 }
 
 TEST_F(PtxCompilerTest, ReturnsReasonableVersion) {
   constexpr stream_executor::SemanticVersion kMinSupportedVersion = {12, 0, 0};
 
   EXPECT_THAT(stream_executor::GetLibNvPtxCompilerVersion(),
-              absl_testing::IsOkAndHolds(testing::Ge(kMinSupportedVersion)));
+              tsl::testing::IsOkAndHolds(testing::Ge(kMinSupportedVersion)));
 }
 
 }  // namespace

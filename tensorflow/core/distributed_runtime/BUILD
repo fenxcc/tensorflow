@@ -66,7 +66,6 @@ tf_cc_test(
         "//tensorflow/core:lib",
         "//tensorflow/core:test",
         "//tensorflow/core:test_main",
-        "@com_google_absl//absl/synchronization",
     ],
 )
 
@@ -153,7 +152,6 @@ tf_cc_test(
         "//tensorflow/core/distributed_runtime/rpc:grpc_worker_cache",
         "//tensorflow/core/kernels:cast_op",
         "//tensorflow/core/kernels:cwise_op",
-        "@com_google_absl//absl/synchronization",
     ],
 )
 
@@ -237,7 +235,6 @@ cc_library(
         "//tensorflow/core:core_cpu_internal",
         "//tensorflow/core:lib",
         "//tensorflow/core/protobuf:worker_proto_cc",
-        "@com_google_absl//absl/synchronization",
     ],
 )
 
@@ -397,7 +394,6 @@ cc_library(
         "//tensorflow/core/platform:regexp",
         "//tensorflow/core/protobuf:master_proto_cc",
         "//tensorflow/core/protobuf:worker_proto_cc",
-        "@com_google_absl//absl/synchronization",
         "@local_xla//xla/tsl/protobuf:rpc_options_proto_cc",
     ],
 )
@@ -424,7 +420,6 @@ cc_library(
         "//tensorflow/core/debug:debug_graph_utils",
         "//tensorflow/core/protobuf:master_proto_cc",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/synchronization",
     ],
 )
 
@@ -437,7 +432,6 @@ cc_library(
         ":master",
         ":master_interface",
         "//tensorflow/core:lib",
-        "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
     ],
 )
@@ -489,7 +483,6 @@ cc_library(
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/hash",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/synchronization",
     ],
 )
 
@@ -616,7 +609,6 @@ tf_cc_test(
         "//tensorflow/core:test_main",
         "//tensorflow/core/nccl:collective_communicator",
         "//tensorflow/core/protobuf:worker_proto_cc",
-        "@com_google_absl//absl/synchronization",
     ],
 )
 
@@ -660,7 +652,6 @@ tf_cc_test(
         "//tensorflow/core:test",
         "//tensorflow/core:test_main",
         "//tensorflow/core/protobuf:worker_proto_cc",
-        "@com_google_absl//absl/synchronization",
     ],
 )
 
@@ -790,7 +781,6 @@ tf_cuda_cc_test(
         "//tensorflow/core/kernels:identity_op",
         "//tensorflow/core/kernels:variable_ops",
         "//tensorflow/core/protobuf:master_proto_cc",
-        "@com_google_absl//absl/synchronization",
         "@eigen_archive//:eigen3",
     ] + tf_grpc_cc_dependencies(),
 )
@@ -824,7 +814,6 @@ tf_cuda_cc_test(
         "//tensorflow/core/distributed_runtime/rpc:grpc_util",
         "//tensorflow/core/distributed_runtime/rpc:grpc_worker_cache",
         "//tensorflow/core/protobuf:master_proto_cc",
-        "@com_google_absl//absl/synchronization",
     ] + tf_grpc_cc_dependencies(),
 )
 

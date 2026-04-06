@@ -101,9 +101,6 @@ TF_DataType GetTensorFlowDataType(TfLiteType type) {
       return TF_INT32;
     case kTfLiteUInt32:
       return TF_UINT32;
-    case kTfLiteInt2:
-      // TODO(b/246806634): Tensorflow DT_INT2/4 type doesn't exist yet
-      return TF_INT8;
     case kTfLiteInt4:
       // TODO(b/246806634): Tensorflow DT_INT4 type doesn't exist yet
       return TF_INT8;
@@ -188,8 +185,6 @@ const char* TfLiteTypeToTfTypeName(TfLiteType type) {
       return "int32";
     case kTfLiteUInt32:
       return "uint32";
-    case kTfLiteInt2:
-      return "int2";
     case kTfLiteInt4:
       return "int4";
     case kTfLiteUInt8:

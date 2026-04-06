@@ -63,16 +63,13 @@ HloPrintOptions CreateHloPrintOptions(
     const HloGumgraphFingerprintOptions& fingerprint_options) {
   HloPrintOptions hlo_print_options =
       HloPrintOptions::Fingerprint()
+          .set_include_layout_in_shapes(false)
           .set_print_subcomputation_mode(
               HloPrintOptions::PrintSubcomputationMode::kOff)
-          .set_print_parameter_number(false)
-          .set_print_only_essential_constants(false);
+          .set_print_parameter_number(false);
   if (fingerprint_options.ignore_shape) {
     hlo_print_options.set_print_operand_shape(false);
     hlo_print_options.set_print_result_shape(false);
-  }
-  if (!fingerprint_options.ignore_backend_config) {
-    hlo_print_options.set_print_backend_config(true);
   }
   return hlo_print_options;
 }
@@ -120,8 +117,8 @@ std::pair<HloInstructionNode*, bool> HloGumgraph::AddNode(
     const HloInstruction& instruction, int unique_node_index) {
   auto node = std::make_unique<HloInstructionNode>(HloInstructionNode{
       .instruction = &instruction, .unique_node_index = unique_node_index});
-  auto [new_node_it, inserted] = instruction_name_to_node_.try_emplace(
-      instruction.name(), std::move(node));
+  auto [new_node_it, inserted] =
+      instruction_to_node_.try_emplace(&instruction, std::move(node));
   return {new_node_it->second.get(), inserted};
 }
 
@@ -139,10 +136,10 @@ absl::Status HloGumgraph::ConstructGraph(const HloModule& hlo_module) {
 
       HloInstructionNode* node = node_and_inserted.first;
       node->props.fingerprint = GetHloInstructionFingerprint(
-          instruction, CreateHloPrintOptions(fingerprint_options_)
-                           .set_include_layout_in_shapes(false));
-      node->props.canonical_fingerprint = GetHloInstructionFingerprint(
           instruction, CreateHloPrintOptions(fingerprint_options_));
+      node->props.canonical_fingerprint = GetHloInstructionFingerprint(
+          instruction,
+          HloPrintOptions::Fingerprint().set_print_parameter_number(false));
 
       bool inline_called_computations = false;
       switch (instruction->opcode()) {
@@ -220,7 +217,7 @@ HloGumgraph::PrecomputeGenerations() {
   LOG(INFO) << "Precomputing generations";
   std::vector<HloInstructionNode*> zero_indegrees;
   absl::flat_hash_map<const HloInstructionNode*, int> indegrees;
-  for (const auto& [_, node] : instruction_name_to_node_) {
+  for (const auto& [_, node] : instruction_to_node_) {
     if (node->parents.empty()) {
       zero_indegrees.push_back(node.get());
       continue;
@@ -363,8 +360,7 @@ void HloGumgraph::PrecomputeInstructionDependencies() {
 
 absl::StatusOr<std::unique_ptr<const HloGumgraph>> HloGumgraph::Create(
     const HloModule* absl_nonnull hlo_module,
-    const HloGumgraphFingerprintOptions& fingerprint_options,
-    bool precompute_instruction_dependencies) {
+    const HloGumgraphFingerprintOptions& fingerprint_options) {
   CHECK(hlo_module != nullptr) << "Expected a non-null hlo module";
   CHECK(hlo_module->entry_computation() != nullptr)
       << "Expected a non-null entry computation";
@@ -384,9 +380,7 @@ absl::StatusOr<std::unique_ptr<const HloGumgraph>> HloGumgraph::Create(
   }
   graph->PrecomputeSizeAndHeight();
   TF_RETURN_IF_ERROR(graph->PrecomputeComputationFingerprint());
-  if (precompute_instruction_dependencies) {
-    graph->PrecomputeInstructionDependencies();
-  }
+  graph->PrecomputeInstructionDependencies();
 
   return graph;
 };

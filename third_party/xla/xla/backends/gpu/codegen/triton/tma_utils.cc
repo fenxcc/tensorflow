@@ -23,7 +23,6 @@ limitations under the License.
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
 #include "xla/backends/gpu/codegen/triton/ir/triton_xla_ops.h"
-#include "xla/service/gpu/matmul_utils.h"
 #include "xla/stream_executor/gpu/tma_metadata.h"
 #include "xla/tsl/platform/statusor.h"
 
@@ -80,7 +79,6 @@ absl::StatusOr<TmaDescriptor> CreateTmaDescriptor(
   // dimension should have a stride of 1.
   CHECK(tile_strides[layout[0]] == 1)
       << "tile stride must be 1 for the most minor dimension";
-
   SmallVector<uint32_t, 5> element_strides;
   for (auto layout_dim : layout) {
     element_strides.push_back(tile_strides[layout_dim]);
@@ -118,15 +116,11 @@ absl::StatusOr<TmaDescriptor> CreateTmaDescriptor(
     box_dims[0] = 128 / element_byte_size;
   }
 
-  // Currently we hardcode these values.
-  auto interleave = TmaDescriptor::TmaInterleave::kNone;
-  auto l2_promotion = TmaDescriptor::TmaL2Promotion::k128B;
-
   TF_ASSIGN_OR_RETURN(
-      auto tma_desc,
-      TmaDescriptor::Create(global_dims, global_strides, box_dims,
-                            element_strides, element_byte_size, interleave,
-                            swizzle_mode, l2_promotion));
+      auto tma_desc, TmaDescriptor::Create(
+                         global_dims, global_strides, box_dims, element_strides,
+                         element_byte_size, TmaDescriptor::TmaInterleave::kNone,
+                         swizzle_mode, TmaDescriptor::TmaL2Promotion::k128B));
   return tma_desc;
 }
 
@@ -137,35 +131,6 @@ absl::StatusOr<TmaDescriptor> CreateTmaDescriptor(
   return CreateTmaDescriptor(global_shape, tile_shape, tile_strides, layout,
                              element_byte_size,
                              GetTmaSwizzleMode(swizzle_mode));
-}
-
-bool IsTmaRecommended(const TritonGemmConfig& config) {
-  // The current recommendation is based on analyzing the E2E "Nucleo" group
-  // data. It might make sense to re-evaluate this recommendation later if we
-  // believe there are missed opportunities.
-  return (config.split_k == 1 || config.split_k == 16) &&
-         config.num_warps <= 8 &&
-         (config.num_stages == 1 || config.num_stages == 3 ||
-          config.num_stages == 4) &&
-         config.block_m <= 256 && config.block_n <= 256 &&
-         config.block_k <= 256;
-}
-
-// Equivalent to the recommendation constructed for TritonGemmConfig.
-bool IsTmaRecommended(const BlockLevelFusionConfig& config) {
-  if (!(config.num_warps() <= 8 &&
-        (config.num_stages() == 1 || config.num_stages() == 3 ||
-         config.num_stages() == 4))) {
-    return false;
-  }
-  for (const auto& tile : config.output_tiles()) {
-    for (const auto& dim : tile.sizes()) {
-      if (dim > 256) {
-        return false;
-      }
-    }
-  }
-  return true;
 }
 
 }  // namespace xla::gpu

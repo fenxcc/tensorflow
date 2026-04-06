@@ -26,7 +26,6 @@ limitations under the License.
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include "absl/status/status.h"
-#include "absl/synchronization/notification.h"
 #include "xla/tsl/platform/criticality.h"
 #include "tensorflow/core/platform/env.h"
 #include "tensorflow/core/platform/notification.h"
@@ -45,7 +44,7 @@ using ::testing::Property;
 TEST(MixedPriorityBatchingPolicyTest, InvalidAttrValueError) {
   EXPECT_THAT(
       GetMixedPriorityBatchingPolicy("invalid_attr_value"),
-      absl_testing::StatusIs(
+      testing::StatusIs(
           absl::StatusCode::kInvalidArgument,
           ::testing::HasSubstr(
               "Unknown mixed priority batching policy: invalid_attr_value")));
@@ -58,7 +57,7 @@ TEST_P(MixedPriorityBatchingPolicyParameterizedTest,
        GetMixedPriorityBatchingPolicySuccess) {
   auto [attr_name, policy] = GetParam();
   EXPECT_THAT(GetMixedPriorityBatchingPolicy(attr_name),
-              absl_testing::IsOkAndHolds(Eq(policy)));
+              testing::IsOkAndHolds(Eq(policy)));
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -406,7 +405,7 @@ TEST(BatchTest, DeletionBlocksUntilClosed) {
   batch->AddTask(std::make_unique<FakeTask>(3));
   EXPECT_FALSE(batch->IsClosed());
 
-  absl::Notification do_delete, deleted;
+  Notification do_delete, deleted;
   std::unique_ptr<Thread> delete_thread(Env::Default()->StartThread(
       ThreadOptions(), "test", [&batch, &do_delete, &deleted]() {
         do_delete.WaitForNotification();

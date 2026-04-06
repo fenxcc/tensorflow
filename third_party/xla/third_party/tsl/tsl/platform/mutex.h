@@ -222,27 +222,25 @@ inline ConditionResult WaitForMilliseconds(mutex_lock* mu,
 
 inline mutex::mutex() = default;
 
-inline void mutex::lock() TF_EXCLUSIVE_LOCK_FUNCTION() { mu_.lock(); }
+inline void mutex::lock() TF_EXCLUSIVE_LOCK_FUNCTION() { mu_.Lock(); }
 
 inline bool mutex::try_lock() TF_EXCLUSIVE_TRYLOCK_FUNCTION(true) {
-  return mu_.try_lock();
+  return mu_.TryLock();
 };
 
-inline void mutex::unlock() TF_UNLOCK_FUNCTION() { mu_.unlock(); }
+inline void mutex::unlock() TF_UNLOCK_FUNCTION() { mu_.Unlock(); }
 
 inline void mutex::assert_held() const TF_ASSERT_EXCLUSIVE_LOCK() {
   mu_.AssertHeld();
 }
 
-inline void mutex::lock_shared() TF_SHARED_LOCK_FUNCTION() {
-  mu_.lock_shared();
-}
+inline void mutex::lock_shared() TF_SHARED_LOCK_FUNCTION() { mu_.ReaderLock(); }
 
 inline bool mutex::try_lock_shared() TF_SHARED_TRYLOCK_FUNCTION(true) {
-  return mu_.try_lock_shared();
+  return mu_.ReaderTryLock();
 }
 
-inline void mutex::unlock_shared() TF_UNLOCK_FUNCTION() { mu_.unlock_shared(); }
+inline void mutex::unlock_shared() TF_UNLOCK_FUNCTION() { mu_.ReaderUnlock(); }
 
 inline void mutex::assert_held_shared() const TF_ASSERT_SHARED_LOCK() {
   mu_.AssertReaderHeld();

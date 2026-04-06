@@ -21,7 +21,6 @@ limitations under the License.
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include "absl/status/status.h"
-#include "absl/status/status_matchers.h"
 #include "absl/strings/string_view.h"
 #include "llvm/Support/MathExtras.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"  // from @llvm-project
@@ -35,6 +34,7 @@ limitations under the License.
 #include "tensorflow/compiler/mlir/quantization/common/func.h"
 #include "tensorflow/compiler/mlir/quantization/common/test_base.h"
 #include "tensorflow/compiler/mlir/tensorflow/ir/tf_ops.h"
+#include "xla/tsl/platform/status_matchers.h"
 
 namespace mlir::quant {
 namespace {
@@ -50,6 +50,7 @@ using ::testing::IsEmpty;
 using ::testing::IsNull;
 using ::testing::NotNull;
 using ::testing::Optional;
+using ::tsl::testing::StatusIs;
 
 using AttrsAndConstraintsTest = ::mlir::quant::QuantizationTestBase;
 
@@ -487,9 +488,9 @@ constexpr absl::string_view kModuleDotGeneralBatchMatmul = R"mlir(
 
 TEST_F(AttrsAndConstraintsTest, IsDotGeneralFullyConnectedReturnsError) {
   DotGeneralOp dot_general_op = nullptr;
-  absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
-                         "Given dot_general op cannot be null when checking "
-                         "`IsDotGeneralBatchMatmul`");
+  StatusIs(absl::StatusCode::kInvalidArgument,
+           "Given dot_general op cannot be null when checking "
+           "`IsDotGeneralBatchMatmul`");
 }
 
 TEST_F(AttrsAndConstraintsTest, IsDotGeneralFullyConnectedReturnsTrue) {

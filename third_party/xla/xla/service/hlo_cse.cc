@@ -40,6 +40,7 @@ limitations under the License.
 #include "xla/shape.h"
 #include "xla/shape_util.h"
 #include "xla/tsl/platform/errors.h"
+#include "xla/tsl/platform/status.h"
 #include "xla/tsl/platform/statusor.h"
 
 namespace xla {
@@ -115,8 +116,8 @@ absl::StatusOr<bool> CombineConstants(
 
     if (match != nullptr) {
       // Match found, replace this instruction with the one in the set.
-      CHECK_OK(instruction->ReplaceAllUsesWith(match));
-      CHECK_OK(computation->RemoveInstruction(instruction));
+      TF_CHECK_OK(instruction->ReplaceAllUsesWith(match));
+      TF_CHECK_OK(computation->RemoveInstruction(instruction));
       ++combined;
     }
   }
@@ -263,6 +264,19 @@ bool HloCSE::ShouldEliminateInstruction(const HloInstruction* instruction) {
   return true;
 }
 
+absl::StatusOr<bool> HloCSE::Run(
+    HloModule* module,
+    const absl::flat_hash_set<absl::string_view>& execution_threads) {
+  bool changed = false;
+
+  for (auto* computation : module->computations(execution_threads)) {
+    TF_ASSIGN_OR_RETURN(bool computation_changed,
+                        RunOnComputation(computation));
+    changed |= computation_changed;
+  }
+  return changed;
+}
+
 absl::StatusOr<bool> HloCSE::RunOnComputation(HloComputation* computation) {
   if (should_eliminate_computation_ &&
       !should_eliminate_computation_(computation)) {
@@ -375,19 +389,6 @@ absl::StatusOr<bool> HloCSE::RunOnComputation(HloComputation* computation) {
         }
       }
     }
-  }
-  return changed;
-}
-
-absl::StatusOr<bool> HloCSE::RunImpl(
-    HloModule* module,
-    const absl::flat_hash_set<absl::string_view>& execution_threads) {
-  bool changed = false;
-
-  for (auto* computation : module->computations(execution_threads)) {
-    TF_ASSIGN_OR_RETURN(bool computation_changed,
-                        RunOnComputation(computation));
-    changed |= computation_changed;
   }
   return changed;
 }

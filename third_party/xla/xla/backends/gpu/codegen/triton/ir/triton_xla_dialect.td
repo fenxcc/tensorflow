@@ -28,11 +28,6 @@ def XlaTritonDialect : Dialect {
 
   let cppNamespace = "::mlir::triton::xla";
   let useDefaultAttributePrinterParser = 1;
-  let dependentDialects = [
-    "mlir::triton::TritonDialect",
-    "mlir::triton::gpu::TritonGPUDialect",
-    "::xla::xtile::XTileDialect",
-  ];
 }
 
 #endif // XLA_BACKENDS_GPU_CODEGEN_TRITON_IR_TRITON_XLA_DIALECT_TD_

@@ -21,8 +21,6 @@ limitations under the License.
 #include <type_traits>
 #include <vector>
 
-#include "absl/log/check.h"
-#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -37,10 +35,7 @@ limitations under the License.
 #include "xla/stream_executor/gpu/gpu_kernel_registry.h"
 #include "xla/stream_executor/stream.h"
 #include "xla/stream_executor/stream_executor.h"
-#include "xla/tsl/platform/errors.h"
-#include "xla/tsl/platform/statusor.h"
 #include "xla/util.h"
-#include "xla/xla_data.pb.h"
 
 namespace xla {
 namespace gpu {
@@ -48,7 +43,6 @@ namespace gpu {
 struct ComparisonParams {
   double relative_tol = 0.1;
   bool verbose = true;
-  bool run_host_compare = true;
   const Shape* shape = nullptr;
   se::Stream* stream = nullptr;
   se::DeviceMemoryBase current{};
@@ -86,14 +80,6 @@ static absl::StatusOr<bool> DeviceCompare(const ComparisonParams& params) {
 
   LaunchDimensions dim =
       CalculateLaunchDimensions(*params.shape, gpu_device_info);
-  // Limit # of blocks to some meaningful number which is large enough to
-  // occupy all GPU cores if necessary but not too large to reduce # of idle
-  // blocks
-  dim = LaunchDimensions(
-      se::BlockDim(std::min(dim.num_blocks(),
-                            BufferComparator::kMaxNumThreadBlocksForKernel),
-                   1, 1),
-      dim.thread_counts_per_block());
 
   se::DeviceMemory<uint64_t> as_uint64(out.memory());
   TF_RETURN_IF_ERROR(comparison_kernel.Launch(
@@ -156,9 +142,7 @@ static absl::StatusOr<bool> HostCompare(const ComparisonParams& params) {
                         std::abs(expected_value_canonical)) +
                1) <
           params.relative_tol)) {
-      if (!params.verbose) {
-        return false;  // Return immediately if not verbose.
-      }
+      if (!params.verbose) return false;  // Return immediately if not verbose.
       ++differences_seen;
       LOG(ERROR) << "Difference at " << i << ": " << current_value
                  << ", expected " << expected_value;
@@ -172,8 +156,9 @@ static absl::StatusOr<bool> CompareEqualParameterized(
     const ComparisonParams& params) {
   XLA_SCOPED_LOGGING_TIMER("BufferComparator::CompareEqual");
   TF_ASSIGN_OR_RETURN(bool result, DeviceCompare<ElementT>(params));
-  if (result) return true;
-  if (!params.run_host_compare) return false;
+  if (result) {
+    return true;
+  }
 
   TF_ASSIGN_OR_RETURN(bool host_return,
                       (HostCompare<ElementT, ComparisonT>(params)));
@@ -183,9 +168,9 @@ static absl::StatusOr<bool> CompareEqualParameterized(
 }
 
 absl::StatusOr<bool> BufferComparator::CompareEqual(
-    se::Stream* stream, const se::DeviceMemoryBase& current,
-    const se::DeviceMemoryBase& expected) const {
-  ComparisonParams params{relative_tol_, verbose_, run_host_compare_, &shape_,
+    se::Stream* stream, se::DeviceMemoryBase current,
+    se::DeviceMemoryBase expected) const {
+  ComparisonParams params{relative_tol_, verbose_, &shape_,
                           stream,        current,  expected};
 
   auto do_compare = [&](auto cst_type) {
@@ -216,18 +201,11 @@ absl::StatusOr<bool> BufferComparator::CompareEqual(
 }
 
 BufferComparator::BufferComparator(const Shape& shape, double tolerance,
-                                   bool verbose, bool run_host_compare)
-    : shape_(shape),
-      relative_tol_(tolerance),
-      verbose_(verbose),
-      run_host_compare_(run_host_compare) {
+                                   bool verbose)
+    : shape_(shape), relative_tol_(tolerance), verbose_(verbose) {
   // Normalize complex shapes: since we treat the passed array as a contiguous
   // storage it does not matter which dimension are we doubling.
   auto double_dim_size = [&]() {
-    // A 0D tensor is equal to a 1D tensor of size 1 in a buffer.
-    if (shape_.dimensions().empty()) {
-      shape_.add_dimensions(1);
-    }
     int64_t prev_zero_dim_size = shape_.dimensions(0);
     shape_.set_dimensions(0, prev_zero_dim_size * 2);
   };

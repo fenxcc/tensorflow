@@ -15,29 +15,22 @@ limitations under the License.
 
 #include "xla/service/executable.h"
 
-#include <cstddef>
-#include <cstdint>
 #include <memory>
-#include <optional>
 #include <utility>
-#include <vector>
 
-#include "absl/log/log.h"
 #include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
 #include "absl/types/span.h"
+#include "xla/debug_options_flags.h"
+#include "xla/service/dump.h"
+#include "xla/service/hlo_graph_dumper.h"
 #include "xla/service/maybe_owning_device_memory.h"
-#include "xla/service/service_executable_run_options.h"
 #include "xla/service/shaped_buffer.h"
-#include "xla/shape.h"
-#include "xla/shape_util.h"
 #include "xla/status_macros.h"
-#include "xla/stream_executor/device_memory.h"
-#include "xla/stream_executor/device_memory_allocator.h"
-#include "xla/stream_executor/stream.h"
-#include "xla/tsl/platform/errors.h"
-#include "xla/tsl/platform/statusor.h"
+#include "xla/stream_executor/device_description.h"
+#include "tsl/platform/env.h"
+#include "tsl/platform/errors.h"
+#include "tsl/platform/status.h"
 
 namespace xla {
 
@@ -50,20 +43,12 @@ ExecutionInput::~ExecutionInput() {
   }
 }
 
-ExecutionInput::ExecutionInput(ExecutionInput&& rhs) noexcept
-    : buffers_(std::move(rhs.buffers_)),
-      unowned_indices_(std::move(rhs.unowned_indices_)),
-      dynamic_shape_(std::move(rhs.dynamic_shape_)),
-      host_shape_(std::move(rhs.host_shape_)) {
-  rhs.unowned_indices_.clear();
-}
-
 absl::Status ExecutionInput::SetDynamicShape(Shape dynamic_shape) {
   const Shape& input_shape = shape();
   if (!ShapeUtil::DynamicShapeIsCompatible(input_shape, dynamic_shape)) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Cannot set dynamic shape: ", input_shape.ToString(),
-                     " vs. ", dynamic_shape.ToString()));
+    return tsl::errors::InvalidArgument(
+        "Cannot set dynamic shape: ", input_shape.ToString(), " vs. ",
+        dynamic_shape.ToString());
   }
   dynamic_shape_ = std::make_unique<Shape>(std::move(dynamic_shape));
   return absl::OkStatus();

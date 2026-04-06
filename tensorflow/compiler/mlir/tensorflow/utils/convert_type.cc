@@ -98,8 +98,7 @@ absl::Status ConvertDataType(DataType dtype, Builder builder, Type* type) {
       *type = builder.getType<mlir::Float8E5M2FNUZType>();
       return absl::OkStatus();
     case DT_INT4:
-      // build a **signless** integer type.
-      *type = builder.getIntegerType(4);
+      *type = builder.getIntegerType(4, /*isSigned=*/true);
       return absl::OkStatus();
     case DT_UINT4:
       *type = builder.getIntegerType(4, /*isSigned=*/false);

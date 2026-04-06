@@ -16,17 +16,14 @@ limitations under the License.
 #ifndef XLA_SERVICE_HLO_BUFFER_H_
 #define XLA_SERVICE_HLO_BUFFER_H_
 
-#include <cstdint>
 #include <ostream>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "absl/log/check.h"
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "xla/service/buffer_value.h"
 #include "xla/service/hlo_value.h"
+#include "xla/shape_tree.h"
+#include "xla/types.h"
 #include "xla/xla_data.pb.h"
 
 namespace xla {
@@ -98,14 +95,11 @@ class HloBuffer {
 
   // Memory space color. Used to indicate the memory space that the hlo buffer
   // needs to live in.
-  absl::StatusOr<BufferValue::Color> color() const {
+  BufferValue::Color color() const {
     // Invariant: All values in the buffer should have the same color.
     BufferValue::Color result = values()[0]->color();
     for (const HloValue* value : values()) {
-      if (result != value->color()) {
-        return absl::FailedPreconditionError(
-            "Not all HloValues in the HloBuffer have the same color");
-      }
+      DCHECK_EQ(result, value->color());
     }
     return result;
   }

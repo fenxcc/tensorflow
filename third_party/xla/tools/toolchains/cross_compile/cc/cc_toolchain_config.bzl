@@ -40,7 +40,6 @@ load(
     "variable_with_value",
     "with_feature_set",
 )
-load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
 
 def layering_check_features(compiler):
     if compiler != "clang":

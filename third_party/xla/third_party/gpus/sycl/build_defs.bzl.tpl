@@ -13,11 +13,7 @@ def if_sycl(if_true, if_false = []):
 
 def sycl_default_copts():
     """Default options for all SYCL compilations."""
-    return if_sycl(["-sycl_compile"])
-
-def sycl_default_linkopts():
-    """Default options for all SYCL compilations."""
-    return if_sycl(["-link_stage", "-lirc"])
+    return if_sycl(["-x", "sycl"])
 
 def sycl_build_is_configured():
     """Returns true if SYCL compiler was enabled during the configure process."""
@@ -38,13 +34,6 @@ def if_sycl_build_is_configured(x, y):
       return x
     return y
 
-def sycl_library(copts = [], linkopts = [], tags = [], deps = [], **kwargs):
+def sycl_library(copts = [], **kwargs):
     """Wrapper over cc_library which adds default SYCL options."""
-    native.cc_library(copts = sycl_default_copts() + copts,
-                      linkopts = sycl_default_linkopts() + linkopts,
-                      tags = tags + ["gpu"],
-                      deps = deps + if_sycl_is_configured([
-                        "@local_config_sycl//sycl:sycl_headers",
-                        "@local_config_sycl//sycl:level_zero",
-                      ]),
-                      **kwargs)
+    native.cc_library(copts = sycl_default_copts() + copts, **kwargs)

@@ -74,7 +74,7 @@ class PjRtState : public ResourceBase {
   PjRtGpuClientCreationInfo* GetPjRtGpuClientCreationInfo();
 
  private:
-  explicit PjRtState() = default;
+  explicit PjRtState() {}
   absl::Mutex mu_;
   PjRtClientsMap clients_ ABSL_GUARDED_BY(mu_);
   // Store the PJRT clients that are no longer used to guarantee that PJRT

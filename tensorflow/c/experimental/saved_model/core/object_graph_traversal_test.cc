@@ -26,7 +26,8 @@ namespace {
 
 SavedObjectGraph ParseSavedObjectGraph(absl::string_view text_proto) {
   SavedObjectGraph value;
-  CHECK(tensorflow::protobuf::TextFormat::ParseFromString(text_proto, &value));
+  CHECK(tensorflow::protobuf::TextFormat::ParseFromString(string(text_proto),
+                                                          &value));
   return value;
 }
 

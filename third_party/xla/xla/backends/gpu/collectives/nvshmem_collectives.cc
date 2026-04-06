@@ -42,9 +42,7 @@ limitations under the License.
 namespace xla::gpu {
 
 NvshmemCollectives::~NvshmemCollectives() {
-  if (initialized_) {
-    Finalize();
-  }
+  if (initialized_) Finalize();
 }
 
 NvshmemCollectives* NvshmemCollectives::Default() {

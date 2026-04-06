@@ -16,6 +16,7 @@ limitations under the License.
 
 #include <cstdint>
 #include <memory>
+#include <utility>
 
 #include <gtest/gtest.h>
 #include "absl/container/flat_hash_set.h"
@@ -47,10 +48,10 @@ class DecrementPositiveConstants : public HloModulePass {
  public:
   absl::string_view name() const override { return "decrement-constants"; }
 
- protected:
-  absl::StatusOr<bool> RunImpl(HloModule* module,
-                               const absl::flat_hash_set<absl::string_view>&
-                                   execution_threads) override {
+  using HloPassInterface::Run;
+  absl::StatusOr<bool> Run(HloModule* module,
+                           const absl::flat_hash_set<absl::string_view>&
+                               execution_threads) override {
     bool changed = false;
     for (HloComputation* computation :
          module->computations(execution_threads)) {
@@ -78,10 +79,10 @@ class FlipAddSubtract : public HloModulePass {
  public:
   absl::string_view name() const override { return "flip-add-subtract"; }
 
- protected:
-  absl::StatusOr<bool> RunImpl(HloModule* module,
-                               const absl::flat_hash_set<absl::string_view>&
-                                   execution_threads) override {
+  using HloPassInterface::Run;
+  absl::StatusOr<bool> Run(HloModule* module,
+                           const absl::flat_hash_set<absl::string_view>&
+                               execution_threads) override {
     bool changed = false;
     for (HloComputation* computation :
          module->computations(execution_threads)) {
@@ -136,49 +137,77 @@ TEST_F(HloPassFixTest, RunModuleToFixedPoint) {
   EXPECT_EQ(root->literal().GetFirstElement<int32_t>(), 0);
 }
 
-TEST_F(HloPassFixTest, RunModuleToDefaultEarlyExit) {
-  constexpr absl::string_view kModule = R"(
-    HloModule Converges
+TEST_F(HloPassFixTest, RunModuleGroupToFixedPoint) {
+  constexpr absl::string_view kModule0 = R"(
+    HloModule First
 
     ENTRY main {
-      ROOT c = s32[] constant(30)
+      ROOT c = s32[] constant(5)
     }
   )";
 
-  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<VerifiedHloModule> module,
-                          ParseAndReturnVerifiedModule(kModule));
+  constexpr absl::string_view kModule1 = R"(
+    HloModule Second
+
+    ENTRY main {
+      ROOT c = s32[] constant(3)
+    }
+  )";
+
+  constexpr absl::string_view kModule2 = R"(
+    HloModule Second
+
+    ENTRY main {
+      ROOT c = s32[] constant(0)
+    }
+  )";
+
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<VerifiedHloModule> module0,
+                          ParseAndReturnVerifiedModule(kModule0));
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<VerifiedHloModule> module1,
+                          ParseAndReturnVerifiedModule(kModule1));
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<VerifiedHloModule> module2,
+                          ParseAndReturnVerifiedModule(kModule2));
+  HloModuleGroup module_group("group");
+  module_group.push_back(std::move(module0));
+  module_group.push_back(std::move(module1));
+  module_group.push_back(std::move(module2));
 
   HloPassFix<DecrementPositiveConstants> pass;
-  TF_ASSERT_OK_AND_ASSIGN(bool changed, pass.Run(module.get()));
-  // TODO(b/395958361): HloPassFix lies about whether it changed the module if
-  // it terminates due to hitting the iteration limit.
-  EXPECT_FALSE(changed);
-  HloInstruction* root = module->entry_computation()->root_instruction();
-  ASSERT_EQ(root->opcode(), HloOpcode::kConstant);
-  EXPECT_EQ(root->literal().GetFirstElement<int32_t>(), 5);
+  TF_ASSERT_OK_AND_ASSIGN(bool changed, pass.RunOnModuleGroup(&module_group));
+  EXPECT_TRUE(changed);
+  HloInstruction* root0 =
+      module_group.module(0).entry_computation()->root_instruction();
+  ASSERT_EQ(root0->opcode(), HloOpcode::kConstant);
+  EXPECT_EQ(root0->literal().GetFirstElement<int32_t>(), 0);
+  HloInstruction* root1 =
+      module_group.module(1).entry_computation()->root_instruction();
+  ASSERT_EQ(root1->opcode(), HloOpcode::kConstant);
+  EXPECT_EQ(root1->literal().GetFirstElement<int32_t>(), 0);
+  HloInstruction* root2 =
+      module_group.module(2).entry_computation()->root_instruction();
+  ASSERT_EQ(root2->opcode(), HloOpcode::kConstant);
+  EXPECT_EQ(root2->literal().GetFirstElement<int32_t>(), 0);
 }
 
-TEST_F(HloPassFixTest, RunModuleToNonDefaultEarlyExit) {
+TEST_F(HloPassFixTest, OscillationsStillTerminate) {
   constexpr absl::string_view kModule = R"(
-    HloModule Converges
+    HloModule Oscillating
 
     ENTRY main {
-      ROOT c = s32[] constant(30)
+      a = f32[4] parameter(0)
+      b = f32[4] parameter(1)
+      ROOT c = f32[4] add(a, b)
     }
   )";
 
   TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<VerifiedHloModule> module,
                           ParseAndReturnVerifiedModule(kModule));
+  HloPassFix<FlipAddSubtract> pass;
 
-  auto pass = HloPassFix<DecrementPositiveConstants>::Create(
-      /*iteration_limit=*/10);
-  TF_ASSERT_OK_AND_ASSIGN(bool changed, pass->Run(module.get()));
-  // TODO(b/395958361): HloPassFix lies about whether it changed the module if
-  // it terminates due to hitting the iteration limit.
+  // We expect this to terminate and report that the module did not change.
+  TF_ASSERT_OK_AND_ASSIGN(bool changed, pass.Run(module.get()));
   EXPECT_FALSE(changed);
-  HloInstruction* root = module->entry_computation()->root_instruction();
-  ASSERT_EQ(root->opcode(), HloOpcode::kConstant);
-  EXPECT_EQ(root->literal().GetFirstElement<int32_t>(), 20);
 }
 
 }  // namespace

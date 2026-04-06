@@ -18,7 +18,6 @@ limitations under the License.
 #include <map>
 #include <memory>
 
-#include "absl/synchronization/notification.h"
 #include "tensorflow/core/common_runtime/function_testlib.h"
 #include "tensorflow/core/distributed_runtime/rpc/grpc_channel.h"
 #include "tensorflow/core/distributed_runtime/rpc/grpc_testlib.h"
@@ -94,7 +93,7 @@ class ClusterFunctionLibraryRuntimeTest : public ::testing::Test {
       const std::vector<Tensor>& args, std::vector<Tensor*> rets) {
     FunctionLibraryRuntime::LocalHandle handle;
     absl::Status status;
-    absl::Notification instantiate_done;
+    Notification instantiate_done;
     cluster_flr_->Instantiate(
         function_name, lib_def, attrs, options, &handle,
         [&status, &instantiate_done](const absl::Status& s) {
@@ -106,7 +105,7 @@ class ClusterFunctionLibraryRuntimeTest : public ::testing::Test {
       return status;
     }
 
-    absl::Notification done;
+    Notification done;
     FunctionLibraryRuntime::Options opts;
     std::vector<Tensor> out;
     cluster_flr_->Run(opts, handle, args, &out,

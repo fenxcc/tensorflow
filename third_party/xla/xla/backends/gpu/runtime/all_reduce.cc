@@ -18,6 +18,7 @@ limitations under the License.
 #include <algorithm>
 #include <cstdint>
 
+#include "absl/algorithm/container.h"
 #include "absl/base/casts.h"
 #include "absl/log/log.h"
 #include "absl/status/status.h"
@@ -29,7 +30,6 @@ limitations under the License.
 #include "xla/service/gpu/launch_dimensions.h"
 #include "xla/stream_executor/device_memory.h"
 #include "xla/stream_executor/gpu/all_reduce_kernel.h"
-#include "xla/stream_executor/gpu/collective_kernel_metadata.h"
 #include "xla/stream_executor/gpu/gpu_kernel_registry.h"
 #include "xla/stream_executor/stream.h"
 #include "xla/tsl/platform/statusor.h"
@@ -42,10 +42,7 @@ namespace xla::gpu {
 
 namespace {
 
-using se::gpu::AllReduceStrategy;
-static constexpr int64_t kMaxOneShotAllReduceSizeBytes = 256 * 1024;  // 256 KB
-static constexpr int64_t kMaxTwoShotAllReduceSizeBytes =
-    2 * 1024 * 1024;  // 2 MB
+using ::stream_executor::gpu::AllReduceStrategy;
 
 template <typename T, ReductionKind kReductionKindV>
 class TagRegistry {
@@ -60,7 +57,6 @@ class TagRegistry {
  public:
   static constexpr auto kOneShot = Impl<AllReduceStrategy::kOneShot>{};
   static constexpr auto kTwoShot = Impl<AllReduceStrategy::kTwoShot>{};
-  static constexpr auto kMultimem = Impl<AllReduceStrategy::kMultimem>{};
 };
 
 // Static set of supported kernel tags.
@@ -74,15 +70,13 @@ static constexpr int64_t kMaxThreadsPerBlock = 512;
 static constexpr int64_t kWarpSize = 32;
 
 template <typename TagType>
-absl::Status LaunchTypedKernel(TagType, se::Stream* stream,
-                               const LaunchDimensions& launch_dimensions,
-                               se::DeviceMemoryBase symmetric_input_buffer,
-                               se::DeviceMemoryBase local_input_buffer,
-                               se::DeviceMemoryBase output_buffer, int64_t rank,
-                               int64_t num_ranks, int64_t num_elements,
-                               se::DeviceMemoryBase symmetric_signal_buffer,
-                               uint32_t signal_value,
-                               se::DeviceMemoryBase metadata) {
+absl::Status LaunchTypedKernel(
+    TagType, se::Stream* stream, const LaunchDimensions& launch_dimensions,
+    absl::Span<const se::DeviceMemoryBase> remote_input_buffers,
+    se::DeviceMemoryBase local_input_buffer, se::DeviceMemoryBase output_buffer,
+    int64_t rank, int64_t num_ranks, int64_t num_elements,
+    absl::Span<const se::DeviceMemoryBase> signal_flags_buffers,
+    uint32_t signal_value) {
   using ElementType = typename TagType::ElementType;
   static constexpr bool kIsTwoShot =
       TagType::kAllReduceStrategy == AllReduceStrategy::kTwoShot;
@@ -96,14 +90,15 @@ absl::Status LaunchTypedKernel(TagType, se::Stream* stream,
                stream->parent())));
 
   se::gpu::AllReduceKernelParams<ElementType> params{};
+  absl::c_transform(
+      remote_input_buffers, params.remote_input_buffers.begin(),
+      [](se::DeviceMemoryBase buffer) {
+        return tsl::safe_reinterpret_cast<ElementType*>(buffer.opaque());
+      });
   params.input_buffer =
       tsl::safe_reinterpret_cast<ElementType*>(local_input_buffer.opaque());
   params.output_buffer =
       tsl::safe_reinterpret_cast<ElementType*>(output_buffer.opaque());
-  params.symmetric_input_ptrs =
-      tsl::safe_reinterpret_cast<ElementType*>(symmetric_input_buffer.opaque());
-  params.symmetric_signal_ptrs =
-      tsl::safe_reinterpret_cast<uint32_t*>(symmetric_signal_buffer.opaque());
   params.rank = rank;
   params.num_ranks = num_ranks;
   params.num_elements = num_elements;
@@ -115,14 +110,17 @@ absl::Status LaunchTypedKernel(TagType, se::Stream* stream,
       CeilOfRatio(params.num_elements_per_rank,
                   absl::implicit_cast<int64_t>(launch_dimensions.num_blocks())),
       se::gpu::kNumElementsPerThread);
+  absl::c_transform(
+      signal_flags_buffers, params.signal_flags_buffers.begin(),
+      [](se::DeviceMemoryBase buffer) {
+        return tsl::safe_reinterpret_cast<uint32_t*>(buffer.opaque());
+      });
   params.rank_offset =
       kIsTwoShot ? params.rank * params.num_elements_per_rank : 0;
   for (int i = 0; i < params.num_ranks; ++i) {
     params.rotated_ranks[i] = (i + rank) % params.num_ranks;
   }
   params.signal_value = signal_value;
-  params.metadata =
-      tsl::safe_reinterpret_cast<CollectiveKernelMetadata*>(metadata.opaque());
 
   VLOG(3) << "Launching all-reduce kernel with params: " << "strategy: "
           << absl::StrFormat("%v", TagType::kAllReduceStrategy)
@@ -162,28 +160,6 @@ bool IsElementReductionSupported(PrimitiveType element_type,
 
 }  // namespace
 
-AllReduceStrategy GetAllReduceStrategy(int64_t input_size_bytes,
-                                       bool is_multimem_enabled) {
-  if (input_size_bytes > kMaxOneShotAllReduceSizeBytes) {
-    return AllReduceStrategy::kTwoShot;
-  }
-  if (is_multimem_enabled) {
-    return AllReduceStrategy::kMultimem;
-  }
-  return AllReduceStrategy::kOneShot;
-}
-
-int64_t GetMaxSupportedAllReduceSizeBytes(AllReduceStrategy strategy) {
-  switch (strategy) {
-    case AllReduceStrategy::kOneShot:
-      return kMaxOneShotAllReduceSizeBytes;
-    case AllReduceStrategy::kTwoShot:
-      return kMaxTwoShotAllReduceSizeBytes;
-    case AllReduceStrategy::kMultimem:
-      return kMaxTwoShotAllReduceSizeBytes;
-  }
-}
-
 LaunchDimensions AllReduceLaunchDimensions(int64_t elements, int64_t num_ranks,
                                            AllReduceStrategy strategy) {
   int64_t threads_per_block;
@@ -207,8 +183,7 @@ bool IsAllReduceKernelSupported(int64_t num_ranks, int64_t num_elements,
     return false;
   }
   const int64_t alignment_requirement =
-      all_reduce_strategy == AllReduceStrategy::kOneShot ||
-              all_reduce_strategy == AllReduceStrategy::kMultimem
+      all_reduce_strategy == AllReduceStrategy::kOneShot
           ? se::gpu::kNumElementsPerThread
           : se::gpu::kNumElementsPerThread * num_ranks;
 
@@ -221,20 +196,20 @@ bool IsAllReduceKernelSupported(int64_t num_ranks, int64_t num_elements,
 }
 
 absl::Status RunAllReduceKernel(
-    se::Stream* stream,                            //
-    const LaunchDimensions& launch_dimensions,     //
-    PrimitiveType element_type,                    //
-    ReductionKind reduction_kind,                  //
-    AllReduceStrategy all_reduce_strategy,         //
-    se::DeviceMemoryBase symmetric_input_buffer,   //
-    se::DeviceMemoryBase local_input_buffer,       //
-    se::DeviceMemoryBase output_buffer,            //
-    RankId rank,                                   //
-    int64_t num_ranks,                             //
-    int64_t num_elements,                          //
-    se::DeviceMemoryBase symmetric_signal_buffer,  //
-    uint32_t signal_value,                         //
-    se::DeviceMemoryBase metadata) {
+    se::Stream* stream,                                           //
+    const LaunchDimensions& launch_dimensions,                    //
+    PrimitiveType element_type,                                   //
+    ReductionKind reduction_kind,                                 //
+    AllReduceStrategy all_reduce_strategy,                        //
+    absl::Span<const se::DeviceMemoryBase> remote_input_buffers,  //
+    se::DeviceMemoryBase local_input_buffer,                      //
+    se::DeviceMemoryBase output_buffer,                           //
+    RankId rank,                                                  //
+    int64_t num_ranks,                                            //
+    int64_t num_elements,                                         //
+    absl::Span<const se::DeviceMemoryBase> signal_flags_buffers,  //
+    uint32_t signal_value                                         //
+) {
   if (!IsAllReduceKernelSupported(num_ranks, num_elements, element_type,
                                   reduction_kind, all_reduce_strategy)) {
     return absl::InvalidArgumentError(
@@ -242,14 +217,21 @@ absl::Status RunAllReduceKernel(
                      "of ranks, elements, element type and reduction kind: ",
                      num_ranks, ", ", num_elements, ", ",
                      primitive_util::LowercasePrimitiveTypeName(element_type),
-                     ", ", reduction_kind));
+                     ", ", ReductionKindToString(reduction_kind)));
+  }
+
+  if (remote_input_buffers.size() >
+      stream_executor::gpu::kMaxNumAllReduceInputPtrs) {
+    return absl::InvalidArgumentError(
+        "Number of input pointers exceeds the maximum supported number of "
+        "input pointers.");
   }
 
   const auto launch_kernel_impl = [&](auto tag) -> absl::Status {
-    return LaunchTypedKernel(
-        tag, stream, launch_dimensions, symmetric_input_buffer,
-        local_input_buffer, output_buffer, rank.value(), num_ranks,
-        num_elements, symmetric_signal_buffer, signal_value, metadata);
+    return LaunchTypedKernel(tag, stream, launch_dimensions,
+                             remote_input_buffers, local_input_buffer,
+                             output_buffer, rank.value(), num_ranks,
+                             num_elements, signal_flags_buffers, signal_value);
   };
   const auto launch_kernel = [&](auto tag_registry,
                                  AllReduceStrategy strategy) -> absl::Status {
@@ -258,8 +240,6 @@ absl::Status RunAllReduceKernel(
         return launch_kernel_impl(tag_registry.kOneShot);
       case AllReduceStrategy::kTwoShot:
         return launch_kernel_impl(tag_registry.kTwoShot);
-      case AllReduceStrategy::kMultimem:
-        return launch_kernel_impl(tag_registry.kMultimem);
     }
   };
 

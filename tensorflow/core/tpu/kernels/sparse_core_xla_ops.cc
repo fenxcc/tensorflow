@@ -843,38 +843,18 @@ class XlaSparseDenseMatmulGradWithCsrInputOp : public XlaOpKernel {
 
     std::vector<XlaCompiler::Argument> arguments(num_arguments);
 
-    // Tables and slot variables are passed as single-row slices.
-    // 2D vars [R, C] -> shape [1, C], 1D vars [R] -> shape [1].
+    // For tables and slot variables, we use the derived type and the shape is
+    // {1, feature_width}.
     xla::PrimitiveType table_primitive_type;
     OP_REQUIRES_OK(
         ctx, DataTypeToPrimitiveType(table_dtype_, &table_primitive_type));
 
     for (int32_t i = 0; i < num_arguments; ++i) {
       arguments[i].kind = XlaCompiler::Argument::kParameter;
-      if (i == 0) {
-        arguments[i].type = DT_FLOAT;
-        arguments[i].shape =
-            xla::ShapeUtil::MakeShape(xla::F32, {1, feature_width});
-        continue;
-      }
-      const int32_t table_idx = i - 1;
-      if (table_idx >= 0 &&
-          table_idx < static_cast<int32_t>(tables_inputs.size())) {
+      if (i > 0 && i < tables_inputs.size() + 1) {
         arguments[i].type = table_dtype_;
-        const TensorShape& ts = tables_shapes[table_idx];
-        if (ts.dims() == 2) {
-          const int64_t cols = ts.dim_size(1);
-          arguments[i].shape =
-              xla::ShapeUtil::MakeShape(table_primitive_type, {1, cols});
-        } else if (ts.dims() == 1) {
-          arguments[i].shape =
-              xla::ShapeUtil::MakeShape(table_primitive_type, {1});
-        } else {
-          OP_REQUIRES(ctx, false,
-                      absl::InvalidArgumentError(absl::StrCat(
-                          "Table/slot variable rank must be 1 or 2, got ",
-                          ts.dims(), " for argument index ", i)));
-        }
+        arguments[i].shape =
+            xla::ShapeUtil::MakeShape(table_primitive_type, {1, feature_width});
       } else {
         arguments[i].type = DT_FLOAT;
         arguments[i].shape =
@@ -904,19 +884,9 @@ class XlaSparseDenseMatmulGradWithCsrInputOp : public XlaOpKernel {
 
     xla_tables_shapes.reserve(tables_shapes.size());
     for (const auto& table_shape : tables_shapes) {
-      if (table_shape.dims() == 2) {
-        xla_tables_shapes.push_back(xla::ShapeUtil::MakeShape(
-            table_primitive_type,
-            {table_shape.dim_size(0), table_shape.dim_size(1)}));
-      } else if (table_shape.dims() == 1) {
-        xla_tables_shapes.push_back(xla::ShapeUtil::MakeShape(
-            table_primitive_type, {table_shape.dim_size(0)}));
-      } else {
-        OP_REQUIRES(ctx, false,
-                    absl::InvalidArgumentError(absl::StrCat(
-                        "Table/slot variable rank must be 1 or 2, got ",
-                        table_shape.dims())));
-      }
+      xla_tables_shapes.push_back(xla::ShapeUtil::MakeShape(
+          table_primitive_type,
+          {table_shape.dim_size(0), table_shape.dim_size(1)}));
     }
 
     xla::Shape tables_shape = xla::ShapeUtil::MakeTupleShape(xla_tables_shapes);

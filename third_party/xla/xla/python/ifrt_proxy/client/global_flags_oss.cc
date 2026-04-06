@@ -13,9 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include <cstdint>
 #include <cstdlib>
-#include <limits>
 #include <string>
 
 #include "absl/debugging/leak_check.h"
@@ -29,25 +27,14 @@ namespace proxy {
 
 namespace {
 
-bool GetBoolFromEnv(const char* key, bool default_value) {
+bool GetBoolFromEnv(const char* key) {
   if (const char* valptr = std::getenv(key)) {
     std::string val(valptr);
     bool result;
     QCHECK(absl::SimpleAtob(val, &result)) << " " << key << ": '" << val << "'";
     return result;
   }
-  return default_value;
-}
-
-template <typename IntType>
-IntType GetIntFromEnv(const char* key, IntType default_value) {
-  if (const char* valptr = std::getenv(key)) {
-    std::string val(valptr);
-    IntType result;
-    QCHECK(absl::SimpleAtoi(val, &result)) << " " << key << ": '" << val << "'";
-    return result;
-  }
-  return default_value;
+  return false;
 }
 
 }  // namespace
@@ -56,15 +43,7 @@ static GlobalClientFlags DefaultGlobalClientFlags() {
   GlobalClientFlags result;
   result.synchronous_host_buffer_store = false;
   result.array_is_deleted_hack =
-      GetBoolFromEnv("IFRT_PROXY_ARRAY_IS_DELETED_HACK", false);
-  result.grpc_max_ongoing_host_buffer_stores =
-      GetIntFromEnv<int>("IFRT_PROXY_GRPC_MAX_ONGOING_HOST_BUFFER_STORES", 0);
-  result.grpc_max_ongoing_host_buffer_lookups =
-      GetIntFromEnv<int>("IFRT_PROXY_GRPC_MAX_ONGOING_HOST_BUFFER_LOOKUPS", 0);
-  result.grpc_large_transfer_optimization_threshold_bytes =
-      GetIntFromEnv<int64_t>(
-          "IFRT_PROXY_GRPC_LARGE_TRANSFER_OPTIMIZATION_THRESHOLD_BYTES",
-          std::numeric_limits<int64_t>::max());
+      GetBoolFromEnv("IFRT_PROXY_ARRAY_IS_DELETED_HACK");
   return result;
 };
 

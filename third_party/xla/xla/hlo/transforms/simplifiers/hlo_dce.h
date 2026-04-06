@@ -48,36 +48,20 @@ class HloDCE : public HloModulePass {
   absl::string_view name() const override { return "dce"; }
 
   // Run DCE on a computation.
-  // If `remove_dead_parameters_from_entry_computation` is true, then remove
-  // dead parameters from the entry computation and update the entry computation
-  // layout of the module.
   static absl::StatusOr<bool> RunOnComputation(
-      HloComputation* computation,
-      bool remove_cross_partition_collective_ops = false,
-      CallGraph* call_graph = nullptr,
-      bool remove_dead_parameters_from_entry_computation = false);
+      HloComputation* computation, bool remove_cross_partition_collective_ops,
+      CallGraph* call_graph = nullptr);
 
-  // If `remove_dead_parameters_from_entry_computation` is true, then this pass
-  // will remove dead parameters from the entry computation and update the entry
-  // computation layout of the module.
-  // Note: The caller needs to be aware of the entry computation layout changes.
-  void set_remove_dead_parameters_from_entry_computation(
-      bool remove_dead_parameters_from_entry_computation) {
-    remove_dead_parameters_from_entry_computation_ =
-        remove_dead_parameters_from_entry_computation;
-  }
-
- protected:
   // Run the pass on the given module. Returns whether the module was changed
   // (instructions were removed).
-  absl::StatusOr<bool> RunImpl(
+  using HloPassInterface::Run;
+  absl::StatusOr<bool> Run(
       HloModule* module,
       const absl::flat_hash_set<absl::string_view>& execution_threads) override;
 
  private:
   bool remove_cross_partition_collective_ops_;
   bool use_call_analysis_;
-  bool remove_dead_parameters_from_entry_computation_ = false;
 };
 
 }  // namespace xla

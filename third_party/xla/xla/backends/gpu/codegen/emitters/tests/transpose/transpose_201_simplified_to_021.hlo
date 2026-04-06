@@ -1,4 +1,4 @@
-// RUN: gpu_test_correctness %s
+// RUN: test_correctness %s
 
 fusion {
   %input = f32[1,6400,32] parameter(0)

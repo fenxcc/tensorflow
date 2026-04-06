@@ -35,7 +35,7 @@ limitations under the License.
 
 namespace xla {
 
-absl::StatusOr<bool> AllGatherSimplifier::RunImpl(
+absl::StatusOr<bool> AllGatherSimplifier::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   bool changed = false;

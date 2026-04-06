@@ -30,7 +30,7 @@ namespace tensorflow {
 class RenamedDevice : public Device {
  public:
   static std::unique_ptr<Device> NewRenamedDevice(
-      const std::string& new_base, Device* underlying, bool owns_underlying,
+      const string& new_base, Device* underlying, bool owns_underlying,
       bool isolate_session_state,
       thread::ThreadPoolInterface* underlying_threadpool = nullptr);
 
@@ -155,7 +155,7 @@ class RenamedDevice : public Device {
   }
 
  private:
-  RenamedDevice(Device* underlying, DeviceAttributes attributes,
+  RenamedDevice(Device* underlying, const DeviceAttributes& attributes,
                 bool owns_underlying, bool isolate_session_state,
                 thread::ThreadPoolInterface* underlying_threadpool);
   Device* const underlying_device_;

@@ -23,7 +23,6 @@ limitations under the License.
 #include <utility>
 
 #include "absl/status/status.h"
-#include "absl/strings/string_view.h"
 #include "xla/service/custom_call_sharding_helper.h"
 #include "xla/service/spmd/spmd_partitioner.h"
 #include "xla/service/spmd/spmd_partitioner_util.h"
@@ -47,8 +46,7 @@ std::optional<xla::HloSharding> InspectShardingReadArgs(
     JAX_InspectSharding_Callback_Args* args) {
   xla::OpSharding proto;
   if (args->sharding_spec_size > std::numeric_limits<int>::max() ||
-      !proto.ParseFromString(
-          absl::string_view(args->sharding_spec, args->sharding_spec_size))) {
+      !proto.ParseFromArray(args->sharding_spec, args->sharding_spec_size)) {
     InspectShardingSetError(args,
                             "inspect_sharding: error parsing OpShardingProto");
     return std::nullopt;

@@ -17,7 +17,6 @@ limitations under the License.
 
 #include <utility>
 
-#include "absl/log/check.h"
 #include "tensorflow/core/common_runtime/dma_helper.h"
 #include "tensorflow/core/framework/tensor.h"
 #include "tsl/profiler/lib/traceme.h"

@@ -19,8 +19,7 @@ limitations under the License.
 #include <gtest/gtest.h>
 #include "xla/error_spec.h"
 #include "xla/literal_util.h"
-#include "xla/tests/hlo_pjrt_interpreter_reference_mixin.h"
-#include "xla/tests/hlo_pjrt_test_base.h"
+#include "xla/service/gpu/tests/gpu_codegen_test.h"
 #include "xla/tests/test_utils.h"
 #include "xla/tsl/platform/statusor.h"
 
@@ -28,7 +27,7 @@ namespace xla {
 namespace gpu {
 namespace {
 
-using RaggedDotTest = HloPjRtInterpreterReferenceMixin<HloPjRtTestBase>;
+using RaggedDotTest = GpuCodegenTest;
 
 TEST_F(RaggedDotTest, NonContracting) {
   const char* hlo_text = R"(

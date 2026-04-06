@@ -1,4 +1,3 @@
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//tensorflow:tensorflow.bzl", "VERSION")
 load("//tensorflow:tensorflow.default.bzl", "pybind_extension")
 

@@ -18,7 +18,6 @@ limitations under the License.
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
-#include <string>
 #include <vector>
 
 #include "absl/status/status.h"
@@ -40,9 +39,8 @@ namespace tensorflow {
 namespace cc_op {
 namespace {
 
-void WriteAllFuzzers(std::string root_location,
-                     std::vector<std::string> api_def_dirs,
-                     std::vector<std::string> op_names) {
+void WriteAllFuzzers(string root_location, std::vector<string> api_def_dirs,
+                     std::vector<string> op_names) {
   OpList ops;
   absl::StatusOr<ApiDefMap> api_def_map =
       LoadOpsAndApiDefs(ops, false, api_def_dirs);
@@ -62,7 +60,7 @@ void WriteAllFuzzers(std::string root_location,
       continue;
     }
 
-    OpInfo op_info(op_def, *api_def, std::vector<std::string>());
+    OpInfo op_info(op_def, *api_def, std::vector<string>());
     status.Update(env->NewWritableFile(
         root_location + "/" + op_def.name() + "_fuzz.cc", &fuzz_file));
     status.Update(
@@ -89,9 +87,9 @@ int main(int argc, char* argv[]) {
   for (int i = 1; i < argc; ++i) {
     fprintf(stdout, "Arg %d = %s\n", i, argv[i]);
   }
-  std::vector<std::string> api_def_srcs = tensorflow::str_util::Split(
+  std::vector<tensorflow::string> api_def_srcs = tensorflow::str_util::Split(
       argv[2], ",", tensorflow::str_util::SkipEmpty());
-  std::vector<std::string> op_names = tensorflow::str_util::Split(
+  std::vector<tensorflow::string> op_names = tensorflow::str_util::Split(
       argv[3], ",", tensorflow::str_util::SkipEmpty());
   tensorflow::cc_op::WriteAllFuzzers(argv[1], api_def_srcs, op_names);
   return 0;

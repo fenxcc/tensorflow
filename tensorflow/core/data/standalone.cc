@@ -162,7 +162,7 @@ absl::Status Dataset::FromGraph(Params params, const GraphDef& graph_def,
         return absl::OkStatus();
       }});
 
-  std::string fetch_node = "";
+  string fetch_node = "";
   for (const auto& node : graph_def.node()) {
     if (node.op() == "_Retval") {
       fetch_node = node.input(0);

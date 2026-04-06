@@ -13,16 +13,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
+#if defined(INTEL_MKL)
+
 #include "xla/service/cpu/onednn_memory_util.h"
 
-#include <cstdint>
-#include <sstream>
 #include <string>
-#include <vector>
 
-#include "absl/algorithm/container.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/str_cat.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/BasicBlock.h"
@@ -31,10 +27,7 @@ limitations under the License.
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
-#include "llvm/Support/raw_ostream.h"
 #include "xla/hlo/testlib/filecheck.h"
-#include "xla/layout_util.h"
-#include "xla/service/llvm_ir/ir_array.h"
 #include "xla/service/llvm_ir/llvm_util.h"
 #include "xla/shape.h"
 #include "xla/shape_util.h"
@@ -113,3 +106,5 @@ INSTANTIATE_TEST_SUITE_P(
 }  // namespace
 }  // namespace cpu
 }  // namespace xla
+
+#endif  // INTEL_MKL

@@ -399,8 +399,7 @@ TEST(KernelTest, CreateExecuteOpError) {
 
   EXPECT_THAT(
       execution_context.status(),
-      absl_testing::StatusIs(absl::StatusCode::kInternal,
-                             "test error\n\tError from kernel: TestError"));
+      ::tsl::testing::StatusIs(absl::StatusCode::kInternal, "test error"));
 }
 
 REGISTER_OP("TestAsyncIdentity")
@@ -641,7 +640,7 @@ TEST(KernelTest, AsyncExecuteOpCanCancell) {
   notification.WaitForNotification();
 
   EXPECT_THAT(execution_context.status(),
-              absl_testing::StatusIs(absl::StatusCode::kCancelled));
+              ::tsl::testing::StatusIs(absl::StatusCode::kCancelled));
 }
 
 mlrt::bc::Buffer CreateExecutableForSetGetResourceOp() {
@@ -830,8 +829,8 @@ TEST(KernelTest, Predicate) {
   mlrt::Execute(execution_context);
   EXPECT_THAT(
       execution_context.status(),
-      absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
-                             "variant cannot be converted to a boolean"));
+      ::tsl::testing::StatusIs(absl::StatusCode::kInvalidArgument,
+                               "variant cannot be converted to a boolean"));
 }
 
 mlrt::bc::Buffer CreateExecutableForPromiseAwaitOps() {
@@ -1318,7 +1317,7 @@ TEST(KernelTest, CancelCanEarlyReturn) {
   notification.WaitForNotification();
 
   EXPECT_THAT(execution_context.status(),
-              absl_testing::StatusIs(absl::StatusCode::kCancelled));
+              ::tsl::testing::StatusIs(absl::StatusCode::kCancelled));
   EXPECT_EQ(result.HasValue(), false);
 }
 
@@ -1527,12 +1526,12 @@ TEST(KernelTest, CancelInAsyncCanEarlyReturn) {
   notification.WaitForNotification();
 
   EXPECT_THAT(execution_context.status(),
-              absl_testing::StatusIs(absl::StatusCode::kCancelled));
+              ::tsl::testing::StatusIs(absl::StatusCode::kCancelled));
 
   ASSERT_TRUE(future.IsError());
 
   EXPECT_THAT(future.GetError(),
-              absl_testing::StatusIs(absl::StatusCode::kCancelled));
+              ::tsl::testing::StatusIs(absl::StatusCode::kCancelled));
 }
 
 mlrt::bc::Buffer CreateExecutableForTensorToInt32Op() {
@@ -1607,8 +1606,8 @@ TEST(KernelTest, TensorToInt32) {
     mlrt::Execute(execution_context);
     EXPECT_THAT(
         execution_context.status(),
-        absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
-                               "variant cannot be converted to a int32"));
+        ::tsl::testing::StatusIs(absl::StatusCode::kInvalidArgument,
+                                 "variant cannot be converted to a int32"));
   }
 }
 
@@ -1993,8 +1992,8 @@ TEST(KernelTest, MapFnOpError) {
   notification.WaitForNotification();
 
   EXPECT_THAT(execution_context.status(),
-              absl_testing::StatusIs(absl::StatusCode::kInternal,
-                                     "Test Error. First Error Index=0 of 1"));
+              ::tsl::testing::StatusIs(absl::StatusCode::kInternal,
+                                       "Test Error. First Error Index=0 of 1"));
 }
 
 TEST(KernelTest, MapFnOpErrorWithPromiseSet) {
@@ -2069,7 +2068,7 @@ TEST(KernelTest, MapFnOpErrorWithPromiseSet) {
 
   EXPECT_THAT(
       execution_context.status(),
-      absl_testing::StatusIs(absl::StatusCode::kInternal, "Test Error"));
+      ::tsl::testing::StatusIs(absl::StatusCode::kInternal, "Test Error"));
 }
 
 mlrt::bc::Buffer CreatePromiseReturnExecutable() {
@@ -2473,7 +2472,7 @@ TEST(KernelTest, AsyncWhileOpError) {
   notification.WaitForNotification();
   EXPECT_THAT(
       execution_context.status(),
-      absl_testing::StatusIs(absl::StatusCode::kInternal, "Test error"));
+      ::tsl::testing::StatusIs(absl::StatusCode::kInternal, "Test error"));
 }
 
 }  // namespace

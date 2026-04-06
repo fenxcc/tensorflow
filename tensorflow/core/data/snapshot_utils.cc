@@ -710,7 +710,7 @@ absl::Status Reader::MakeNestedDataset(
     datasets.push_back(
         new Dataset(DatasetContext(DatasetContext::Params(
                         {"SnapshotDatasetReader",
-                         absl::StrCat("SnapshotDatasetReader/_", i)})),
+                         strings::StrCat("SnapshotDatasetReader/_", i)})),
                     shard_dirs.at(i), compression_type, version, dtypes, shapes,
                     dataset_start_index));
     datasets.back()->Initialize(/*metadata=*/{});

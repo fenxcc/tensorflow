@@ -18,9 +18,6 @@ limitations under the License.
 
 #include <functional>
 
-#include "absl/container/flat_hash_set.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/string_view.h"
 #include "xla/hlo/ir/hlo_module.h"
 #include "xla/hlo/pass/hlo_pass_interface.h"
 
@@ -65,13 +62,13 @@ class TransposeFolding : public HloModulePass {
           AlwaysFoldTranspose);
   absl::string_view name() const override { return "transpose-folding"; }
 
-  static absl::StatusOr<bool> IsRowColumnTransposeDotOperand(
-      const HloInstruction& dot, int64_t operand_idx);
-
- protected:
-  absl::StatusOr<bool> RunImpl(
+  using HloPassInterface::Run;
+  absl::StatusOr<bool> Run(
       HloModule* module,
       const absl::flat_hash_set<absl::string_view>& execution_threads) override;
+
+  static absl::StatusOr<bool> IsRowColumnTransposeDotOperand(
+      const HloInstruction& dot, int64_t operand_idx);
 
  private:
   CanFoldTransposeOperand dot_can_fold_transpose_operand_;

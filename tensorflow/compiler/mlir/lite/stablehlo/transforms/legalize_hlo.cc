@@ -163,10 +163,9 @@ class ConvertNdConvOp : public OpConversionPattern<mhlo::ConvolutionOp> {
       return failure();
     }
 
-    // tf Convolution doesn't support quantized type or 8-bit integer type.
-    Type rhs_element_type = conv_op.getRhs().getType().getElementType();
-    if (mlir::isa<quant::QuantizedType>(rhs_element_type) ||
-        rhs_element_type.isInteger(8)) {
+    // tf Convolution doesn't support quantized type.
+    if (mlir::isa<quant::QuantizedType>(
+            conv_op.getRhs().getType().getElementType())) {
       return failure();
     }
 
@@ -2081,10 +2080,8 @@ class ConvertIotaOpToTfRange : public OpConversionPattern<mhlo::IotaOp> {
       ConversionPatternRewriter& rewriter) const final {
     RankedTensorType type =
         mlir::dyn_cast_or_null<RankedTensorType>(iota_op.getType());
-    // TF::RangeOp doesn't support UI16 and UI8.
-    if (!type || type.getElementType().isUnsignedInteger(16) ||
-        type.getElementType().isUnsignedInteger(8))
-      return failure();
+    // TF::RangeOp doesn't support UI16.
+    if (!type || type.getElementType().isUnsignedInteger(16)) return failure();
 
     const uint64_t dimension = iota_op.getIotaDimension();
     Type element_type = type.getElementType();

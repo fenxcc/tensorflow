@@ -32,31 +32,7 @@ limitations under the License.
 
 namespace xla {
 
-bool MemorySpacePropagation::RunOnComputation(HloComputation* computation) {
-  CHECK(dataflow_analysis_ != nullptr);
-  bool modified = false;
-  // Propagate the parameter subshapes.
-  for (int parameter_idx = 0; parameter_idx < computation->num_parameters();
-       ++parameter_idx) {
-    ShapeUtil::ForEachLeafShape(
-        computation->parameter_instruction(parameter_idx)->shape(),
-        [&](const Shape& sub_shape, const ShapeIndex& index) {
-          modified |= Propagate(
-              index, computation->parameter_instruction(parameter_idx),
-              sub_shape);
-        });
-  }
-  // Propagate output subshapes.
-  ShapeUtil::ForEachLeafShape(
-      computation->root_instruction()->shape(),
-      [&](const Shape& sub_shape, const ShapeIndex& index) {
-        modified |=
-            Propagate(index, computation->root_instruction(), sub_shape);
-      });
-  return modified;
-}
-
-absl::StatusOr<bool> MemorySpacePropagation::RunImpl(
+absl::StatusOr<bool> MemorySpacePropagation::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   bool modified = false;
@@ -124,13 +100,6 @@ bool MemorySpacePropagation::Propagate(ShapeIndexView index,
     shape->mutable_layout()->clear_split_configs();
     if (src_split_config.has_value()) {
       shape->mutable_layout()->add_split_configs(*src_split_config);
-    }
-
-    if (instruction->opcode() == HloOpcode::kDynamicUpdateSlice) {
-      auto op_0 = instruction->mutable_operand(0);
-      op_0->mutable_shape()->mutable_layout()->set_memory_space(
-          src_shape.layout().memory_space());
-      op_0->mutable_shape()->mutable_layout()->clear_split_configs();
     }
     modified = true;
 

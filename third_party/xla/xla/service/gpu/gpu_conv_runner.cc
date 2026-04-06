@@ -32,17 +32,15 @@ limitations under the License.
 #include "xla/hlo/ir/hlo_instructions.h"
 #include "xla/service/gpu/backend_configs.pb.h"
 #include "xla/service/gpu/cublas_cudnn.h"
-#include "xla/service/gpu/gpu_conv_runner.pb.h"
 #include "xla/service/gpu/stream_executor_util.h"
 #include "xla/shape.h"
 #include "xla/shape_util.h"
 #include "xla/stream_executor/device_memory.h"
 #include "xla/stream_executor/dnn.h"
 #include "xla/stream_executor/lazy_op_runner.h"
-#include "xla/stream_executor/stream.h"
-#include "xla/tsl/platform/statusor.h"
 #include "xla/util.h"
 #include "tsl/platform/ml_dtypes.h"
+#include "tsl/platform/statusor.h"
 
 namespace xla {
 namespace gpu {
@@ -69,6 +67,9 @@ absl::Status RunGpuConvUnfused(const GpuConvParams& params, se::Stream* stream,
                     params.config->conv_result_scale);
   }
 
+  TF_ASSIGN_OR_RETURN(se::dnn::ConvolutionKind kind,
+                      GetDNNConvKindFromCudnnConvKind(params.config->kind));
+
   TF_ASSIGN_OR_RETURN(
       se::dnn::DataType input_type,
       GetDNNDataTypeFromPrimitiveType(params.config->input_type));
@@ -85,7 +86,7 @@ absl::Status RunGpuConvUnfused(const GpuConvParams& params, se::Stream* stream,
     lazy_runner = &*local_runner;
   }
 
-  se::dnn::ConvOp::Config config{CudnnConvKindToProto(params.config->kind),
+  se::dnn::ConvOp::Config config{kind,
                                  input_type,
                                  output_type,
                                  params.config->input_descriptor,
@@ -111,6 +112,9 @@ absl::Status RunGpuConvGraph(const GpuConvParams& params, se::Stream* stream,
                     params.config->conv_result_scale);
   }
 
+  TF_ASSIGN_OR_RETURN(se::dnn::ConvolutionKind kind,
+                      GetDNNConvKindFromCudnnConvKind(params.config->kind));
+
   TF_ASSIGN_OR_RETURN(
       se::dnn::DataType input_type,
       GetDNNDataTypeFromPrimitiveType(params.config->input_type));
@@ -127,7 +131,7 @@ absl::Status RunGpuConvGraph(const GpuConvParams& params, se::Stream* stream,
     lazy_runner = &*local_runner;
   }
 
-  se::dnn::GraphConvOp::Config config{CudnnConvKindToProto(params.config->kind),
+  se::dnn::GraphConvOp::Config config{kind,
                                       input_type,
                                       output_type,
                                       params.config->input_descriptor,
@@ -651,38 +655,6 @@ absl::Status RunGpuConv(const gpu::GpuConvConfig& config,
     default:
       return Unimplemented("Unimplemented convolution");
   }
-}
-
-absl::StatusOr<GpuConvDescriptor> GpuConvDescriptor::FromProto(
-    const GpuConvDescriptorProto& proto) {
-  GpuConvDescriptor descriptor;
-  TF_ASSIGN_OR_RETURN(descriptor.kind, CudnnConvKindFromProto(proto.kind()));
-  descriptor.backend_config = proto.backend_config();
-  TF_ASSIGN_OR_RETURN(descriptor.operand0_shape,
-                      Shape::FromProto(proto.operand0_shape()));
-  TF_ASSIGN_OR_RETURN(descriptor.operand1_shape,
-                      Shape::FromProto(proto.operand1_shape()));
-  TF_ASSIGN_OR_RETURN(descriptor.result_shape,
-                      Shape::FromProto(proto.result_shape()));
-  descriptor.scratch_size = proto.scratch_size();
-  descriptor.window = proto.window();
-  descriptor.dnums = proto.dnums();
-  descriptor.feature_group_count = proto.feature_group_count();
-  return descriptor;
-}
-
-GpuConvDescriptorProto GpuConvDescriptor::ToProto() const {
-  GpuConvDescriptorProto proto;
-  proto.set_kind(CudnnConvKindToProto(kind));
-  *proto.mutable_backend_config() = backend_config;
-  *proto.mutable_operand0_shape() = operand0_shape.ToProto();
-  *proto.mutable_operand1_shape() = operand1_shape.ToProto();
-  *proto.mutable_result_shape() = result_shape.ToProto();
-  proto.set_scratch_size(scratch_size);
-  *proto.mutable_window() = window;
-  *proto.mutable_dnums() = dnums;
-  proto.set_feature_group_count(feature_group_count);
-  return proto;
 }
 
 }  // namespace gpu

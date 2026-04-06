@@ -28,7 +28,6 @@ limitations under the License.
 
 #include "absl/log/check.h"
 #include "absl/log/log.h"
-#include "absl/strings/str_cat.h"
 #define EIGEN_USE_THREADS
 
 #include <optional>
@@ -340,11 +339,12 @@ unsigned ThreadWorkSource::NonBlockingWorkShardingFactor() {
 }
 
 std::string ThreadWorkSource::ToString() {
-  return absl::StrCat("traceme_id = ", GetTracemeId(),
-                      ", inter queue size = ", TaskQueueSize(true),
-                      ", inter inflight = ", GetInflightTaskCount(true),
-                      ", intra queue size = ", TaskQueueSize(false),
-                      ", intra inflight = ", GetInflightTaskCount(false));
+  return tensorflow::strings::StrCat(
+      "traceme_id = ", GetTracemeId(),
+      ", inter queue size = ", TaskQueueSize(true),
+      ", inter inflight = ", GetInflightTaskCount(true),
+      ", intra queue size = ", TaskQueueSize(false),
+      ", intra inflight = ", GetInflightTaskCount(false));
 }
 
 RunHandlerThreadPool::RunHandlerThreadPool(
@@ -990,9 +990,9 @@ void RunHandlerPool::Impl::LogInfo() {
         ids_str += " ";
       }
 
-      absl::StrAppend(&times_str, (now - (*it)->start_time_us()) / 1000.0,
-                      " ms.");
-      absl::StrAppend(&ids_str, (*it)->tws()->GetTracemeId());
+      times_str += tensorflow::strings::StrCat(
+          (now - (*it)->start_time_us()) / 1000.0, " ms.");
+      ids_str += tensorflow::strings::StrCat((*it)->tws()->GetTracemeId());
       ++it;
     }
     VLOG(1) << "Elapsed times are: " << times_str;

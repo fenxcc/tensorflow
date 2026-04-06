@@ -38,10 +38,8 @@ limitations under the License.
 #include "absl/synchronization/mutex.h"
 #include "absl/types/span.h"
 #include "mlir/IR/BuiltinOps.h"
-#include "xla/future.h"
 #include "xla/hlo/builder/xla_computation.h"
 #include "xla/hlo/evaluator/hlo_evaluator.h"
-#include "xla/hlo/evaluator/hlo_evaluator_interface.h"
 #include "xla/hlo/ir/hlo_computation.h"
 #include "xla/hlo/ir/hlo_module.h"
 #include "xla/layout.h"
@@ -51,6 +49,7 @@ limitations under the License.
 #include "xla/pjrt/pjrt_compiler.h"
 #include "xla/pjrt/pjrt_device_description.h"
 #include "xla/pjrt/pjrt_executable.h"
+#include "xla/pjrt/pjrt_future.h"
 #include "xla/service/computation_placer.h"
 #include "xla/service/dynamic_dimension_inference.h"
 #include "xla/service/hlo_cost_analysis.h"
@@ -198,8 +197,8 @@ class InterpreterLiteralWrapperBuffer final : public PjRtBuffer {
         "InterpreterLiteralWrapperBuffer.");
   }
 
-  Future<> ToLiteral(MutableLiteralBase* literal) override {
-    return Future<>(ShapeUtil::ForEachSubshapeWithStatus(
+  PjRtFuture<> ToLiteral(MutableLiteralBase* literal) override {
+    return PjRtFuture<>(ShapeUtil::ForEachSubshapeWithStatus(
         literal_.shape(),
         [&](const Shape& subshape, const ShapeIndex& index) -> absl::Status {
           if (!subshape.IsArray()) {
@@ -220,14 +219,14 @@ class InterpreterLiteralWrapperBuffer final : public PjRtBuffer {
         }));
   }
 
-  Future<> LazyToLiteral(
-      absl::AnyInvocable<Future<MutableLiteralBase*>() &&> generator) override {
+  PjRtFuture<> LazyToLiteral(
+      absl::AnyInvocable<absl::StatusOr<MutableLiteralBase*>() &&> generator)
+      override {
     // Underlying buffer is always ready, so we can immediately call the
     // generator.
-    Future<MutableLiteralBase*> future = std::move(generator)();
-    const absl::StatusOr<MutableLiteralBase*>& literal = future.Await();
+    absl::StatusOr<MutableLiteralBase*> literal = std::move(generator)();
     if (!literal.ok()) {
-      return Future<>(literal.status());
+      return PjRtFuture<>(literal.status());
     }
     return ToLiteral(*literal);
   }
@@ -236,9 +235,9 @@ class InterpreterLiteralWrapperBuffer final : public PjRtBuffer {
     return literal_.size_bytes();
   }
 
-  Future<> CopyRawToHost(void* dst, int64_t offset,
-                         int64_t transfer_size) override {
-    return Future<>(absl::UnimplementedError(
+  PjRtFuture<> CopyRawToHost(void* dst, int64_t offset,
+                             int64_t transfer_size) override {
+    return PjRtFuture<>(absl::UnimplementedError(
         "CopyRawToHost not supported by InterpreterLiteralWrapperBuffer."));
   }
 
@@ -267,13 +266,15 @@ class InterpreterLiteralWrapperBuffer final : public PjRtBuffer {
         "InterpreterLiteralWrapperBuffer.");
   }
 
-  void CopyToRemoteDevice(Future<std::string> serialized_descriptor,
+  void CopyToRemoteDevice(PjRtFuture<std::string> serialized_descriptor,
                           RemoteSendCallback on_done) override {
     LOG(ERROR) << "InterpreterLiteralWrapperBuffer::CopyToRemoteDevice was "
                   "called but is not implemented.";
   }
 
-  Future<> GetReadyFuture() override { return Future<>(absl::OkStatus()); }
+  PjRtFuture<> GetReadyFuture() override {
+    return PjRtFuture<>(absl::OkStatus());
+  }
 
   bool IsOnCpu() const override { return true; }
 
@@ -291,7 +292,7 @@ class InterpreterLoadedExecutable final : public PjRtLoadedExecutable {
  public:
   explicit InterpreterLoadedExecutable(
       PjRtClient* absl_nonnull client, std::unique_ptr<HloModule> hlo_module,
-      std::unique_ptr<HloEvaluatorInterface> hlo_evaluator,
+      std::unique_ptr<HloEvaluator> hlo_evaluator,
       std::optional<DynamicDimensionInference> dynamic_dimension_inference,
       std::shared_ptr<DeviceAssignment> device_assignment,
       CompileOptions compile_options,
@@ -354,16 +355,19 @@ class InterpreterLoadedExecutable final : public PjRtLoadedExecutable {
   absl::StatusOr<std::vector<std::vector<std::unique_ptr<PjRtBuffer>>>> Execute(
       absl::Span<const std::vector<PjRtBuffer*>> argument_handles,
       const ExecuteOptions& options,
-      std::optional<std::vector<Future<>>>& returned_futures) const override;
+      std::optional<std::vector<PjRtFuture<>>>& returned_futures)
+      const override;
 
   absl::StatusOr<std::vector<std::unique_ptr<PjRtBuffer>>> ExecuteSharded(
       absl::Span<PjRtBuffer* const> argument_handles, PjRtDevice* device,
-      const ExecuteOptions& options, std::optional<Future<>>& returned_future,
+      const ExecuteOptions& options,
+      std::optional<PjRtFuture<>>& returned_future,
       bool fill_future) const override;
 
   absl::StatusOr<std::vector<std::unique_ptr<PjRtBuffer>>> ExecutePortable(
       absl::Span<PjRtBuffer* const> argument_handles, PjRtDevice* device,
-      const ExecuteOptions& options, std::optional<Future<>>& returned_future,
+      const ExecuteOptions& options,
+      std::optional<PjRtFuture<>>& returned_future,
       bool fill_future) const override;
 
   void Delete() override { hlo_module_ = nullptr; }
@@ -379,7 +383,7 @@ class InterpreterLoadedExecutable final : public PjRtLoadedExecutable {
   PjRtClient* client_ = nullptr;
   std::shared_ptr<HloModule> hlo_module_;
   mutable absl::Mutex hlo_evaluator_lock_;
-  std::unique_ptr<HloEvaluatorInterface> hlo_evaluator_
+  std::unique_ptr<HloEvaluator> hlo_evaluator_
       ABSL_PT_GUARDED_BY(hlo_evaluator_lock_);
   std::optional<DynamicDimensionInference> dynamic_dimension_inference_;
   std::shared_ptr<DeviceAssignment> device_assignment_;
@@ -393,7 +397,7 @@ class InterpreterClient final : public PjRtClient {
   InterpreterClient()
       : InterpreterClient([]() { return std::make_unique<HloEvaluator>(); }) {}
   explicit InterpreterClient(
-      absl::AnyInvocable<std::unique_ptr<HloEvaluatorInterface>() const>
+      absl::AnyInvocable<std::unique_ptr<HloEvaluator>() const>
           hlo_evaluator_factory)
       : hlo_evaluator_factory_(std::move(hlo_evaluator_factory)),
         interpreter_device_{this},
@@ -477,7 +481,7 @@ class InterpreterClient final : public PjRtClient {
   absl::StatusOr<std::unique_ptr<PjRtLoadedExecutable>> RunBackend(
       std::unique_ptr<HloModule> hlo_module, CompileOptions& options);
 
-  absl::AnyInvocable<std::unique_ptr<HloEvaluatorInterface>() const>
+  absl::AnyInvocable<std::unique_ptr<HloEvaluator>() const>
       hlo_evaluator_factory_;
   InterpreterDevice interpreter_device_;
   InterpreterMemorySpace interpreter_memory_space_;

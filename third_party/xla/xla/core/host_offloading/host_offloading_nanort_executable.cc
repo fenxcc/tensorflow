@@ -24,8 +24,6 @@ limitations under the License.
 
 #include "absl/base/attributes.h"
 #include "absl/base/const_init.h"
-#include "absl/base/no_destructor.h"
-#include "absl/base/optimization.h"
 #include "absl/container/inlined_vector.h"
 #include "absl/log/check.h"
 #include "absl/log/log.h"
@@ -39,7 +37,6 @@ limitations under the License.
 #include "xla/backends/cpu/nanort/nanort_executable.h"
 #include "xla/core/host_offloading/host_offloading_buffer.h"
 #include "xla/core/host_offloading/host_offloading_executable.h"
-#include "xla/core/host_offloading/host_offloading_executable.pb.h"
 #include "xla/core/host_offloading/host_offloading_layout_analysis.h"
 #include "xla/debug_options_flags.h"
 #include "xla/hlo/builder/xla_computation.h"
@@ -66,12 +63,13 @@ limitations under the License.
 
 namespace xla {
 
+namespace {
 // An upper bound on the number of threads to use for intra-op parallelism. It
 // is nearly impossible to utilize efficiently more than 256 threads for compute
 // intensive operations that are supposed to run inside the intra-op threadpool.
 static const size_t kMaxIntraOpThreads = 256;
 
-static tsl::ThreadOptions GetIntraOpThreadOptions() {
+static tsl::ThreadOptions GetThreadOptions() {
   tsl::ThreadOptions thread_options;
   // On Mac OS the default stack size is 512KiB, which is too small for some
   // BLAS and LAPACK functions (https://github.com/google/jax/issues/20428).
@@ -81,7 +79,7 @@ static tsl::ThreadOptions GetIntraOpThreadOptions() {
   return thread_options;
 }
 
-static size_t GetIntraOpThreadPoolSize() {
+static size_t GetEigenThreadPoolSize() {
   // By default we fix the number of devices to one.  However we do let the user
   // override this behavior to help run tests on the host that run models in
   // parallel across multiple devices, e.g. pmap.
@@ -91,12 +89,7 @@ static size_t GetIntraOpThreadPoolSize() {
   return std::min(num_threads, kMaxIntraOpThreads);
 }
 
-static tsl::thread::ThreadPool& GetIntraOpThreadPool() {
-  static absl::NoDestructor<tsl::thread::ThreadPool> intra_op_thread_pool(
-      tsl::Env::Default(), GetIntraOpThreadOptions(),
-      "host-offloading-intra-op", GetIntraOpThreadPoolSize());
-  return *intra_op_thread_pool;
-}
+}  // namespace
 
 HostOffloadingNanoRtExecutable::HostOffloadingNanoRtExecutable(
     std::string name, ProgramShape program_shape,
@@ -108,10 +101,13 @@ HostOffloadingNanoRtExecutable::HostOffloadingNanoRtExecutable(
       program_shape_(std::move(program_shape)),
       alias_config_(std::move(alias_config)),
       executable_(std::move(executable)),
+      eigen_intraop_pool_(tsl::Env::Default(), GetThreadOptions(),
+                          "XLAEigenNanoRtHostOffloading",
+                          GetEigenThreadPoolSize()),
+      eigen_intraop_device_(eigen_intraop_pool_.AsEigenThreadPool(),
+                            eigen_intraop_pool_.NumThreads()),
       needs_layout_conversion_(needs_layout_conversion),
-      device_assignment_(std::move(device_assignment)),
-      intra_op_device_(GetIntraOpThreadPool().AsEigenThreadPool(),
-                       GetIntraOpThreadPool().NumThreads()) {}
+      device_assignment_(std::move(device_assignment)) {}
 
 namespace {
 
@@ -125,7 +121,7 @@ ABSL_CONST_INIT absl::Mutex host_offloading_client_mutex(absl::kConstInit);
 absl::StatusOr<xla::cpu::NanoRtClient*> GetHostOffloadingNanoRtClient() {
   static xla::cpu::NanoRtClient* client = nullptr;
 
-  absl::MutexLock lock(host_offloading_client_mutex);
+  absl::MutexLock lock(&host_offloading_client_mutex);
   if (client != nullptr) {
     return client;
   }
@@ -143,48 +139,42 @@ HostOffloadingNanoRtExecutable::LoadFromProto(
   TF_RET_CHECK(proto.executable_type() ==
                HostOffloadingExecutableProto::EXECUTABLE_TYPE_NANORT);
 
-  auto& hlo_module_proto =
-      proto.has_aot_compilation_result()
-          ? proto.aot_compilation_result().hlo_module().hlo_module()
-          : proto.hlo_module();
-
   VLOG(3) << "Load NanoRt host offloading executable: name="
-          << hlo_module_proto.name();
+          << proto.hlo_module().name();
 
   TraceMe trace([&] {
     return TraceMeEncode("HostOffloadingNanoRtExecutable::LoadFromProto",
-                         {{"name", hlo_module_proto.name()}});
+                         {{"name", proto.hlo_module().name()}});
   });
 
   // We keep program shape and alias config of the original HLO module and not
-  // the destination-passing-style module with extra output parameters.
+  // the destination-passing-styFle module with extra output parameters.
   TF_ASSIGN_OR_RETURN(
       ProgramShape program_shape,
-      ProgramShape::FromProto(hlo_module_proto.host_program_shape()));
-
+      ProgramShape::FromProto(proto.hlo_module().host_program_shape()));
   TF_ASSIGN_OR_RETURN(
       auto alias_config,
       HloInputOutputAliasConfig::CreateFromProto(
-          program_shape.result(), hlo_module_proto.input_output_alias()));
+          program_shape.result(), proto.hlo_module().input_output_alias()));
 
-  std::unique_ptr<xla::cpu::NanoRtExecutable> executable;
+  TF_ASSIGN_OR_RETURN(std::unique_ptr<HloModule> hlo_module,
+                      HloModule::CreateFromProto(
+                          proto.hlo_module(), HloModuleConfig(program_shape)));
 
-  if (proto.has_aot_compilation_result()) {
-    TF_ASSIGN_OR_RETURN(executable,
-                        xla::cpu::NanoRtExecutable::Create(
-                            proto.aot_compilation_result(), program_shape));
-  } else {
-    XlaComputation computation;
-    computation = XlaComputation(proto.hlo_module());
+  XlaComputation computation;
+  computation = XlaComputation(proto.hlo_module());
 
-    TF_ASSIGN_OR_RETURN(xla::cpu::NanoRtClient * client,
-                        GetHostOffloadingNanoRtClient());
+  TF_ASSIGN_OR_RETURN(
+      bool needs_layout_conversion,
+      HostOffloadingLayoutAnalysis::NeedsLayoutConversion(hlo_module.get()));
 
-    TF_ASSIGN_OR_RETURN(executable, client->Compile(computation));
-  }
+  TF_ASSIGN_OR_RETURN(xla::cpu::NanoRtClient * client,
+                      GetHostOffloadingNanoRtClient());
 
   // TODO(basioli): Add support for compile options.
   CompileOptions compile_options;
+  TF_ASSIGN_OR_RETURN(std::unique_ptr<xla::cpu::NanoRtExecutable> executable,
+                      client->Compile(computation));
 
   std::shared_ptr<DeviceAssignment> device_assignment;
   int num_replicas;
@@ -198,27 +188,18 @@ HostOffloadingNanoRtExecutable::LoadFromProto(
       },
       &num_replicas, &num_partitions, &device_assignment));
 
-  TF_ASSIGN_OR_RETURN(std::unique_ptr<HloModule> hlo_module,
-                      HloModule::CreateFromProto(
-                          proto.hlo_module(), HloModuleConfig(program_shape)));
-
-  TF_ASSIGN_OR_RETURN(
-      bool needs_layout_conversion,
-      HostOffloadingLayoutAnalysis::NeedsLayoutConversion(hlo_module.get()));
-
   return absl::WrapUnique(new HostOffloadingNanoRtExecutable(
-      hlo_module_proto.name(),
+      proto.hlo_module().name(),
       executable->program_shape() ? *executable->program_shape()
                                   : program_shape,
       std::move(alias_config), std::move(executable), needs_layout_conversion,
       std::move(device_assignment)));
 }
 
-tsl::AsyncValueRef<HostOffloadingExecutable::ExecuteEvent>
-HostOffloadingNanoRtExecutable::Execute(
+absl::Status HostOffloadingNanoRtExecutable::Execute(
     absl::Span<const ShapeTree<HostOffloadingBuffer>> parameters,
     const xla::ShapeTree<HostOffloadingBuffer>& result,
-    const ExecuteOptions& execute_options) {
+    const ExecuteOptions& execute_options, OnResultReady) {
   VLOG(3) << "Execute NanoRt host offloading executable: name=" << name_;
 
   TraceMe trace([&] {
@@ -260,7 +241,7 @@ HostOffloadingNanoRtExecutable::Execute(
     nanort_execute_options.set_ffi_context(
         &execute_options.context->ffi_context());
   }
-  nanort_execute_options.set_intra_op_thread_pool(&intra_op_device_);
+  nanort_execute_options.set_intra_op_thread_pool(&eigen_intraop_device_);
   nanort_execute_options.set_launch_id(execute_options.launch_id);
 
   // We assume that for host offloading computation we have a single device.
@@ -270,26 +251,20 @@ HostOffloadingNanoRtExecutable::Execute(
 
   nanort_execute_options.set_device_assignment(device_assignment_.get());
 
-  auto temp_buffer =
-      std::make_unique<xla::cpu::NanoRtExecutable::ManagedTemp<128>>(
-          executable_->temp_buffer_size());
-
+  xla::cpu::NanoRtExecutable::ManagedTemp<128> temp_buffer(
+      executable_->temp_buffer_size());
   auto execute_event = executable_->Execute(
-      arguments, nanort_results, *temp_buffer, nanort_execute_options);
+      arguments, nanort_results, temp_buffer, nanort_execute_options);
 
-  // Avoid creating a callback if the computation is already done.
-  if (ABSL_PREDICT_TRUE(execute_event.IsAvailable())) {
-    return execute_event;
+  // TODO(b/409478175): Once OnResultReady is implemented we can use it for non
+  // blocking execution.
+  tsl::BlockUntilReady(execute_event);
+
+  if (execute_event.IsError()) {
+    return execute_event.GetError();
   }
 
-  // Keep arguments to Execute alive until the computation is done.
-  execute_event.AndThen([arguments = std::move(arguments),
-                         nanort_results = std::move(nanort_results),
-                         temp_buffer = std::move(temp_buffer),
-                         nanort_execute_options = std::move(
-                             nanort_execute_options)](absl::Status status) {});
-
-  return execute_event;
+  return absl::OkStatus();
 }
 
 }  // namespace xla

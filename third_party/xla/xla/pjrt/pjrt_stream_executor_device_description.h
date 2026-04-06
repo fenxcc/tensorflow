@@ -25,16 +25,11 @@ namespace xla {
 
 class PjRtStreamExecutorDeviceDescription : public PjRtDeviceDescription {
  public:
-  PjRtStreamExecutorDeviceDescription(int id, int local_device_id,
-                                      int process_index,
-                                      int process_index_in_partition,
-                                      int partition_index,
+  PjRtStreamExecutorDeviceDescription(int id, int process_index,
                                       std::string device_kind)
       : id_(id),
         process_index_(process_index),
-        device_kind_(std::move(device_kind)),
-        coords_(
-            {partition_index, process_index_in_partition, local_device_id}) {}
+        device_kind_(std::move(device_kind)) {}
 
   int id() const override { return id_; }
 
@@ -64,6 +59,8 @@ class PjRtStreamExecutorDeviceDescription : public PjRtDeviceDescription {
 
   void SetToString(std::string to_string) { to_string_ = std::move(to_string); }
 
+  void SetCoords(std::array<int, 1> coords) { coords_ = coords; }
+
  private:
   const int id_;
   const int process_index_;
@@ -71,7 +68,7 @@ class PjRtStreamExecutorDeviceDescription : public PjRtDeviceDescription {
   std::string debug_string_ = "<unknown SE device>";
   std::string to_string_ = "<unknown SE device>";
   absl::flat_hash_map<std::string, PjRtDeviceAttribute> attributes_;
-  const std::array<int, 3> coords_;
+  std::array<int, 1> coords_;
 };
 }  // namespace xla
 

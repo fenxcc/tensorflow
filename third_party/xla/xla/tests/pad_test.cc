@@ -16,11 +16,8 @@ limitations under the License.
 #include <array>
 #include <cstdint>
 #include <memory>
-#include <utility>
 #include <vector>
 
-#include "absl/types/span.h"
-#include "xla/array.h"
 #include "xla/array2d.h"
 #include "xla/array3d.h"
 #include "xla/array4d.h"
@@ -30,26 +27,20 @@ limitations under the License.
 #include "xla/hlo/builder/xla_computation.h"
 #include "xla/layout.h"
 #include "xla/layout_util.h"
-#include "xla/literal.h"
 #include "xla/literal_util.h"
 #include "xla/reference_util.h"
-#include "xla/tests/client_library_test_runner_mixin.h"
-#include "xla/tests/hlo_pjrt_interpreter_reference_mixin.h"
-#include "xla/tests/hlo_pjrt_test_base.h"
-#include "xla/tsl/platform/test.h"
+#include "xla/tests/client_library_test_base.h"
 #include "xla/util.h"
 #include "xla/xla_data.pb.h"
+#include "tsl/platform/test.h"
 
 namespace xla {
 namespace {
 
-constexpr std::array<PrimitiveType, 4> test_type_params{F32, BF16, F8E5M2,
-                                                        F8E4M3FN};
+static std::array<PrimitiveType, 4> test_type_params{F32, BF16, F8E5M2,
+                                                     F8E4M3FN};
 
-constexpr ErrorSpec kErrorSpec(1e-5, 1e-5);
-
-class PadTest : public ClientLibraryTestRunnerMixin<
-                    HloPjRtInterpreterReferenceMixin<HloPjRtTestBase>> {
+class PadTest : public ClientLibraryTestBase {
  protected:
   PadTest() {
     // Initializes the padding configuration used for R4 tests.
@@ -73,50 +64,16 @@ class PadTest : public ClientLibraryTestRunnerMixin<
     dimension3->set_interior_padding(0);
   }
 
-  void TearDown() override {
-    ASSERT_FALSE(!params_were_used_ && !params_.empty())
-        << "AddParam() was used to add parameters, but those parameters were "
-           "never used for execution. Please remove the AddParam() calls or "
-           "ensure that you call AddParamArgumentPointers().";
-  }
-
-  // Convenience function to help us port tests from ClientLibraryTestBase.
-  // Usually AddParam should be replaced with Parameter() and an appropriate
-  // literal, but there are too many of these in this test.
-  XlaOp AddParam(Literal literal, XlaBuilder* builder) {
-    Literal converted_literal = MaybeConvertLiteralToTestType(literal);
-    const Shape shape = converted_literal.shape();
-    params_.push_back(std::move(converted_literal));
-    return Parameter(builder, params_.size() - 1, shape, "");
-  }
-
-  template <class T>
-  XlaOp AddParam(const Array<T>& argument, XlaBuilder* builder) {
-    return AddParam(LiteralUtil::CreateFromArray(argument), builder);
-  }
-
-  std::vector<const Literal*> AddParamArgumentPointers() {
-    params_were_used_ = true;
-    std::vector<const Literal*> ptrs;
-    ptrs.reserve(params_.size());
-    for (const Literal& param : params_) {
-      ptrs.push_back(&param);
-    }
-    return ptrs;
-  }
-
   // Padding configuration for R4 that only pads dimension 0 and 1.
   PaddingConfig r4_padding_on_dim0_dim1_;
-
- private:
-  std::vector<Literal> params_;
-  bool params_were_used_ = false;
 };
 
 class PadTestFloat : public PadTest,
                      public ::testing::WithParamInterface<PrimitiveType> {
  protected:
   PadTestFloat() { set_float_type(GetParam()); }
+
+  ErrorSpec DefaultErrorSpec() const { return ErrorSpec(1e-5, 1e-5); }
 };
 
 // Tests a Pad() with a zero-element input and output.
@@ -131,7 +88,7 @@ TEST_P(PadTestFloat, Pad1DS0ToS0Array) {
 
   Pad(AddParam(LiteralUtil::CreateR1<float>({}), &b),
       AddParam(LiteralUtil::CreateR0<float>(0.1), &b), padding_config);
-  ComputeAndCompareR1<float>(&b, {}, AddParamArgumentPointers(), kErrorSpec);
+  ComputeAndCompareR1<float>(&b, {}, {}, DefaultErrorSpec());
 }
 
 // Tests a Pad() with a zero-element input but a non-zero-element output.
@@ -146,8 +103,8 @@ TEST_P(PadTestFloat, Pad1DS0ToS5Array) {
 
   Pad(AddParam(LiteralUtil::CreateR1<float>({}), &b),
       AddParam(LiteralUtil::CreateR0<float>(0.1), &b), padding_config);
-  ComputeAndCompareR1<float>(&b, std::vector<float>(5, 0.1),
-                             AddParamArgumentPointers(), kErrorSpec);
+  ComputeAndCompareR1<float>(&b, std::vector<float>(5, 0.1), {},
+                             DefaultErrorSpec());
 }
 
 TEST_P(PadTestFloat, Pad1DS3Array) {
@@ -162,8 +119,7 @@ TEST_P(PadTestFloat, Pad1DS3Array) {
   Pad(AddParam(LiteralUtil::CreateR1<float>({1, 2, 3}), &b),
       AddParam(LiteralUtil::CreateR0<float>(0.1), &b), padding_config);
   std::vector<float> expected({0.1, 0.1, 0.1, 1, 0.1, 2, 0.1, 3});
-  ComputeAndCompareR1<float>(&b, expected, AddParamArgumentPointers(),
-                             kErrorSpec);
+  ComputeAndCompareR1<float>(&b, expected, {}, DefaultErrorSpec());
 }
 
 TEST_P(PadTestFloat, Pad4D_2x0x3x2_FloatArray) {
@@ -171,8 +127,8 @@ TEST_P(PadTestFloat, Pad4D_2x0x3x2_FloatArray) {
   Pad(AddParam(Array4D<float>(2, 0, 3, 2), &b),
       AddParam(LiteralUtil::CreateR0<float>(1.5), &b),
       r4_padding_on_dim0_dim1_);
-  ComputeAndCompareR4<float>(&b, Array4D<float>(5, 2, 3, 2, 1.5f),
-                             AddParamArgumentPointers(), kErrorSpec);
+  ComputeAndCompareR4<float>(&b, Array4D<float>(5, 2, 3, 2, 1.5f), {},
+                             DefaultErrorSpec());
 }
 
 TEST_P(PadTestFloat, Pad4DFloat_1x1x3x2_Array) {
@@ -196,8 +152,7 @@ TEST_P(PadTestFloat, Pad4DFloat_1x1x3x2_Array) {
   (*expected)(1, 0, 1, 1) = 4.0f;
   (*expected)(1, 0, 2, 0) = 5.0f;
   (*expected)(1, 0, 2, 1) = 6.0f;
-  ComputeAndCompareR4<float>(&b, *expected, AddParamArgumentPointers(),
-                             kErrorSpec);
+  ComputeAndCompareR4<float>(&b, *expected, {}, DefaultErrorSpec());
 }
 
 TEST_P(PadTestFloat, Pad4DFloatArrayWithInteriorPadding) {
@@ -217,8 +172,7 @@ TEST_P(PadTestFloat, Pad4DFloatArrayWithInteriorPadding) {
   (*expected)(4, 2, 0, 0) = 4.0f;
   (*expected)(7, 0, 0, 0) = 5.0f;
   (*expected)(7, 2, 0, 0) = 6.0f;
-  ComputeAndCompareR4<float>(&b, *expected, AddParamArgumentPointers(),
-                             ErrorSpec(0.0001));
+  ComputeAndCompareR4<float>(&b, *expected, {}, ErrorSpec(0.0001));
 }
 
 TEST_P(PadTestFloat, Pad4DFloatArrayMinorFirstSmall) {
@@ -249,7 +203,7 @@ TEST_P(PadTestFloat, Pad4DFloatArrayMinorFirstSmall) {
   auto input = LiteralUtil::CreateR4FromArray4D<float>(input_array);
   input = input.Relayout(layout);
 
-  Pad(AddParam(std::move(input), &b),
+  Pad(AddParam(input, &b),
       AddParam(LiteralUtil::CreateR0<float>(pad_value), &b), padding_config);
 
   Array4D<float> expected_array(1, 1, 5, 8);
@@ -260,8 +214,7 @@ TEST_P(PadTestFloat, Pad4DFloatArrayMinorFirstSmall) {
   expected_array(0, 0, 3, 2) = 4.0f;
   expected_array(0, 0, 3, 3) = 5.0f;
   expected_array(0, 0, 3, 4) = 6.0f;
-  ComputeAndCompareR4<float>(&b, expected_array, AddParamArgumentPointers(),
-                             ErrorSpec(0.0001));
+  ComputeAndCompareR4<float>(&b, expected_array, {}, ErrorSpec(0.0001));
 }
 
 TEST_P(PadTestFloat, Pad4DFloatArrayMinorFirstNonTrivialMinorDimensions) {
@@ -296,7 +249,7 @@ TEST_P(PadTestFloat, Pad4DFloatArrayMinorFirstNonTrivialMinorDimensions) {
   auto input = LiteralUtil::CreateR4FromArray4D<float>(input_array);
   input = input.Relayout(layout);
 
-  Pad(AddParam(std::move(input), &b),
+  Pad(AddParam(input, &b),
       AddParam(LiteralUtil::CreateR0<float>(pad_value), &b), padding_config);
 
   Array4D<float> expected_array(1, 25, 17, 11);
@@ -304,8 +257,7 @@ TEST_P(PadTestFloat, Pad4DFloatArrayMinorFirstNonTrivialMinorDimensions) {
   expected_array(0, 0, 2, 2) = 1.0f;
   expected_array(0, 24, 14, 8) = 2.0f;
   expected_array(0, 17, 6, 7) = 3.0f;
-  ComputeAndCompareR4<float>(&b, expected_array, AddParamArgumentPointers(),
-                             ErrorSpec(0.0001));
+  ComputeAndCompareR4<float>(&b, expected_array, {}, ErrorSpec(0.0001));
 }
 
 TEST_F(PadTest, Pad4DU8Array) {
@@ -329,7 +281,7 @@ TEST_F(PadTest, Pad4DU8Array) {
   (*expected)(1, 0, 1, 1) = 4;
   (*expected)(1, 0, 2, 0) = 5;
   (*expected)(1, 0, 2, 1) = 6;
-  ComputeAndCompareR4<uint8_t>(&b, *expected, AddParamArgumentPointers());
+  ComputeAndCompareR4<uint8_t>(&b, *expected, {});
 }
 
 TEST_F(PadTest, Pad4DPredArray) {
@@ -356,7 +308,7 @@ TEST_F(PadTest, Pad4DPredArray) {
   (*expected)(1, 0, 1, 1) = 1;
   (*expected)(1, 0, 2, 0) = 1;
   (*expected)(1, 0, 2, 1) = 1;
-  ComputeAndCompareR4<int32_t>(&b, *expected, AddParamArgumentPointers());
+  ComputeAndCompareR4<int32_t>(&b, *expected, {});
 }
 
 TEST_P(PadTestFloat, Large2DPad) {
@@ -375,8 +327,7 @@ TEST_P(PadTestFloat, Large2DPad) {
   Pad(input, AddParam(LiteralUtil::CreateR0<float>(0.0f), &b), padding_config);
 
   auto expected = ReferenceUtil::PadArray2D(*ones, padding_config, 0.0f);
-  ComputeAndCompareR2<float>(&b, *expected, AddParamArgumentPointers(),
-                             kErrorSpec);
+  ComputeAndCompareR2<float>(&b, *expected, {}, DefaultErrorSpec());
 }
 
 TEST_P(PadTestFloat, AllTypes2DPad) {
@@ -398,8 +349,7 @@ TEST_P(PadTestFloat, AllTypes2DPad) {
   Pad(input, AddParam(LiteralUtil::CreateR0<float>(3.14f), &b), padding_config);
 
   auto expected = ReferenceUtil::PadArray2D(*operand, padding_config, 3.14f);
-  ComputeAndCompareR2<float>(&b, *expected, AddParamArgumentPointers(),
-                             kErrorSpec);
+  ComputeAndCompareR2<float>(&b, *expected, {}, DefaultErrorSpec());
 }
 
 TEST_P(PadTestFloat, High2DPad) {
@@ -426,8 +376,7 @@ TEST_P(PadTestFloat, High2DPad) {
 
   auto expected = ReferenceUtil::PadArray2D(*operand, padding_config, 2.718f);
 
-  ComputeAndCompareR2<float>(&b, *expected, AddParamArgumentPointers(),
-                             kErrorSpec);
+  ComputeAndCompareR2<float>(&b, *expected, {}, DefaultErrorSpec());
 }
 
 TEST_P(PadTestFloat, NegativePadding2D) {
@@ -455,8 +404,7 @@ TEST_P(PadTestFloat, NegativePadding2D) {
 
   auto expected = ReferenceUtil::PadArray2D(*operand, padding_config, 2.718f);
 
-  ComputeAndCompareR2<float>(&b, *expected, AddParamArgumentPointers(),
-                             kErrorSpec);
+  ComputeAndCompareR2<float>(&b, *expected, {}, DefaultErrorSpec());
 }
 
 TEST_P(PadTestFloat, NegativeAndInteriorPadding2D) {
@@ -484,8 +432,7 @@ TEST_P(PadTestFloat, NegativeAndInteriorPadding2D) {
 
   auto expected = ReferenceUtil::PadArray2D(*operand, padding_config, 2.718f);
 
-  ComputeAndCompareR2<float>(&b, *expected, AddParamArgumentPointers(),
-                             kErrorSpec);
+  ComputeAndCompareR2<float>(&b, *expected, {}, DefaultErrorSpec());
 }
 
 // Regression test for b/31827337.
@@ -508,8 +455,7 @@ TEST_P(PadTestFloat, ReducePad) {
                            {{2.0, 2.0}, {2.0, 2.0}},
                            {{2.0, 2.0}, {2.0, 2.0}},
                            {{0.0, 0.0}, {0.0, 0.0}}});
-  ComputeAndCompareR3<float>(&b, expected, AddParamArgumentPointers(),
-                             kErrorSpec);
+  ComputeAndCompareR3<float>(&b, expected, {}, DefaultErrorSpec());
 }
 
 INSTANTIATE_TEST_CASE_P(PadTestFloatInstantiation, PadTestFloat,

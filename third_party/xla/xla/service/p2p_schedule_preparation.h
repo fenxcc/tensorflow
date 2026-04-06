@@ -193,8 +193,10 @@ class P2PSchedulePreparation : public HloModulePass {
     return "latency-hiding-scheduler-preparation";
   }
 
- protected:
-  absl::StatusOr<bool> RunImpl(
+  using HloPassInterface::Run;
+  // Runs P2PSchedulePreparation pass on computations in 'module'.
+  // Returns whether the 'module' was changed.
+  absl::StatusOr<bool> Run(
       HloModule* module,
       const absl::flat_hash_set<absl::string_view>& execution_threads) override;
 };

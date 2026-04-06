@@ -69,13 +69,13 @@ absl::Status CheckValidPadding(Padding padding_type,
   return absl::OkStatus();
 }
 
-std::string GetPaddingAttrString() { return "padding: {'SAME', 'VALID'}"; }
+string GetPaddingAttrString() { return "padding: {'SAME', 'VALID'}"; }
 
-std::string GetPaddingAttrStringWithExplicit() {
+string GetPaddingAttrStringWithExplicit() {
   return "padding: {'SAME', 'VALID', 'EXPLICIT'}";
 }
 
-std::string GetExplicitPaddingsAttrString() {
+string GetExplicitPaddingsAttrString() {
   return "explicit_paddings: list(int) = []";
 }
 

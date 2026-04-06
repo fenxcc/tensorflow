@@ -28,7 +28,7 @@ func.func @nested_for(%arg : tensor<16x16x8xf32>) -> () {
 // CHECK: scf.for
 // CHECK-NEXT: scf.for
 // CHECK-NEXT: scf.for
-// CHECK: tensor.extract
+// CHECK-NEXT: tensor.extract
 // CHECK-NEXT: scf.yield
 // CHECK-NEXT: }
 // CHECK-NOT: loop_annotation

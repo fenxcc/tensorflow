@@ -16,37 +16,33 @@ limitations under the License.
 #ifndef XLA_SERVICE_EXECUTABLE_H_
 #define XLA_SERVICE_EXECUTABLE_H_
 
-#include <cstdint>
 #include <memory>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include "absl/base/nullability.h"
 #include "absl/base/thread_annotations.h"
-#include "absl/container/flat_hash_map.h"
-#include "absl/container/flat_hash_set.h"
 #include "absl/log/check.h"
-#include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 #include "absl/types/span.h"
-#include "xla/client/executable_build_options.h"
+#include "absl/types/variant.h"
+#include "xla/debug_options_flags.h"
 #include "xla/hlo/ir/hlo_module.h"
 #include "xla/service/buffer_assignment.h"
 #include "xla/service/computation_layout.h"
 #include "xla/service/hlo.pb.h"
 #include "xla/service/hlo_execution_profile.h"
+#include "xla/service/hlo_graph_dumper.h"
 #include "xla/service/hlo_module_config.h"
 #include "xla/service/maybe_owning_device_memory.h"
 #include "xla/service/service_executable_run_options.h"
 #include "xla/service/shaped_buffer.h"
 #include "xla/shape.h"
 #include "xla/shape_tree.h"
-#include "xla/shape_util.h"
 #include "xla/stream_executor/device_memory_allocator.h"
-#include "xla/stream_executor/kernel_stats.h"
+#include "xla/stream_executor/stream_executor.h"
 #include "xla/util.h"
 #include "xla/xla_data.pb.h"
 
@@ -70,40 +66,26 @@ namespace xla {
 class ExecutionInput {
  public:
   explicit ExecutionInput(xla::Shape shape) : buffers_(std::move(shape)) {
-    if (!ShapeUtil::DeviceShapeIsHostShape(buffers_.shape())) {
-      SetHostShape(ShapeUtil::DeviceShapeToHostShape(buffers_.shape()));
-    }
+    SetHostShape(ShapeUtil::DeviceShapeToHostShape(buffers_.shape()));
   }
   // TODO(b/170310047): remove this overload.
   ExecutionInput(xla::Shape shape, xla::Shape host_shape)
       : buffers_(std::move(shape)) {
-    if (!ShapeUtil::DeviceShapeIsHostShape(buffers_.shape())) {
-      SetHostShape(ShapeUtil::DeviceShapeToHostShape(buffers_.shape()));
-    }
-  }
-
-  explicit ExecutionInput(const xla::Shape* shape) : buffers_(shape) {
-    if (!ShapeUtil::DeviceShapeIsHostShape(buffers_.shape())) {
-      SetHostShape(ShapeUtil::DeviceShapeToHostShape(buffers_.shape()));
-    }
+    SetHostShape(ShapeUtil::DeviceShapeToHostShape(buffers_.shape()));
   }
 
   explicit ExecutionInput(ShapeTree<MaybeOwningDeviceMemory> buffers)
       : buffers_(std::move(buffers)) {
-    if (!ShapeUtil::DeviceShapeIsHostShape(buffers_.shape())) {
-      SetHostShape(ShapeUtil::DeviceShapeToHostShape(buffers_.shape()));
-    }
+    SetHostShape(ShapeUtil::DeviceShapeToHostShape(buffers_.shape()));
   }
   // TODO(b/170310047): remove this overload.
   ExecutionInput(ShapeTree<MaybeOwningDeviceMemory> buffers,
                  xla::Shape host_shape)
       : buffers_(std::move(buffers)) {
-    if (!ShapeUtil::DeviceShapeIsHostShape(buffers_.shape())) {
-      SetHostShape(ShapeUtil::DeviceShapeToHostShape(buffers_.shape()));
-    }
+    SetHostShape(ShapeUtil::DeviceShapeToHostShape(buffers_.shape()));
   }
 
-  ExecutionInput(ExecutionInput&&) noexcept;
+  ExecutionInput(ExecutionInput&&) = default;
 
   ~ExecutionInput();
 
@@ -134,9 +116,7 @@ class ExecutionInput {
     unowned_indices_.erase(index);
   }
 
-  const absl::flat_hash_set<ShapeIndex>& unowned_indices() {
-    return unowned_indices_;
-  }
+  const std::set<ShapeIndex>& unowned_indices() { return unowned_indices_; }
 
   const ShapeTree<MaybeOwningDeviceMemory>& Buffers() const { return buffers_; }
 
@@ -158,11 +138,9 @@ class ExecutionInput {
   }
 
   ShapeTree<MaybeOwningDeviceMemory> buffers_;
-
   // Set of indices of buffers that should be returned to the caller if an error
   // occurs when enqueuing the computation.
-  absl::flat_hash_set<ShapeIndex> unowned_indices_;
-
+  std::set<ShapeIndex> unowned_indices_;
   std::unique_ptr<Shape> dynamic_shape_;
   std::unique_ptr<Shape> host_shape_;
 };
@@ -277,7 +255,7 @@ class Executable {
     CHECK_EQ(hlo_profile_printer_data_.get() == nullptr,
              hlo_profile_index_map_.get() == nullptr);
   }
-  virtual ~Executable() = default;
+  virtual ~Executable() {}
 
   // Enqueues the compilation result on the provided stream, passing the given
   // arguments. This call is blocking and returns after the execution is done.
@@ -374,21 +352,9 @@ class Executable {
 
   // The shape (including layout) that results from this execution. This is the
   // shape of the DeviceMemoryBase result value in ExecuteOnStream above.
-  virtual Shape result_shape() const {
+  const Shape& result_shape() const {
     CHECK(hlo_module_ != nullptr);
     return hlo_module_->config().entry_computation_layout().result_shape();
-  }
-
-  virtual ComputationLayout compute_computation_layout() const {
-    CHECK(hlo_module_ != nullptr);
-    return hlo_module_->compute_computation_layout();
-  }
-
-  virtual absl::string_view name() const {
-    if (has_module()) {
-      return module().name();
-    }
-    return "<unknown executable>";
   }
 
   // Returns the size of the executable in bytes. Returns -1 if this query is
@@ -404,7 +370,7 @@ class Executable {
     // Since both `hlo_proto()` and `buffer_assignment_proto()` return a
     // pointer to hlo_proto_, having the mutex is not enough to make this
     // function thread-safe.
-    absl::MutexLock lock(hlo_proto_mutex_);
+    absl::MutexLock lock(&hlo_proto_mutex_);
     hlo_proto_ = std::move(hlo_proto);
   }
   bool dumping_snapshot() const {
@@ -414,7 +380,7 @@ class Executable {
   }
 
   HloProto const* hlo_proto() const {
-    absl::MutexLock lock(hlo_proto_mutex_);
+    absl::MutexLock lock(&hlo_proto_mutex_);
     if (hlo_proto_ != nullptr && !hlo_proto_->has_hlo_module()) {
       *hlo_proto_->mutable_hlo_module() = module().ToProto();
     }
@@ -422,20 +388,16 @@ class Executable {
   }
 
   const BufferAssignmentProto* buffer_assignment_proto() const {
-    absl::MutexLock lock(hlo_proto_mutex_);
+    absl::MutexLock lock(&hlo_proto_mutex_);
     return hlo_proto_ != nullptr && hlo_proto_->has_buffer_assignment()
                ? &hlo_proto_->buffer_assignment()
                : nullptr;
   }
 
-  // Returns a map of kernel name to relevant kernel stats.
-  const ModuleStats& module_stats() { return module_stats_; }
-
-  // Sets a module_stats map of kernel name to relevant kernel stats.
-  void set_module_stats(ModuleStats module_stats) {
-    module_stats_ = std::move(module_stats);
+  std::string& debug_info() { return debug_info_; }
+  void set_debug_info(const std::string& debug_info) {
+    debug_info_ = debug_info;
   }
-
   // Gather unused but donated buffers, return them to the caller of this API.
   // We don't free buffers inside this function since the caller could have
   // different preferences for buffer deallocation. For example, in TensorFlow,
@@ -447,29 +409,18 @@ class Executable {
 
   // Returns the allocations resulting from buffer assignment, or an empty span
   // if unimplemented.
-  virtual absl::Span<const BufferAllocation* absl_nonnull const>
-  GetAllocations() const {
+  virtual absl::Span<const BufferAllocation> GetAllocations() const {
     return {};
   }
 
-  // Gives the executable a chance to dump itself with the given
-  // `ExecutableBuildOptions`
-  // Whether dumping is enabled, and how/where is determined by the
-  // `debug_options`.
-  virtual absl::Status DumpExecutableIfEnabled(
-      const ExecutableBuildOptions& options,
-      const DebugOptions& debug_options) const {
-    return absl::OkStatus();
-  }
-
- private:
+ protected:
   // HloModule this was compiled from. BufferAssignment keeps pointers to
   // HloInstructions owned by the HloModule so we need to keep the HloModule
   // around if we keep the BufferAssignment around.
   //
   // This member may be nullptr, if the given executable type doesn't need it
   // for execution.
-  std::shared_ptr<HloModule> hlo_module_;
+  const std::shared_ptr<HloModule> hlo_module_;
 
   // Execution count, used to generate a unique filename for each dumped
   // execution.
@@ -478,9 +429,10 @@ class Executable {
   std::unique_ptr<HloProfilePrinterData> hlo_profile_printer_data_;
   std::unique_ptr<HloProfileIndexMap> hlo_profile_index_map_;
 
-  // A map from kernel name to relevant kernel stats.
-  ModuleStats module_stats_;
+  // Generic debug information as a string.
+  std::string debug_info_;
 
+ private:
   // The serialized HLO proto. Non-null only if dumping snapshots is enabled.
   // This field may also be only partially set: if only
   // hlo_proto_->buffer_assignment is set and hlo_proto_->hlo_module isn't, the

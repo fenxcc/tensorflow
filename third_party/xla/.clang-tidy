@@ -11,6 +11,7 @@ ExtraArgs: [
   "-Wshift-sign-overflow",
   "-Wtautological-undefined-compare",
   "-Wthread-safety-analysis",
+  "-Wthread-safety-beta",
   "-Wthread-safety-reference",
   "-Wundefined-bool-conversion",
   "-Wunreachable-code",

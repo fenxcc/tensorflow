@@ -27,11 +27,11 @@ class ComputeEngineZoneProvider : public ZoneProvider {
       std::shared_ptr<ComputeEngineMetadataClient> google_metadata_client);
   virtual ~ComputeEngineZoneProvider();
 
-  absl::Status GetZone(std::string* zone) override;
+  absl::Status GetZone(string* zone) override;
 
  private:
   std::shared_ptr<ComputeEngineMetadataClient> google_metadata_client_;
-  std::string cached_zone;
+  string cached_zone;
   ComputeEngineZoneProvider(const ComputeEngineZoneProvider&) = delete;
   void operator=(const ComputeEngineZoneProvider&) = delete;
 };

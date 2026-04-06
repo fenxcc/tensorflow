@@ -21,7 +21,6 @@ limitations under the License.
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "xla/util.h"
-#include "xla/xla_data.pb.h"
 
 namespace xla {
 namespace {
@@ -29,18 +28,19 @@ namespace {
 struct CollectiveOpGroupModeInfo {
   CollectiveOpGroupMode mode;
   absl::string_view name;
+  CollectiveOpGroupModeProto proto;
 };
 
 const CollectiveOpGroupModeInfo kGroupModeInfos[] = {
-    {CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_CROSS_REPLICA,
-     "cross_replica"},
-    {CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_CROSS_PARTITION,
-     "cross_partition"},
-    {CollectiveOpGroupMode::
-         COLLECTIVE_OP_GROUP_MODE_CROSS_REPLICA_AND_PARTITION,
-     "cross_replica_and_partition"},
-    {CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_FLATTENED_ID,
-     "flattened_id"},
+    {CollectiveOpGroupMode::kCrossReplica, "cross_replica",
+     CollectiveOpGroupModeProto::COLLECTIVE_MODE_CROSS_REPLICA},
+    {CollectiveOpGroupMode::kCrossPartition, "cross_partition",
+     CollectiveOpGroupModeProto::COLLECTIVE_MODE_CROSS_PARTITION},
+    {CollectiveOpGroupMode::kCrossReplicaAndPartition,
+     "cross_replica_and_partition",
+     CollectiveOpGroupModeProto::COLLECTIVE_MODE_CROSS_REPLICA_AND_PARTITION},
+    {CollectiveOpGroupMode::kFlattenedID, "flattened_id",
+     CollectiveOpGroupModeProto::COLLECTIVE_MODE_FLATTENED_ID},
 };
 
 }  // namespace
@@ -66,6 +66,28 @@ absl::StatusOr<CollectiveOpGroupMode> StringToCollectiveOpGroupMode(
   return InvalidArgument("Invalid collective op group mode: %s", name);
 }
 
+CollectiveOpGroupModeProto CollectiveOpGroupModeToProto(
+    CollectiveOpGroupMode group_mode) {
+  for (const CollectiveOpGroupModeInfo& info : kGroupModeInfos) {
+    if (info.mode == group_mode) {
+      return info.proto;
+    }
+  }
+  CHECK(false) << "Unknown collective op group mode: "
+               << static_cast<int>(group_mode);
+}
+
+absl::StatusOr<CollectiveOpGroupMode> CollectiveOpGroupModeFromProto(
+    CollectiveOpGroupModeProto proto) {
+  for (const CollectiveOpGroupModeInfo& info : kGroupModeInfos) {
+    if (info.proto == proto) {
+      return info.mode;
+    }
+  }
+  return InvalidArgument("Invalid collective op group mode proto: %s",
+                         CollectiveOpGroupModeProto_Name(proto));
+}
+
 // Returns the group formation mode implied by (a) whether the operation has
 // channel_id and (b) if it has use_global_device_ids and if yes, its value.
 absl::StatusOr<CollectiveOpGroupMode> GetCollectiveOpGroupMode(
@@ -75,16 +97,15 @@ absl::StatusOr<CollectiveOpGroupMode> GetCollectiveOpGroupMode(
       return InvalidArgument(
           "Cannot have use_global_device_ids=true without channel_id");
     }
-    return CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_CROSS_REPLICA;
+    return CollectiveOpGroupMode::kCrossReplica;
   }
   if (!use_global_device_ids.has_value()) {
-    return CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_CROSS_PARTITION;
+    return CollectiveOpGroupMode::kCrossPartition;
   }
   if (!*use_global_device_ids) {
-    return CollectiveOpGroupMode::
-        COLLECTIVE_OP_GROUP_MODE_CROSS_REPLICA_AND_PARTITION;
+    return CollectiveOpGroupMode::kCrossReplicaAndPartition;
   }
-  return CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_FLATTENED_ID;
+  return CollectiveOpGroupMode::kFlattenedID;
 }
 
 }  // namespace xla

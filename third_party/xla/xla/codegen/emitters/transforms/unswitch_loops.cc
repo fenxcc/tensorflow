@@ -89,12 +89,8 @@ void UnswitchLoopsPass::runOnOperation() {
   patterns.add<UnswitchLoop>(&getContext());
   mlir::scf::ForOp::getCanonicalizationPatterns(patterns, &getContext());
   mlir::scf::IfOp::getCanonicalizationPatterns(patterns, &getContext());
-  // In a deeply nested loop we can easily reach the default limit of 10
-  // iterations.
-  const int64_t kMaxIterations = 1000;
-  auto config = mlir::GreedyRewriteConfig().setMaxIterations(kMaxIterations);
-  if (mlir::failed(mlir::applyPatternsGreedily(getOperation(),
-                                               std::move(patterns), config))) {
+  if (mlir::failed(
+          mlir::applyPatternsGreedily(getOperation(), std::move(patterns)))) {
     signalPassFailure();
   }
 }

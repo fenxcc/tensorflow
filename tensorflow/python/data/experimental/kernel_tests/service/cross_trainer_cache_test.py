@@ -30,7 +30,8 @@ class CrossTrainerCacheTest(data_service_test_base.TestBase,
                             parameterized.TestCase):
   """Tests for sharing datasets across jobs using a cross-trainer cache."""
 
-  @combinations.generate(test_base.default_test_combinations())
+  @combinations.generate(
+      combinations.times(test_base.default_test_combinations()))
   def testEnableCrossTrainerCache(self):
     """Tests cross-trainer cache with `distribute`."""
     cluster = self._create_cluster(num_workers=1)
@@ -52,7 +53,8 @@ class CrossTrainerCacheTest(data_service_test_base.TestBase,
             trainer_id="Trainer 2"))
     self.assertDatasetProduces(dataset2.take(10), list(range(10)))
 
-  @combinations.generate(test_base.default_test_combinations())
+  @combinations.generate(
+      combinations.times(test_base.default_test_combinations()))
   def testFromDatasetId(self):
     """Tests cross-trainer cache with `register_dataset`/`from_dataset_id`."""
     cluster = self._create_cluster(num_workers=1)
@@ -81,7 +83,8 @@ class CrossTrainerCacheTest(data_service_test_base.TestBase,
             trainer_id="Trainer 2"))
     self.assertDatasetProduces(dataset2.take(10), list(range(10)))
 
-  @combinations.generate(test_base.default_test_combinations())
+  @combinations.generate(
+      combinations.times(test_base.default_test_combinations()))
   def testDisableCrossTrainerCacheByDefault(self):
     cluster = self._create_cluster(num_workers=1)
     dataset = dataset_ops.Dataset.range(10000000).repeat()
@@ -94,7 +97,8 @@ class CrossTrainerCacheTest(data_service_test_base.TestBase,
     output = self.getDatasetOutput(dataset2.take(10))
     self.assertGreaterEqual(output[0], 10)
 
-  @combinations.generate(test_base.default_test_combinations())
+  @combinations.generate(
+      combinations.times(test_base.default_test_combinations()))
   def testConcurrentReaders(self):
     # Fetching an element from the dataset will trigger prefetches of more
     # elements, one per CPU core which will be placed in the cache.
@@ -131,7 +135,8 @@ class CrossTrainerCacheTest(data_service_test_base.TestBase,
       for j in range(num_readers):
         self.assertEqual(self.evaluate(iterators[j]()), i)
 
-  @combinations.generate(test_base.default_test_combinations())
+  @combinations.generate(
+      combinations.times(test_base.default_test_combinations()))
   def testSlowClientSkipsData(self):
     cluster = self._create_cluster(
         num_workers=1, cross_trainer_cache_size_bytes=500)
@@ -158,7 +163,8 @@ class CrossTrainerCacheTest(data_service_test_base.TestBase,
     self.assertGreater(output[0], 0)
     self.assertLen(output, 200)
 
-  @combinations.generate(test_base.default_test_combinations())
+  @combinations.generate(
+      combinations.times(test_base.default_test_combinations()))
   def testSmallCache(self):
     cluster = self._create_cluster(
         num_workers=1, cross_trainer_cache_size_bytes=500)
@@ -178,7 +184,8 @@ class CrossTrainerCacheTest(data_service_test_base.TestBase,
       output = self.getDatasetOutput(distributed_dataset.take(200))
       self.assertLen(output, 200)
 
-  @combinations.generate(test_base.default_test_combinations())
+  @combinations.generate(
+      combinations.times(test_base.default_test_combinations()))
   def testShuffleDataset(self):
     cluster = self._create_cluster(num_workers=1)
     dataset = dataset_ops.Dataset.range(10000000).repeat().shuffle(
@@ -200,7 +207,8 @@ class CrossTrainerCacheTest(data_service_test_base.TestBase,
     output2 = self.getDatasetOutput(dataset2.take(10))
     self.assertEqual(output1, output2)
 
-  @combinations.generate(test_base.default_test_combinations())
+  @combinations.generate(
+      combinations.times(test_base.default_test_combinations()))
   def testSameTrainerID(self):
     # Jobs from the same training cluster do not reuse data from the cache.
     cluster = self._create_cluster(num_workers=1)
@@ -222,7 +230,8 @@ class CrossTrainerCacheTest(data_service_test_base.TestBase,
     output = self.getDatasetOutput(dataset2.take(10))
     self.assertGreaterEqual(output[0], 10)
 
-  @combinations.generate(test_base.default_test_combinations())
+  @combinations.generate(
+      combinations.times(test_base.default_test_combinations()))
   def testDifferentJobNames(self):
     cluster = self._create_cluster(num_workers=1)
     dataset = dataset_ops.Dataset.range(10000000).repeat()
@@ -242,7 +251,8 @@ class CrossTrainerCacheTest(data_service_test_base.TestBase,
             trainer_id="Trainer 2"))
     self.assertDatasetProduces(dataset2.take(10), list(range(10)))
 
-  @combinations.generate(test_base.default_test_combinations())
+  @combinations.generate(
+      combinations.times(test_base.default_test_combinations()))
   def testDynamicSharding(self):
     cluster = self._create_cluster(num_workers=2)
     dataset = dataset_ops.Dataset.range(10000000).repeat()
@@ -267,7 +277,8 @@ class CrossTrainerCacheTest(data_service_test_base.TestBase,
     # Verifies the intersection is non-empty.
     self.assertTrue(set(output1) & set(output2))
 
-  @combinations.generate(test_base.default_test_combinations())
+  @combinations.generate(
+      combinations.times(test_base.default_test_combinations()))
   def testNoCompression(self):
     cluster = self._create_cluster(num_workers=1)
     dataset = dataset_ops.Dataset.range(10000000).repeat()
@@ -289,7 +300,8 @@ class CrossTrainerCacheTest(data_service_test_base.TestBase,
             trainer_id="Trainer 2"))
     self.assertDatasetProduces(dataset2.take(10), list(range(10)))
 
-  @combinations.generate(test_base.default_test_combinations())
+  @combinations.generate(
+      combinations.times(test_base.default_test_combinations()))
   def testCompressionMismatch(self):
     cluster = self._create_cluster(num_workers=1)
     dataset = dataset_ops.Dataset.range(10000000).repeat()
@@ -312,7 +324,8 @@ class CrossTrainerCacheTest(data_service_test_base.TestBase,
               trainer_id="Trainer 1"))
       self.getDatasetOutput(dataset2)
 
-  @combinations.generate(test_base.default_test_combinations())
+  @combinations.generate(
+      combinations.times(test_base.default_test_combinations()))
   def testRequiresJobName(self):
     cluster = self._create_cluster(num_workers=1)
     dataset = dataset_ops.Dataset.range(10000000).repeat()
@@ -345,7 +358,8 @@ class CrossTrainerCacheTest(data_service_test_base.TestBase,
                   trainer_id="Trainer ID")))
       self.getDatasetOutput(dataset)
 
-  @combinations.generate(test_base.eager_only_combinations())
+  @combinations.generate(
+      combinations.times(test_base.eager_only_combinations()))
   def testMultipleIterationsForOneDatasetEagerMode(self):
     cluster = self._create_cluster(num_workers=1)
     dataset = dataset_ops.Dataset.range(10000000).repeat()
@@ -365,7 +379,8 @@ class CrossTrainerCacheTest(data_service_test_base.TestBase,
       self.getDatasetOutput(dataset1.take(10))
       self.getDatasetOutput(dataset1.take(10))
 
-  @combinations.generate(test_base.graph_only_combinations())
+  @combinations.generate(
+      combinations.times(test_base.graph_only_combinations()))
   def testMultipleIterationsForOneDatasetGraphMode(self):
     cluster = self._create_cluster(num_workers=1)
     dataset = dataset_ops.Dataset.range(10000000).repeat()
@@ -395,7 +410,8 @@ class CrossTrainerCacheTest(data_service_test_base.TestBase,
     output2 += self.getDatasetOutput(dataset2.take(10))
     self.assertTrue(set(output1) & set(output2))
 
-  @combinations.generate(test_base.default_test_combinations())
+  @combinations.generate(
+      combinations.times(test_base.default_test_combinations()))
   def testDisallowCoordinatedRead(self):
     cluster = self._create_cluster(num_workers=1)
     dataset = dataset_ops.Dataset.range(10000000).repeat()
@@ -412,7 +428,8 @@ class CrossTrainerCacheTest(data_service_test_base.TestBase,
               trainer_id="Trainer 1"))
       self.getDatasetOutput(dataset)
 
-  @combinations.generate(test_base.default_test_combinations())
+  @combinations.generate(
+      combinations.times(test_base.default_test_combinations()))
   def testNamedJobMismatch(self):
     cluster = self._create_cluster(num_workers=1)
     dataset = dataset_ops.Dataset.range(10000000).repeat()
@@ -431,7 +448,8 @@ class CrossTrainerCacheTest(data_service_test_base.TestBase,
           dataset, cluster, job_name="job", cross_trainer_cache=None)
       self.getDatasetOutput(dataset2)
 
-  @combinations.generate(test_base.default_test_combinations())
+  @combinations.generate(
+      combinations.times(test_base.default_test_combinations()))
   def testRequiresNonEmptyTrainerID(self):
     cluster = self._create_cluster(num_workers=2)
     dataset = dataset_ops.Dataset.range(10000000).repeat()

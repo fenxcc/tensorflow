@@ -1,4 +1,3 @@
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//tensorflow:strict.default.bzl", "py_strict_library")
 load("//tensorflow:tensorflow.bzl", "if_google", "tf_cc_shared_test")
 load("//tensorflow:tensorflow.default.bzl", "tf_py_strict_test")

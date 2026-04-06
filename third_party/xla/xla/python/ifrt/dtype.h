@@ -133,18 +133,9 @@ class DType {
   // Constructs `DType` from `DTypeProto`.
   static absl::StatusOr<DType> FromProto(const DTypeProto& proto);
 
-  // Converts the dtype to a protobuf.
-  void ToProto(
-      DTypeProto& dtype_proto,
-      SerDesVersion version = SerDesDefaultVersionAccessor::Get()) const;
-
   // Returns a `DTypeProto` representation.
   DTypeProto ToProto(
-      SerDesVersion version = SerDesDefaultVersionAccessor::Get()) const {
-    DTypeProto proto;
-    ToProto(proto, version);
-    return proto;
-  }
+      SerDesVersion version = SerDesDefaultVersionAccessor::Get()) const;
 
   // TODO(hyeontaek): Remove this method in favor of AbslStringify.
   std::string DebugString() const;

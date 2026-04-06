@@ -46,8 +46,8 @@ namespace {
 std::string GetDotDumpDir(std::string dot_graph_dump_to) {
   if (dot_graph_dump_to == "sponge") {
     if (!tsl::io::GetTestUndeclaredOutputsDir(&dot_graph_dump_to)) {
-      // Compile option `dot_graph_dump_to=sponge` is specified outside of a
-      // test. Ignore the value.
+      LOG(ERROR) << "compile option `dot_graph_dump_to=sponge` is specified "
+                    "outside of a test; ignoring the value";
       return "";
     }
   }
@@ -96,11 +96,8 @@ void createIfrtPopulateAtomProgramMetadataPipeline(mlir::OpPassManager& pm) {
   pm.addPass(mlir::createSymbolDCEPass());
 }
 
-void createIfrtCompileXlaPreprocessingPipeline(
-    mlir::OpPassManager& pm,
-    std::shared_ptr<xla::ifrt::IfrtIRCompileOptions> compile_options) {
-  pm.addPass(createIfrtLowerAtomProgramMetadataToXlaPass(
-      {/*compile_options=*/compile_options}));
+void createIfrtCompileXlaPreprocessingPipeline(mlir::OpPassManager& pm) {
+  pm.addPass(createIfrtLowerAtomProgramMetadataToXlaPass());
   pm.addPass(createIfrtRemoveIfrtAttrsPass());
 }
 
@@ -124,8 +121,7 @@ absl::Status createOutlinedAtomProgramsToCompiledPipeline(
     pm.addPass(createIfrtLowerMpmdReshardToCallPass());
   }
   pm.addPass(createIfrtPrecompileAtomProgramPreprocessingPass(
-      {/*platform_names=*/llvm::to_vector(options.platform_names),
-       /*compile_options=*/compile_options}));
+      {/*platform_names=*/llvm::to_vector(options.platform_names)}));
   if (options.propagate_shardings) {
     pm.addPass(createIfrtCompileAndPropagateShardingsPass(
         compiler, compile_options->compile_options_overrides,
@@ -209,9 +205,7 @@ void registerIfrtPassesAndPipelines(
   mlir::PassPipelineRegistration<>(
       "ifrt-compile-xla-preprocessing-pipeline",
       "Run passes to lower an IFRT XLA program for XLA compilation",
-      [compile_options](mlir::OpPassManager& pm) mutable {
-        createIfrtCompileXlaPreprocessingPipeline(pm, compile_options);
-      });
+      createIfrtCompileXlaPreprocessingPipeline);
   // Do not move to lambda captures because the pass pipeline registration is
   // invoked for each module in a test file.
   mlir::PassPipelineRegistration<OutlinedAtomProgramsToCompiledPipelineOptions>(

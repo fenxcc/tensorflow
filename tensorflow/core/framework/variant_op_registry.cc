@@ -46,10 +46,9 @@ const char* VariantBinaryOpToString(VariantBinaryOp op) {
   }
 }
 
-std::unordered_set<std::string>*
-UnaryVariantOpRegistry::PersistentStringStorage() {
-  static std::unordered_set<std::string>* string_storage =
-      new std::unordered_set<std::string>();
+std::unordered_set<string>* UnaryVariantOpRegistry::PersistentStringStorage() {
+  static std::unordered_set<string>* string_storage =
+      new std::unordered_set<string>();
   return string_storage;
 }
 
@@ -71,7 +70,7 @@ UnaryVariantOpRegistry::VariantDecodeFn* UnaryVariantOpRegistry::GetDecodeFn(
 }
 
 void UnaryVariantOpRegistry::RegisterDecodeFn(
-    const std::string& type_name, const VariantDecodeFn& decode_fn) {
+    const string& type_name, const VariantDecodeFn& decode_fn) {
   CHECK(!type_name.empty()) << "Need a valid name for UnaryVariantDecode";
   VariantDecodeFn* existing = GetDecodeFn(type_name);
   CHECK_EQ(existing, nullptr)
@@ -99,7 +98,7 @@ bool DecodeUnaryVariant(Variant* variant) {
   if (decode_fn == nullptr) {
     return false;
   }
-  const std::string type_name = variant->TypeName();
+  const string type_name = variant->TypeName();
   bool decoded = (*decode_fn)(variant);
   if (!decoded) return false;
   if (variant->TypeName() != type_name) {

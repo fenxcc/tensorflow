@@ -80,7 +80,7 @@ PYBIND11_MODULE(_pywrap_profiler, m) {
            })
       .def("stop",
            [](ProfilerSessionWrapper& wrapper) {
-             std::string content;
+             tensorflow::string content;
              absl::Status status;
              {
                py::gil_scoped_release release;

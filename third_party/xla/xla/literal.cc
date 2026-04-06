@@ -249,6 +249,9 @@ Shape* MutableLiteralBase::mutable_shape_do_not_use() {
 
 Literal::Literal() : Literal(NilShape()) {}
 
+Literal::Literal(const Shape& shape)
+    : Literal(shape, /*allocate_arrays=*/true) {}
+
 void Literal::SetShape(const Shape& shape) {
   if (const Shape* intered_shape_ptr = TryInternShape(shape)) {
     shape_ = intered_shape_ptr;
@@ -270,15 +273,15 @@ void Literal::SetShape(const Shape& shape) {
   shape_ = std::move(owning_shape_ptr);
 }
 
-absl::Status Literal::SetPiece(const Shape& shape, Piece* piece,
-                               bool allocate_arrays,
-                               ArrayValueState leaf_array_value_state) {
+void Literal::SetPiece(const Shape& shape, Piece* piece, bool allocate_arrays,
+                       ArrayValueState leaf_array_value_state) {
   if (shape.IsTuple()) {
     for (const Shape& subshape : shape.tuple_shapes()) {
       Piece child_piece;
       child_piece.set_subshape(&subshape);
-      TF_RETURN_IF_ERROR(SetPiece(subshape, &child_piece, allocate_arrays,
-                                  leaf_array_value_state));
+
+      SetPiece(subshape, &child_piece, allocate_arrays, leaf_array_value_state);
+
       piece->emplace_back(std::move(child_piece));
     }
   } else if (shape.IsArray()) {
@@ -289,33 +292,21 @@ absl::Status Literal::SetPiece(const Shape& shape, Piece* piece,
     piece->set_array_value_state(leaf_array_value_state);
     if (leaf_array_value_state == LiteralBase::ArrayValueState::kKnown &&
         allocate_arrays) {
-      TF_RETURN_IF_ERROR(piece->AllocateBuffers());
+      piece->AllocateBuffers();
     }
   }
-  return absl::OkStatus();
-}
-
-absl::StatusOr<Literal> Literal::Make(
-    const Shape& shape, const bool allocate_arrays,
-    const ArrayValueState leaf_array_value_state) {
-  // We cannot use the default constructor because it is implemented in terms
-  // of Literal::Make(), leading to infinite recursion.
-  Literal literal(UninitializedLiteralTag{});
-  literal.SetShape(shape);
-  CHECK(leaf_array_value_state != ArrayValueState::kKnown ||
-        LayoutUtil::HasLayout(*literal.shape_));
-  literal.root_piece_.set_subshape(literal.shape_.get());
-  CHECK(&literal.root_piece_.subshape() == literal.shape_.get());
-
-  TF_RETURN_IF_ERROR(literal.SetPiece(*literal.shape_, &literal.root_piece_,
-                                      allocate_arrays, leaf_array_value_state));
-  return literal;
 }
 
 Literal::Literal(const Shape& shape, bool allocate_arrays,
-                 ArrayValueState leaf_array_value_state)
-    : Literal(Literal::Make(shape, allocate_arrays, leaf_array_value_state)
-                  .value()) {}
+                 ArrayValueState leaf_array_value_state) {
+  SetShape(shape);
+  CHECK(leaf_array_value_state != ArrayValueState::kKnown ||
+        LayoutUtil::HasLayout(*shape_));
+  root_piece_.set_subshape(shape_.get());
+  CHECK(&root_piece_.subshape() == shape_.get());
+
+  SetPiece(*shape_, &root_piece_, allocate_arrays, leaf_array_value_state);
+}
 
 Literal::~Literal() { DeallocateBuffers(); }
 
@@ -631,20 +622,16 @@ void LiteralBase::Piece::SetDynamicSize(int64_t dim_index, int32_t size) {
   dynamic_size_buffer()[dim_index] = size;
 }
 
-absl::Status LiteralBase::Piece::AllocateBuffers() {
+void LiteralBase::Piece::AllocateBuffers() {
   const int64_t bytes = total_bytes_dense();
   if (bytes > kMaxInlinedBytes) {
     CHECK_EQ(buffer(), nullptr);
     storage_.Emplace<DenseRep>(
         static_cast<char*>(tsl::port::AlignedMalloc(bytes, kMinimumAlignment)));
-    if (buffer() == nullptr) {
-      return absl::ResourceExhaustedError(
-          "Failed to allocate buffer for Literal");
-    }
+    CHECK_NE(buffer(), nullptr) << "Failed to allocate buffer for Literal";
   } else {
     storage_.Emplace<DenseInlinedRep>();
   }
-  return absl::OkStatus();
 }
 
 void LiteralBase::Piece::DeallocateBuffers() {
@@ -713,7 +700,7 @@ absl::Status LiteralBase::Piece::CopyFrom(const LiteralBase::Piece& src,
     CHECK(src.array_value_state_ == ArrayValueState::kKnown);
     if (array_value_state_ == ArrayValueState::kUndetermined ||
         array_value_state_ == ArrayValueState::kUnknown) {
-      TF_RETURN_IF_ERROR(AllocateBuffers());
+      AllocateBuffers();
     }
     array_value_state_ = src.array_value_state_;
   }

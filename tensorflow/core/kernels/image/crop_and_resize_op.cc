@@ -83,16 +83,14 @@ static inline absl::Status ParseAndCheckBoxSizes(const Tensor& boxes,
 // [0, batch_size) then calls done.
 template <typename Device>
 inline void RunIfBoxIndexIsValid(
-    OpKernelContext* context,
-    typename TTypes<int32_t, 1>::ConstTensor box_index, int batch_size,
-    const Callback& compute, const Callback& done);
+    OpKernelContext* context, typename TTypes<int32, 1>::ConstTensor box_index,
+    int batch_size, const Callback& compute, const Callback& done);
 
 // Specialization of CheckValidBoxIndex for a CPUDevice.
 template <>
 inline void RunIfBoxIndexIsValid<CPUDevice>(
-    OpKernelContext* context,
-    typename TTypes<int32_t, 1>::ConstTensor box_index, int batch_size,
-    const Callback& compute, const Callback& done) {
+    OpKernelContext* context, typename TTypes<int32, 1>::ConstTensor box_index,
+    int batch_size, const Callback& compute, const Callback& done) {
   const int num_boxes = box_index.dimension(0);
   for (int b = 0; b < num_boxes; ++b) {
     OP_REQUIRES_ASYNC(
@@ -171,7 +169,7 @@ class CropAndResizeOp : public AsyncOpKernel {
         done);
 
     // Copy and validate crop sizes.
-    auto crop_size_vec = crop_size.vec<int32_t>();
+    auto crop_size_vec = crop_size.vec<int32>();
     const int crop_height = internal::SubtleMustCopy(crop_size_vec(0));
     const int crop_width = internal::SubtleMustCopy(crop_size_vec(1));
     OP_REQUIRES_ASYNC(
@@ -194,7 +192,7 @@ class CropAndResizeOp : public AsyncOpKernel {
       const Tensor& box_index = context->input(2);
       const bool status = functor::CropAndResize<Device, T>()(
           context, image.tensor<T, 4>(), boxes.tensor<float, 2>(),
-          box_index.tensor<int32_t, 1>(), method_, extrapolation_value_,
+          box_index.tensor<int32, 1>(), method_, extrapolation_value_,
           output->tensor<float, 4>());
 
       if (!status) {
@@ -203,14 +201,14 @@ class CropAndResizeOp : public AsyncOpKernel {
       }
     };
 
-    RunIfBoxIndexIsValid<Device>(context, box_index.tensor<int32_t, 1>(),
+    RunIfBoxIndexIsValid<Device>(context, box_index.tensor<int32, 1>(),
                                  batch_size, std::move(compute_callback),
                                  std::move(done));
   }
 
  private:
   float extrapolation_value_;
-  std::string method_;
+  string method_;
 };
 
 // Partial specialization of CropAndResize functor for a CPUDevice.
@@ -220,8 +218,8 @@ struct CropAndResize<CPUDevice, T> {
   bool operator()(OpKernelContext* context,
                   typename TTypes<T, 4>::ConstTensor image,
                   typename TTypes<float, 2>::ConstTensor boxes,
-                  typename TTypes<int32_t, 1>::ConstTensor box_index,
-                  const std::string& method_name, float extrapolation_value,
+                  typename TTypes<int32, 1>::ConstTensor box_index,
+                  const string& method_name, float extrapolation_value,
                   typename TTypes<float, 4>::Tensor crops) {
     const int batch_size = image.dimension(0);
     const int image_height = image.dimension(1);
@@ -405,7 +403,7 @@ class CropAndResizeGradImageOp : public AsyncOpKernel {
                       errors::InvalidArgument("image_size must have 4 elements",
                                               image_size.shape().DebugString()),
                       done);
-    auto image_size_vec = image_size.vec<int32_t>();
+    auto image_size_vec = image_size.vec<int32>();
     const int batch_size = internal::SubtleMustCopy(image_size_vec(0));
     const int image_height = internal::SubtleMustCopy(image_size_vec(1));
     const int image_width = internal::SubtleMustCopy(image_size_vec(2));
@@ -442,7 +440,7 @@ class CropAndResizeGradImageOp : public AsyncOpKernel {
       const Tensor& box_index = context->input(2);
       const bool status = functor::CropAndResizeBackpropImage<Device, T>()(
           context, grads.tensor<float, 4>(), boxes.tensor<float, 2>(),
-          box_index.tensor<int32_t, 1>(), output->tensor<T, 4>(), method_);
+          box_index.tensor<int32, 1>(), output->tensor<T, 4>(), method_);
 
       if (!status) {
         context->SetStatus(errors::Internal(
@@ -450,13 +448,13 @@ class CropAndResizeGradImageOp : public AsyncOpKernel {
       }
     };
 
-    RunIfBoxIndexIsValid<Device>(context, box_index.tensor<int32_t, 1>(),
+    RunIfBoxIndexIsValid<Device>(context, box_index.tensor<int32, 1>(),
                                  batch_size, std::move(compute_callback),
                                  std::move(done));
   }
 
  private:
-  std::string method_;
+  string method_;
 };
 
 // Partial specialization of CropAndResizeBackpropImage functor for a CPUDevice.
@@ -466,9 +464,9 @@ struct CropAndResizeBackpropImage<CPUDevice, T> {
   bool operator()(const OpKernelContext* context,
                   typename TTypes<float, 4>::ConstTensor grads,
                   typename TTypes<float, 2>::ConstTensor boxes,
-                  typename TTypes<int32_t, 1>::ConstTensor box_index,
+                  typename TTypes<int32, 1>::ConstTensor box_index,
                   typename TTypes<T, 4>::Tensor grads_image,
-                  const std::string& method_name) {
+                  const string& method_name) {
     const int batch_size = grads_image.dimension(0);
     const int image_height = grads_image.dimension(1);
     const int image_width = grads_image.dimension(2);
@@ -585,7 +583,7 @@ class CropAndResizeGradBoxesOp : public AsyncOpKernel {
  public:
   explicit CropAndResizeGradBoxesOp(OpKernelConstruction* context)
       : AsyncOpKernel(context) {
-    std::string method;
+    string method;
     OP_REQUIRES_OK(context, context->GetAttr("method", &method));
     OP_REQUIRES(context, method == "bilinear",
                 errors::InvalidArgument("method must be 'bilinear'", method));
@@ -660,14 +658,14 @@ class CropAndResizeGradBoxesOp : public AsyncOpKernel {
       const bool status = functor::CropAndResizeBackpropBoxes<Device, T>()(
           context->eigen_device<Device>(), grads.tensor<float, 4>(),
           image.tensor<T, 4>(), boxes.tensor<float, 2>(),
-          box_index.tensor<int32_t, 1>(), output->tensor<float, 2>());
+          box_index.tensor<int32, 1>(), output->tensor<float, 2>());
       if (!status) {
         context->SetStatus(errors::Internal(
             "Failed to launch CropAndResizeBackpropBoxes kernel."));
       }
     };
 
-    RunIfBoxIndexIsValid<Device>(context, box_index.tensor<int32_t, 1>(),
+    RunIfBoxIndexIsValid<Device>(context, box_index.tensor<int32, 1>(),
                                  batch_size, std::move(compute_callback),
                                  std::move(done));
   }
@@ -681,7 +679,7 @@ struct CropAndResizeBackpropBoxes<CPUDevice, T> {
                   typename TTypes<float, 4>::ConstTensor grads,
                   typename TTypes<T, 4>::ConstTensor image,
                   typename TTypes<float, 2>::ConstTensor boxes,
-                  typename TTypes<int32_t, 1>::ConstTensor box_index,
+                  typename TTypes<int32, 1>::ConstTensor box_index,
                   typename TTypes<float, 2>::Tensor grads_boxes) {
     const int batch_size = image.dimension(0);
     const int image_height = image.dimension(1);

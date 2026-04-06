@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <numeric>
 #include <optional>
 #include <string>
 #include <utility>
@@ -22,12 +23,10 @@
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include "absl/algorithm/container.h"
 #include "absl/base/thread_annotations.h"
 #include "absl/functional/any_invocable.h"
 #include "absl/log/check.h"
 #include "absl/status/status.h"
-#include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/synchronization/mutex.h"
@@ -35,7 +34,6 @@
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
-#include "xla/future.h"
 #include "xla/pjrt/plugin/xla_cpu/cpu_client_options.h"
 #include "xla/pjrt/plugin/xla_cpu/xla_cpu_pjrt_client.h"
 #include "xla/python/ifrt/array.h"
@@ -43,17 +41,19 @@
 #include "xla/python/ifrt/client.h"
 #include "xla/python/ifrt/device.h"
 #include "xla/python/ifrt/dtype.h"
+#include "xla/python/ifrt/future.h"
 #include "xla/python/ifrt/memory.h"
 #include "xla/python/ifrt/mock.h"
 #include "xla/python/ifrt/shape.h"
 #include "xla/python/ifrt/sharding.h"
+#include "xla/python/ifrt/user_context.h"
 #include "xla/python/ifrt/value.h"
 #include "xla/python/ifrt_proxy/client/client.h"
 #include "xla/python/ifrt_proxy/client/registry.h"
 #include "xla/python/ifrt_proxy/server/grpc_server.h"
 #include "xla/python/pjrt_ifrt/pjrt_client.h"
-#include "xla/tsl/concurrency/future.h"
 #include "xla/tsl/concurrency/ref_count.h"
+#include "xla/tsl/platform/status_matchers.h"
 #include "xla/tsl/platform/statusor.h"
 #include "xla/tsl/platform/test.h"
 
@@ -61,6 +61,9 @@ namespace xla {
 namespace ifrt {
 namespace proxy {
 namespace {
+
+using ::tsl::testing::IsOk;
+using ::tsl::testing::StatusIs;
 
 constexpr absl::StatusCode kInternal = absl::StatusCode::kInternal;
 
@@ -84,7 +87,7 @@ class MockArrayTest : public testing::Test {
     DType dtype(DType::kF32);
     Shape shape({2, 3});
     auto data = std::make_unique<std::vector<float>>(6);
-    absl::c_iota(*data, 0);
+    std::iota(data->begin(), data->end(), 0);
     xla::ifrt::Device* device = client_->addressable_devices().at(0);
     ShardingRef sharding = SingleDeviceSharding::Create(device, MemoryKind());
 
@@ -119,7 +122,8 @@ class MockArrayTest : public testing::Test {
                 const void* data, DType dtype, Shape shape,
                 std::optional<absl::Span<const int64_t>> byte_strides,
                 ShardingRef sharding, Client::HostBufferSemantics semantics,
-                std::function<void()> on_done_with_host_buffer)
+                std::function<void()> on_done_with_host_buffer,
+                tsl::RCReference<UserContext> user_context)
                 -> absl::StatusOr<xla::ifrt::ArrayRef> {
               TF_ASSIGN_OR_RETURN(
                   auto delegated,
@@ -129,24 +133,20 @@ class MockArrayTest : public testing::Test {
               auto result = tsl::MakeRef<MockArray>(delegated);
               ON_CALL(*result, GetReadyFuture)
                   .WillByDefault([this, delegated]() {
-                    absl::MutexLock l(mu_);
+                    absl::MutexLock l(&mu_);
                     if (get_ready_hook_) {
                       absl::Status s = get_ready_hook_();
-                      if (!s.ok()) {
-                        return tsl::Future<>(s);
-                      }
+                      if (!s.ok()) return Future<>(s);
                     }
                     return delegated->GetReadyFuture();
                   });
               ON_CALL(*result, CopyToHostBuffer)
                   .WillByDefault([this, delegated](auto data, auto byte_strides,
                                                    auto semantics) {
-                    absl::MutexLock l(mu_);
+                    absl::MutexLock l(&mu_);
                     if (copy_host_hook_) {
                       absl::Status s = copy_host_hook_();
-                      if (!s.ok()) {
-                        return tsl::Future<>(s);
-                      }
+                      if (!s.ok()) return Future<>(s);
                     }
                     return delegated->CopyToHostBuffer(data, byte_strides,
                                                        semantics);
@@ -156,7 +156,7 @@ class MockArrayTest : public testing::Test {
 
     ON_CALL(*mock_backend, GetReadyFuture)
         .WillByDefault([](absl::Span<const ValueRef> values) {
-          std::vector<tsl::Future<>> futures;
+          std::vector<Future<>> futures;
           futures.reserve(values.size());
           for (const auto& value : values) {
             futures.push_back(value->GetReadyFuture());
@@ -178,7 +178,7 @@ TEST_F(MockArrayTest, ReadyFutureWaitsUntilReady) {
   absl::Notification wait_ready;
 
   {
-    absl::MutexLock l(mu_);
+    absl::MutexLock l(&mu_);
     get_ready_hook_ = [&]() {
       wait_ready.WaitForNotification();
       return absl::OkStatus();
@@ -191,7 +191,7 @@ TEST_F(MockArrayTest, ReadyFutureWaitsUntilReady) {
   EXPECT_FALSE(ready.IsReady());
 
   wait_ready.Notify();
-  EXPECT_THAT(ready.Await(), absl_testing::IsOk());
+  EXPECT_THAT(ready.Await(), IsOk());
 }
 
 TEST_F(MockArrayTest, ReadyFuturePropagatesError) {
@@ -200,11 +200,11 @@ TEST_F(MockArrayTest, ReadyFuturePropagatesError) {
   absl::Notification wait_ready;
 
   {
-    absl::MutexLock l(mu_);
+    absl::MutexLock l(&mu_);
     get_ready_hook_ = [&]() { return absl::InternalError("testing"); };
   }
 
-  EXPECT_THAT(arr->GetReadyFuture().Await(), absl_testing::StatusIs(kInternal));
+  EXPECT_THAT(arr->GetReadyFuture().Await(), StatusIs(kInternal));
 }
 
 TEST_F(MockArrayTest, CopyToHostFutureWaitsUntilCopied) {
@@ -213,7 +213,7 @@ TEST_F(MockArrayTest, CopyToHostFutureWaitsUntilCopied) {
   absl::Notification wait_ready;
 
   {
-    absl::MutexLock l(mu_);
+    absl::MutexLock l(&mu_);
     copy_host_hook_ = [&]() {
       wait_ready.WaitForNotification();
       return absl::OkStatus();
@@ -228,7 +228,7 @@ TEST_F(MockArrayTest, CopyToHostFutureWaitsUntilCopied) {
   EXPECT_FALSE(copied.IsReady());
 
   wait_ready.Notify();
-  EXPECT_THAT(copied.Await(), absl_testing::IsOk());
+  EXPECT_THAT(copied.Await(), IsOk());
 }
 
 TEST_F(MockArrayTest, CopyToHostFuturePropagatesError) {
@@ -237,7 +237,7 @@ TEST_F(MockArrayTest, CopyToHostFuturePropagatesError) {
   absl::Notification wait_ready;
 
   {
-    absl::MutexLock l(mu_);
+    absl::MutexLock l(&mu_);
     copy_host_hook_ = [&]() { return absl::InternalError("testing"); };
   }
 
@@ -245,7 +245,7 @@ TEST_F(MockArrayTest, CopyToHostFuturePropagatesError) {
   auto copied = arr->CopyToHostBuffer(data, /*byte_strides=*/std::nullopt,
                                       ArrayCopySemantics::kAlwaysCopy);
 
-  EXPECT_THAT(copied.Await(), absl_testing::StatusIs(kInternal));
+  EXPECT_THAT(copied.Await(), StatusIs(kInternal));
 }
 
 }  // namespace

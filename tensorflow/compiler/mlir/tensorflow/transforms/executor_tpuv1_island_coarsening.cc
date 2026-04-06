@@ -225,11 +225,10 @@ IslandOp CreateMergedIsland(IslandOp island, SmallVector<IslandOp, 16>& islands,
     }
   }
 
-  OpBuilder builder(island);
-  IslandOp new_island =
-      IslandOp::create(builder, island.getLoc(), result_types,
-                       /*control=*/ControlType::get(island.getContext()),
-                       /*controlInputs=*/island.getOperands());
+  IslandOp new_island = OpBuilder(island).create<IslandOp>(
+      island.getLoc(), result_types,
+      /*control=*/ControlType::get(island.getContext()),
+      /*controlInputs=*/island.getOperands());
   new_island.getBody().push_back(new Block);
 
   // Move the operations in the new island, gather the results of the new yield.
@@ -249,8 +248,8 @@ IslandOp CreateMergedIsland(IslandOp island, SmallVector<IslandOp, 16>& islands,
         yield_operands.push_back(std::get<1>(result));
     }
   }
-  builder.setInsertionPointToEnd(&island_body);
-  YieldOp::create(builder, new_island.getLoc(), yield_operands);
+  OpBuilder::atBlockEnd(&island_body)
+      .create<YieldOp>(new_island.getLoc(), yield_operands);
 
   // remap results of the new islands to the user outside of the island.
   int current_result = 0;

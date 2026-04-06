@@ -36,14 +36,14 @@ AttrValue V(T value) {
   return ret;
 }
 
-AttrValue P(const std::string& p) {
+AttrValue P(const string& p) {
   AttrValue ret;
   ret.set_placeholder(p);
   return ret;
 }
 
-AttrValue F(const std::string& name,
-            std::vector<std::pair<std::string, AttrValue>> pairs) {
+AttrValue F(const string& name,
+            std::vector<std::pair<string, AttrValue>> pairs) {
   AttrValue ret;
   ret.mutable_func()->set_name(name);
   ret.mutable_func()->mutable_attr()->insert(pairs.begin(), pairs.end());
@@ -51,8 +51,7 @@ AttrValue F(const std::string& name,
 }
 
 AttrValue Fs(
-    std::vector<
-        std::pair<std::string, std::vector<std::pair<std::string, AttrValue>>>>
+    std::vector<std::pair<string, std::vector<std::pair<string, AttrValue>>>>
         funcs) {
   AttrValue ret;
   for (const auto& func : funcs) {
@@ -83,7 +82,7 @@ TEST(AttrValueUtil, HasType) {
 }
 
 SubstituteFunc ReplaceTWith(const AttrValue& val) {
-  return [val](const std::string& placeholder, AttrValue* target) {
+  return [val](const string& placeholder, AttrValue* target) {
     if (placeholder == "T") {
       *target = val;
       return true;
@@ -143,14 +142,14 @@ TEST(AttrValueUtil, DeepAttr) {
 
 TEST(AttrValueUtil, SummarizeAttrValueDoesNotElideShortStrings) {
   AttrValue attr_value;
-  SetAttrValue(std::string(40, '-'), &attr_value);
-  EXPECT_EQ(absl::StrCat("\"", std::string(40, '-'), "\""),
+  SetAttrValue(string(40, '-'), &attr_value);
+  EXPECT_EQ(strings::StrCat("\"", string(40, '-'), "\""),
             SummarizeAttrValue(attr_value));
 }
 
 TEST(AttrValueUtil, SummarizeAttrValueElidesLongStrings) {
   AttrValue attr_value;
-  SetAttrValue(std::string(80, '-'), &attr_value);
+  SetAttrValue(string(80, '-'), &attr_value);
   EXPECT_EQ("\"----------...----------\"", SummarizeAttrValue(attr_value));
 }
 
@@ -198,7 +197,7 @@ TEST(AttrValueUtil, TensorByteSizeShouldNotOverflow) {
   }
 }
 
-AttrValue FromText(const std::string& text) {
+AttrValue FromText(const string& text) {
   AttrValue attr;
   EXPECT_TRUE(protobuf::TextFormat::MergeFromString(text, &attr));
   return attr;

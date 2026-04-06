@@ -26,7 +26,6 @@ limitations under the License.
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/ascii.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "xla/tsl/platform/errors.h"
@@ -35,7 +34,7 @@ limitations under the License.
 namespace {
 
 void SkipWhitespace(absl::string_view json, size_t& index) {
-  while (index < json.size() && absl::ascii_isspace(json[index])) {
+  while (index < json.size() && std::isspace(json[index])) {
     ++index;
   }
 }
@@ -104,7 +103,7 @@ absl::StatusOr<std::unique_ptr<T>> ParseSequence(absl::string_view outer_json,
 
 absl::Status EnsureValidLiteralStart(char c) {
   if (c != '"' && c != '+' && c != '-' && c != 'f' && c != 't' && c != 'n' &&
-      !absl::ascii_isdigit(c)) {
+      (c < '0' || c > '9')) {
     return absl::InvalidArgumentError(absl::StrCat(
         "Invalid first character of literal: '", std::string(1, c), "'."));
   }
@@ -135,8 +134,8 @@ bool LiteralIsFinished(absl::string_view outer_json, size_t& index,
     return c == '"';
   }
 
-  return absl::ascii_isspace(c) || c == ',' || c == '{' || c == '}' ||
-         c == '[' || c == ']' || c == ':';
+  return std::isspace(c) || c == ',' || c == '{' || c == '}' || c == '[' ||
+         c == ']' || c == ':';
 }
 
 absl::StatusOr<absl::string_view> ParseLiteral(absl::string_view outer_json,

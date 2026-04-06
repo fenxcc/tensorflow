@@ -20,7 +20,6 @@ limitations under the License.
 #include <gtest/gtest.h>
 #include "absl/log/log.h"
 #include "absl/status/status.h"
-#include "absl/status/status_matchers.h"
 #include "absl/strings/string_view.h"
 #include "llvm/Support/Casting.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -36,6 +35,7 @@ limitations under the License.
 #include "xla/python/ifrt/serdes.pb.h"
 #include "xla/python/ifrt/serdes_test_util.h"
 #include "xla/python/ifrt/serdes_version.h"
+#include "xla/tsl/platform/status_matchers.h"
 #include "xla/tsl/platform/statusor.h"
 
 namespace xla {
@@ -44,6 +44,7 @@ namespace {
 
 using ::testing::HasSubstr;
 using ::testing::Not;
+using ::tsl::testing::StatusIs;
 
 class HloProgramSerDesTest : public testing::TestWithParam<SerDesVersion> {
  public:
@@ -115,10 +116,9 @@ module {
     auto program =
         std::make_unique<HloProgram>(std::move(context), std::move(module));
     auto options = std::make_unique<SerializeOptions>(version());
-    EXPECT_THAT(
-        Serialize(*program, std::move(options)),
-        absl_testing::StatusIs(Not(absl::StatusCode::kOk),
-                               HasSubstr("Failed to serialize StableHLO")));
+    EXPECT_THAT(Serialize(*program, std::move(options)),
+                StatusIs(Not(absl::StatusCode::kOk),
+                         HasSubstr("Failed to serialize StableHLO")));
   }
 }
 
@@ -146,9 +146,8 @@ module {
   serialized.set_data("invalid data");
 
   EXPECT_THAT(Deserialize<HloProgram>(serialized, /*options=*/nullptr),
-              absl_testing::StatusIs(
-                  Not(absl::StatusCode::kOk),
-                  HasSubstr("Failed to deserialize StableHLO module")));
+              StatusIs(Not(absl::StatusCode::kOk),
+                       HasSubstr("Failed to deserialize StableHLO module")));
 }
 
 INSTANTIATE_TEST_SUITE_P(

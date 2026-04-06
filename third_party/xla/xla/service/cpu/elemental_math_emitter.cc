@@ -23,13 +23,12 @@ limitations under the License.
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Value.h"
 #include "llvm/Support/Casting.h"
-#include "xla/codegen/intrinsic/erf.h"
-#include "xla/codegen/intrinsic/intrinsic.h"
+#include "xla/codegen/math/erf.h"
+#include "xla/codegen/math/intrinsic.h"
+#include "xla/service/llvm_ir/math_ops.h"
 #include "xla/xla_data.pb.h"
 
 namespace xla::cpu {
-
-using ::xla::codegen::intrinsics::Type;
 
 absl::StatusOr<llvm::Value*> EmitAtan2(llvm::Module* module,
                                        llvm::IRBuilderBase& b,
@@ -130,7 +129,8 @@ absl::StatusOr<llvm::Value*> EmitErf(llvm::Module* module,
   if (type == b.getFloatTy()) {
     llvm::Value* x = b.CreateFPCast(value, type);
     llvm::Function* erf =
-        codegen::intrinsics::Erf::GetOrInsertDeclaration(module, Type::S(F32));
+        codegen::Intrinsic::GetOrInsertDeclaration<codegen::Intrinsic::Erf>(
+            module, F32);
     llvm::Value* result = b.CreateCall(erf, {x});
     return b.CreateFPCast(result, value->getType());
   }

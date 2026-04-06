@@ -2,6 +2,7 @@
 #   RPC communication interfaces and implementations for TensorFlow.
 
 load("//xla/tsl:tsl.bzl", "internal_visibility")
+load("//xla/tsl:tsl.default.bzl", "tsl_grpc_cc_dependencies")
 load("//xla/tsl/platform:build_config.bzl", "tf_proto_library", "tsl_cc_test")
 load("//xla/tsl/platform:rules_cc.bzl", "cc_library")
 
@@ -25,10 +26,9 @@ cc_library(
     srcs = [],
     hdrs = ["grpc_call.h"],
     deps = [
-        "@com_github_grpc_grpc//:grpc++",
         "@com_google_absl//absl/synchronization",
         "@local_tsl//tsl/platform:refcount",
-    ],
+    ] + tsl_grpc_cc_dependencies(),
 )
 
 cc_library(
@@ -38,16 +38,12 @@ cc_library(
     deps = [
         "//xla/tsl/platform:status",
         "//xla/tsl/protobuf:distributed_runtime_payloads_proto_cc",
-        "@com_github_grpc_grpc//:grpc++",
-        "@com_github_grpc_grpc//:grpc++_codegen_proto",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:cord",
-        "@com_google_protobuf//:protobuf",
         "@local_tsl//tsl/platform:protobuf",
         "@local_tsl//tsl/platform:stringpiece",
         "@local_tsl//tsl/platform:stringprintf",
-        "@local_tsl//tsl/platform:tstring",
-    ],
+    ] + tsl_grpc_cc_dependencies(),
 )
 
 tsl_cc_test(
@@ -60,14 +56,14 @@ tsl_cc_test(
     deps = [
         ":grpc_util",
         ":test_request_proto_cc_impl",
+        "//xla/tsl/platform:env_impl",
         "//xla/tsl/platform:errors",
         "//xla/tsl/platform:test",
         "//xla/tsl/platform:test_benchmark",
         "//xla/tsl/platform:test_main",
+        "//xla/tsl/protobuf:distributed_runtime_payloads_proto_cc_impl",
         "//xla/tsl/util/proto:proto_matchers",
-        "@com_github_grpc_grpc//:grpc++",
-        "@com_google_absl//absl/status",
-    ],
+    ] + tsl_grpc_cc_dependencies(),
 )
 
 cc_library(
@@ -97,15 +93,13 @@ cc_library(
         "//xla/tsl/platform:types",
         "//xla/tsl/protobuf:rpc_options_proto_cc",
         "//xla/tsl/util:device_name_utils",
-        "@com_github_grpc_grpc//:grpc++",
-        "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/synchronization",
         "@local_tsl//tsl/platform:numbers",
         "@local_tsl//tsl/platform:str_util",
         "@local_tsl//tsl/platform:strcat",
         "@local_tsl//tsl/platform:thread_annotations",
-    ],
+    ] + tsl_grpc_cc_dependencies(),
 )
 
 tsl_cc_test(
@@ -137,10 +131,9 @@ cc_library(
         "//xla/tsl/platform:errors",
         "//xla/tsl/platform:status",
         "//xla/tsl/util:env_var",
-        "@com_github_grpc_grpc//:grpc++",
         "@com_google_absl//absl/status",
         "@local_tsl//tsl/platform:strcat",
-    ],
+    ] + tsl_grpc_cc_dependencies(),
 )
 
 cc_library(

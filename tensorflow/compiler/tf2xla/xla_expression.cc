@@ -73,7 +73,7 @@ XlaExpression XlaExpression::Resource(XlaResource* resource) {
   return e;
 }
 
-std::string XlaExpression::HumanString() const {
+string XlaExpression::HumanString() const {
   switch (kind_) {
     case Kind::kInvalid:
       return "invalid";

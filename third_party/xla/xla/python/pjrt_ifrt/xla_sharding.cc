@@ -128,7 +128,7 @@ HloSharding::HloSharding(DeviceListRef devices, MemoryKind memory_kind,
 
 absl::StatusOr<Shape> HloSharding::GetShardShape(const Shape& shape) const {
   if (xla_hlo_sharding_.IsTileMaximal() || xla_hlo_sharding_.IsManual() ||
-      xla_hlo_sharding_.IsUnreduced() || xla_hlo_sharding_.IsUnknown()) {
+      xla_hlo_sharding_.IsUnknown()) {
     return shape;
   }
   if (xla_hlo_sharding_.TotalNumTiles() != devices_->size()) {
@@ -181,6 +181,11 @@ absl::StatusOr<std::unique_ptr<Sharding>> HloSharding::WithDeviceAssignment(
   return Create(devices.value_or(devices_), memory_kind.value_or(memory_kind_),
                 xla_hlo_sharding_);
 }
+absl::StatusOr<std::vector<std::pair<Shape, ShardingRef>>>
+HloSharding::Disassemble(const Shape& shape) const {
+  DCHECK(this);
+  return Disassemble(shape, SingleDeviceShardSemantics::kAllShards);
+}
 
 absl::StatusOr<std::vector<std::pair<Shape, ShardingRef>>>
 HloSharding::Disassemble(
@@ -188,8 +193,7 @@ HloSharding::Disassemble(
     SingleDeviceShardSemantics single_device_shard_semantics) const {
   DCHECK(this);
   bool is_even_sharding = false;
-  if (xla_hlo_sharding_.IsReplicated() || xla_hlo_sharding_.IsTileMaximal() ||
-      xla_hlo_sharding_.IsUnreduced()) {
+  if (xla_hlo_sharding_.IsReplicated() || xla_hlo_sharding_.IsTileMaximal()) {
     is_even_sharding = true;
   } else if (xla_hlo_sharding_.IsTiled()) {
     const int64_t tiled_data_rank = xla_hlo_sharding_.TiledDataRank();
@@ -203,7 +207,7 @@ HloSharding::Disassemble(
 
     is_even_sharding = true;
     for (int i = 0; i < tiled_data_rank; ++i) {
-      if (shape.dims()[i] % xla_hlo_sharding_.dimension(i) != 0) {
+      if (shape.dims()[i] % xla_hlo_sharding_.tile_assignment().dim(i) != 0) {
         is_even_sharding = false;
         break;
       }
@@ -213,42 +217,32 @@ HloSharding::Disassemble(
     is_even_sharding = true;
   }
 
-  return is_even_sharding
-             ? DisassembleEven(shape, single_device_shard_semantics)
-             : DisassembleUneven(shape, single_device_shard_semantics);
-}
-
-absl::StatusOr<std::vector<std::pair<Shape, ShardingRef>>>
-HloSharding::DisassembleEven(
-    const Shape& shape,
-    SingleDeviceShardSemantics single_device_shard_semantics) const {
-  // Fast path for even sharding.
-  TF_ASSIGN_OR_RETURN(xla::ifrt::Shape shard_shape, GetShardShape(shape));
-  std::vector<std::pair<Shape, ShardingRef>> result;
-  DeviceList* device_list;
-  if (single_device_shard_semantics == SingleDeviceShardSemantics::kAllShards) {
-    device_list = devices_.get();
-  } else {
-    device_list = devices_->AddressableDeviceList();
+  const absl::Span<Device* const> devices = devices_->devices();
+  if (is_even_sharding) {
+    // Fast path for even sharding.
+    TF_ASSIGN_OR_RETURN(xla::ifrt::Shape shard_shape, GetShardShape(shape));
+    std::vector<std::pair<Shape, ShardingRef>> result;
+    if (single_device_shard_semantics ==
+        SingleDeviceShardSemantics::kAllShards) {
+      result.reserve(devices_->size());
+    } else {
+      result.reserve(devices_->AddressableDeviceList()->size());
+    }
+    for (int i = 0; i < devices_->size(); ++i) {
+      if (single_device_shard_semantics ==
+              SingleDeviceShardSemantics::kAllShards ||
+          devices[i]->IsAddressable()) {
+        result.push_back({
+            shard_shape,
+            SingleDeviceSharding::Create(devices[i], memory_kind_),
+        });
+      }
+    }
+    return result;
   }
-  result.reserve(device_list->size());
-  for (Device* device : device_list->devices()) {
-    result.push_back({
-        shard_shape,
-        SingleDeviceSharding::Create(device, memory_kind_),
-    });
-  }
-  return result;
-}
-
-absl::StatusOr<std::vector<std::pair<Shape, ShardingRef>>>
-HloSharding::DisassembleUneven(
-    const Shape& shape,
-    SingleDeviceShardSemantics single_device_shard_semantics) const {
   // Slow path that uses `IndexDomains()` to handle uneven sharding.
-  TF_ASSIGN_OR_RETURN(
-      std::vector<IndexDomain> index_domains,
-      IndexDomains(shape, SingleDeviceShardSemantics::kAllShards));
+  TF_ASSIGN_OR_RETURN(std::vector<IndexDomain> index_domains,
+                      IndexDomains(shape));
   CHECK_EQ(index_domains.size(), devices_->size());
   std::vector<std::pair<Shape, ShardingRef>> result;
   if (single_device_shard_semantics == SingleDeviceShardSemantics::kAllShards) {
@@ -256,7 +250,6 @@ HloSharding::DisassembleUneven(
   } else {
     result.reserve(devices_->AddressableDeviceList()->size());
   }
-  const absl::Span<Device* const> devices = devices_->devices();
   for (int i = 0; i < index_domains.size(); ++i) {
     if (single_device_shard_semantics ==
             SingleDeviceShardSemantics::kAllShards ||
@@ -271,6 +264,12 @@ HloSharding::DisassembleUneven(
 }
 
 absl::StatusOr<std::vector<std::pair<DynamicShape, ShardingRef>>>
+HloSharding::Disassemble(const DynamicShape& dynamic_shape) const {
+  DCHECK(this);
+  return Disassemble(dynamic_shape, SingleDeviceShardSemantics::kAllShards);
+}
+
+absl::StatusOr<std::vector<std::pair<DynamicShape, ShardingRef>>>
 HloSharding::Disassemble(
     const DynamicShape& dynamic_shape,
     SingleDeviceShardSemantics single_device_shard_semantics) const {
@@ -279,6 +278,12 @@ HloSharding::Disassemble(
       "HloSharding can only disassemble static shape, but was asked "
       "to disassemble dynamic shape %s",
       dynamic_shape.DebugString());
+}
+
+absl::StatusOr<std::vector<IndexDomain>> HloSharding::IndexDomains(
+    const Shape& shape) const {
+  DCHECK(this);
+  return IndexDomains(shape, SingleDeviceShardSemantics::kAllShards);
 }
 
 absl::StatusOr<std::vector<IndexDomain>> HloSharding::IndexDomains(
@@ -314,12 +319,12 @@ absl::StatusOr<std::vector<IndexDomain>> HloSharding::IndexDomains(
                                   single_device_shard_semantics);
     }
   }
-  if (xla_hlo_sharding_.num_devices() != num_devices) {
-    return absl::InvalidArgumentError(
-        absl::StrFormat("sharding's device count (%d) does not match provided "
-                        "device count (%d); shape=%s, sharding=%s",
-                        xla_hlo_sharding_.num_devices(), num_devices,
-                        shape.DebugString(), DebugString()));
+  if (xla_hlo_sharding_.tile_assignment().num_elements() != num_devices) {
+    return absl::InvalidArgumentError(absl::StrFormat(
+        "sharding's tile_assignment_devices and device count does not "
+        "match: %d vs. %d; shape=%s, sharding=%s",
+        xla_hlo_sharding_.tile_assignment().num_elements(), num_devices,
+        shape.DebugString(), DebugString()));
   }
 
   const int64_t tiled_data_rank = xla_hlo_sharding_.TiledDataRank();

@@ -17,7 +17,6 @@ limitations under the License.
 #include <vector>
 
 #include "absl/memory/memory.h"
-#include "absl/synchronization/notification.h"
 #include "tensorflow/core/common_runtime/device_mgr.h"
 #include "tensorflow/core/framework/device_attributes.pb.h"
 #include "tensorflow/core/lib/core/status.h"
@@ -31,7 +30,7 @@ namespace {
 
 // Return a fake device with the specified type and name.
 static Device* CreateDevice(const char* type, const char* name,
-                            absl::Notification* n = nullptr) {
+                            Notification* n = nullptr) {
   class FakeDevice : public Device {
    public:
     explicit FakeDevice(const DeviceAttributes& attr) : Device(nullptr, attr) {}
@@ -42,12 +41,12 @@ static Device* CreateDevice(const char* type, const char* name,
   class FakeDeviceWithDestructorNotification : public FakeDevice {
    public:
     FakeDeviceWithDestructorNotification(const DeviceAttributes& attr,
-                                         absl::Notification* n)
+                                         Notification* n)
         : FakeDevice(attr), n_(n) {}
     ~FakeDeviceWithDestructorNotification() override { n_->Notify(); }
 
    private:
-    absl::Notification* n_;
+    Notification* n_;
   };
 
   DeviceAttributes attr;
@@ -106,7 +105,7 @@ TEST(DynamicDeviceMgrTest, RemoveDeviceFromMgr) {
 
 TEST(DynamicDeviceMgrTest, RemoveDeviceFromMgrBuffer) {
   // Create a device whose destructor will send a notification.
-  absl::Notification n;
+  Notification n;
   std::unique_ptr<Device> d0(CreateDevice("CPU", "/device:CPU:0", &n));
   Device* d0_ptr = d0.get();
   std::vector<std::unique_ptr<Device>> added_devices;

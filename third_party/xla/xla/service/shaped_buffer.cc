@@ -15,13 +15,11 @@ limitations under the License.
 
 #include "xla/service/shaped_buffer.h"
 
-#include <ostream>
+#include <memory>
 #include <string>
 #include <utility>
 
 #include "absl/container/flat_hash_set.h"
-#include "absl/log/check.h"
-#include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "xla/shape.h"
@@ -29,7 +27,9 @@ limitations under the License.
 #include "xla/shape_util.h"
 #include "xla/stream_executor/device_memory.h"
 #include "xla/stream_executor/device_memory_allocator.h"
-#include "xla/tsl/platform/statusor.h"
+#include "tsl/platform/logging.h"
+#include "tsl/platform/status.h"
+#include "tsl/platform/statusor.h"
 
 namespace xla {
 
@@ -40,9 +40,7 @@ ShapedBuffer::ShapedBuffer(Shape on_device_shape, int device_ordinal,
       buffers_(&on_device_shape_) {
   physical_device_ordinal_ =
       physical_device_ordinal == -1 ? device_ordinal_ : physical_device_ordinal;
-  if (!ShapeUtil::DeviceShapeIsHostShape(on_device_shape_)) {
-    on_host_shape_ = ShapeUtil::DeviceShapeToHostShape(on_device_shape_);
-  }
+  on_host_shape_ = ShapeUtil::DeviceShapeToHostShape(on_device_shape_);
 }
 
 ShapedBuffer::ShapedBuffer(Shape on_host_shape, Shape on_device_shape,
@@ -181,7 +179,7 @@ void ScopedShapedBuffer::Deallocate() {
     se::DeviceMemoryBase& memory_base = pair.second;
     if (!memory_base.is_null() &&
         deallocated_ptrs.insert(memory_base.opaque()).second) {
-      CHECK_OK(allocator_->Deallocate(device_ordinal(), memory_base));
+      TF_CHECK_OK(allocator_->Deallocate(device_ordinal(), memory_base));
     }
   }
 }

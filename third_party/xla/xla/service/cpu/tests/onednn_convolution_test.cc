@@ -15,7 +15,6 @@ limitations under the License.
 
 #include <utility>
 
-#include "absl/strings/ascii.h"
 #include "absl/strings/str_replace.h"
 #include "xla/hlo/testlib/filecheck.h"
 #include "xla/hlo/testlib/test.h"
@@ -31,12 +30,14 @@ limitations under the License.
 namespace xla {
 namespace cpu {
 
+#if defined(INTEL_MKL)
+
 class ConvolutionTest : public HloTestBase,
                         public ::testing::WithParamInterface<PrimitiveType> {
  protected:
   DebugOptions GetDebugOptionsForTest() const override {
     DebugOptions debug_options = HloTestBase::GetDebugOptionsForTest();
-    debug_options.set_xla_cpu_experimental_onednn_custom_call(true);
+    debug_options.set_xla_cpu_use_thunk_runtime(false);
     return debug_options;
   }
 
@@ -301,20 +302,20 @@ TEST_P(ConvolutionTest, ConvInsufficientScratchTest) {
             "dims":"3",
             "input":{
               "dims":"3",
-              "data":{"batch_dim":"0","feature_dim":"2","spatial_dims":["1"]}
+              "data":{"batch_dim":"0","feature_dim":"2","spatial_dims":["2"]}
             },
             "kernel":{
               "dims":"3",
               "filter":{"input_feature_dim":"1","output_feature_dim":"2",
-                "spatial_dims":["0"],"shape":[]}
+                "spatial_dims":["1"],"shape":[]}
             },
             "output":{
               "dims":"3",
-              "data":{"batch_dim":"0","feature_dim":"2","spatial_dims":["1"]}
+              "data":{"batch_dim":"0","feature_dim":"2","spatial_dims":["2"]}
             },
             "window":{
-              "size":[],"pad_left":["0"],"pad_right":["0"],
-              "strides":["1"],"window_dilations":["1"]
+              "size":[],"pad_left":["1"],"pad_right":["1"],
+              "strides":["2"],"window_dilations":["2"]
             },
             "feature_groups":"1",
             "optimization_config":{"user_scratchpad":true}
@@ -367,31 +368,6 @@ TEST_P(ConvolutionTest, Conv2DWithBiasAndBinaryAddTest) {
   } else {
     RunCompareAndMatchOptimizedHlo(outline, {"BIAS", "SUM"});
   }
-}
-
-TEST_P(ConvolutionTest, Conv2DWithReluSumAndBinaryAddTest) {
-  const absl::string_view outline = R"(
-  HloModule convolution.relu.sum.add.test
-
-  ENTRY convolution.relu.sum.add.test {
-    arg0.1 = $dtype[1,22,22,1] parameter(0)
-    arg0.2 = $dtype[8,8,1,10] parameter(1)
-    arg0.3 = $dtype[1,11,11,10] parameter(2)
-    convolution.0 = $dtype[1,11,11,10] convolution(arg0.1, arg0.2),
-          window={size=8x8 stride=2x2 pad=3_3x3_3}, dim_labels=b01f_01io->b01f
-    const.1 = $pdtype[] constant(0)
-    convert.0 = $dtype[] convert(const.1)
-    bcast.2 = $dtype[1,11,11,10] broadcast(convert.0), dimensions={}
-    maximum.1 = $dtype[1,11,11,10] maximum(convolution.0, bcast.2)
-    const.2 = $dtype[1,11,11,10] constant({...})
-    add.1 = $dtype[1,11,11,10] add(maximum.1, const.2)
-    ROOT add.2 = $dtype[1,11,11,10] add(add.1, arg0.3)
-  })";
-
-  // Optimized HLO must match "SUM" only for precisions that support Elementwise
-  // Add operations
-  RunCompareAndMatchOptimizedHlo(
-      outline, {"RELU", dtype_ == BF16 ? "BINARY_ADD" : "SUM", "BINARY_ADD"});
 }
 
 TEST_P(ConvolutionTest, ToeplitzConstrcutionTest) {
@@ -757,9 +733,12 @@ INSTANTIATE_TEST_SUITE_P(
     ::testing::Values(F32, BF16, F16),
     [](const ::testing::TestParamInfo<ConvolutionTest::ParamType>& info) {
       auto test_name = primitive_util::LowercasePrimitiveTypeName(info.param);
-      absl::AsciiStrToUpper(&test_name);
+      std::transform(test_name.begin(), test_name.end(), test_name.begin(),
+                     [](auto c) { return std::toupper(c); });
       return test_name;
     });
+
+#endif  // INTEL_MKL
 
 // Ensure at least one test case is linked to avoid test failures.
 TEST(Dummy, Test) {}

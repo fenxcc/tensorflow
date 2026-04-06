@@ -16,7 +16,6 @@ limitations under the License.
 #ifndef XLA_SERVICE_GPU_FUSION_DISPATCH_PIPELINE_H_
 #define XLA_SERVICE_GPU_FUSION_DISPATCH_PIPELINE_H_
 
-#include "xla/hlo/analysis/symbolic_expr.h"
 #include "xla/hlo/pass/hlo_pass_pipeline.h"
 #include "xla/service/hlo_cost_analysis.h"
 #include "xla/stream_executor/device_description.h"
@@ -29,8 +28,7 @@ namespace gpu {
 // emitter possible.
 HloPassPipeline FusionDispatchPipeline(
     const se::DeviceDescription& device_description,
-    HloCostAnalysis::ShapeSizeFunction shape_size_fn,
-    mlir::MLIRContext* mlir_context);
+    HloCostAnalysis::ShapeSizeFunction shape_size_fn);
 
 }  // namespace gpu
 }  // namespace xla

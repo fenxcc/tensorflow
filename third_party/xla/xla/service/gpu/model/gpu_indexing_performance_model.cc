@@ -32,8 +32,6 @@ limitations under the License.
 #include "absl/types/span.h"
 #include "llvm/Support/MathExtras.h"
 #include "xla/backends/gpu/codegen/triton/fusion.h"
-#include "xla/codegen/tiling/symbolic_tile_analysis.h"
-#include "xla/codegen/tiling/tiled_hlo_computation.h"
 #include "xla/hlo/analysis/indexing_analysis.h"
 #include "xla/hlo/analysis/indexing_map.h"
 #include "xla/hlo/ir/hlo_instruction.h"
@@ -46,6 +44,8 @@ limitations under the License.
 #include "xla/service/gpu/model/coalescing_analysis.h"
 #include "xla/service/gpu/model/gpu_hlo_cost_analysis.h"
 #include "xla/service/gpu/model/gpu_performance_model_base.h"
+#include "xla/service/gpu/model/symbolic_tile_analysis.h"
+#include "xla/service/gpu/model/tiled_hlo_computation.h"
 #include "xla/service/gpu/model/triton_emitter_constraints.h"
 #include "xla/service/instruction_fusion.h"
 #include "xla/shape.h"
@@ -86,8 +86,8 @@ int64_t GetPaddedTileSize(absl::Span<int64_t const> tile_sizes) {
 //
 // Spilling almost always causes significant performance regressions, so this
 // heuristic tries to be safe and increase recall at the cost of precision.
-bool DoesTileFitInRegisters(int64_t tile_size,
-                            const se::DeviceDescription& device_info) {
+bool DoesTileFitsInRegisters(int64_t tile_size,
+                             const se::DeviceDescription& device_info) {
   // This is a conservative estimate to make sure that we don't get a tile that
   // is too big and results in register spills.
   //
@@ -126,40 +126,6 @@ bool DoesTileFitInRegisters(int64_t tile_size,
   // smaller types can fit into one register.
   return tile_size <= kFractionOfRegistersAvailableToStoreTile *
                           device_info.registers_per_block_limit();
-}
-
-// Checks if all tiles in the computation fit in registers.
-//
-// There is no way to know for sure if emitted computation will not spill
-// registers, so we use a heuristic based on tile sizes. The heuristic looks at
-// operand and root tiles, because those will likely be materialized fully and
-// can not be reordered with other tiles.
-bool DoesComputationFitInRegisters(
-    const HloFusionAdaptor& fusion_adaptor,
-    const TiledHloComputation& tiled_hlo_computation,
-    const se::DeviceDescription& device_info) {
-  // Check that output tiles fit in registers.
-  for (const TiledHloInstruction* root : tiled_hlo_computation.GetRoots()) {
-    if (!DoesTileFitInRegisters(GetPaddedTileSize(root->tile_sizes()),
-                                device_info)) {
-      return false;
-    }
-  }
-
-  for (const TiledHloInstruction* tiled_hlo :
-       tiled_hlo_computation.instructions()) {
-    bool is_operand = !fusion_adaptor.ContainsInstruction(tiled_hlo->hlo());
-
-    // Iota is not an operand, but usually needs to be materialized in
-    // registers.
-    if ((is_operand || tiled_hlo->hlo()->opcode() == HloOpcode::kIota) &&
-        !DoesTileFitInRegisters(GetPaddedTileSize(tiled_hlo->tile_sizes()),
-                                device_info)) {
-      return false;
-    }
-  }
-
-  return true;
 }
 
 // Returns the number of warps to use based on the largest tile size in the
@@ -254,7 +220,7 @@ int64_t GpuPerformanceModelWithIndexingAnalysis::FlopsPerElement(
   }
 
   // Encountered unexpected instruction, call into `GpuHloCostAnalysis`.
-  CHECK_OK(
+  TF_CHECK_OK(
       cost_analysis_.RevisitInstruction(const_cast<HloInstruction*>(instr)));
 
   return cost_analysis_.flop_count(*instr) /
@@ -310,7 +276,7 @@ GpuPerformanceModelWithIndexingAnalysis::EstimateRunTimeForFusion(
   auto root_shape = roots.front().shape();
 
   LaunchDimensions launch_dimensions =
-      EstimateFusionLaunchDimensions(fusion_analysis, mlir_context_);
+      EstimateFusionLaunchDimensions(fusion_analysis);
 
   int64_t num_blocks = launch_dimensions.num_blocks();
 
@@ -442,17 +408,18 @@ GpuPerformanceModelWithIndexingAnalysis::EstimateRunTimeForTiledHloComputation(
   int64_t bytes_read = 0;
   int64_t num_blocks = launch_dimensions.num_blocks();
 
-  // Check if the computation is too large to fit in registers and would result
-  // in spilling.
-  if (!DoesComputationFitInRegisters(fusion_adaptor, tiled_hlo_computation,
-                                     *device_info_)) {
-    // TODO(b/363194951): Estimate performance regression due to spilling in
-    // terms of memory bandwidth instead of returning infinite run time.
-    return EstimateRunTimeData::Infinite();
-  }
+  for (const auto& tiled_hlo : tiled_hlo_computation.instructions()) {
+    // Number of elements in the tile after padding.
+    int64_t padded_tile_size = GetPaddedTileSize(tiled_hlo->tile_sizes());
 
-  for (const TiledHloInstruction* tiled_hlo :
-       tiled_hlo_computation.instructions()) {
+    // Check if the tile is too large to fit in registers and would result in
+    // spilling.
+    if (!DoesTileFitsInRegisters(padded_tile_size, *device_info_)) {
+      // TODO(b/363194951): Estimate performance regression due to spilling in
+      // terms of memory bandwidth instead of returning infinite run time.
+      return EstimateRunTimeData::Infinite();
+    }
+
     const HloInstruction* hlo = tiled_hlo->hlo();
 
     if (fusion_adaptor.ContainsInstruction(hlo)) {
@@ -463,9 +430,6 @@ GpuPerformanceModelWithIndexingAnalysis::EstimateRunTimeForTiledHloComputation(
         return absl::FailedPreconditionError(
             "Concatenate is not supported by the indexing cost model.");
       }
-
-      // Number of elements in the tile after padding.
-      int64_t padded_tile_size = GetPaddedTileSize(tiled_hlo->tile_sizes());
 
       // Total number of elements computed for this tile across all blocks.
       //
@@ -601,7 +565,7 @@ GpuPerformanceModelWithIndexingAnalysis::EstimateRunTimeForTriton(
   const auto& fusion_analysis =
       (consumer == nullptr) ? fusion_analysis_cache_->Get(*producer)
                             : fusion_analysis_cache_->Get(*producer, *consumer);
-  auto launch_config = TritonFusion(fusion_analysis).GetLaunchConfig();
+  auto launch_config = TritonFusion(fusion_analysis).launch_config();
 
   if (!launch_config.has_value()) {
     return absl::InvalidArgumentError(

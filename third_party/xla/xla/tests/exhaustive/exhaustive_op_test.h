@@ -40,7 +40,7 @@ class ExhaustiveOpTest : public ExhaustiveOpTestBase<T, N> {
  public:
   using Traits = ExhaustiveOpTestBase<T, 1>::Traits;
 
-  ExhaustiveOpTest() : platform_(this->test_runner()) {}
+  ExhaustiveOpTest() : platform_(*this->client_->platform()) {}
 
   bool RelaxedDenormalSigns() const override {
     return !platform_.IsNvidiaGpu();

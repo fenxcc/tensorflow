@@ -104,12 +104,10 @@ void RemoveCopyIfTargetOnlyRead(func::FuncOp func) {
       SmallVector<MemoryEffects::EffectInstance, 2> effects;
       effect_interface.getEffects<MemoryEffects::Write>(effects);
       for (auto effect : effects) {
-        if (effect.getValue() != nullptr) {
-          if (auto alloc = effect.getValue().getDefiningOp<memref::AllocOp>()) {
-            if (alloc->getBlock() == copy->getBlock() &&
-                copy->isBeforeInBlock(alloc)) {
-              continue;
-            }
+        if (auto alloc = effect.getValue().getDefiningOp<memref::AllocOp>()) {
+          if (alloc->getBlock() == copy->getBlock() &&
+              copy->isBeforeInBlock(alloc)) {
+            continue;
           }
         }
         source_is_mutated = true;

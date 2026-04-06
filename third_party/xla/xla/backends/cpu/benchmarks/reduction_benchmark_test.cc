@@ -198,8 +198,7 @@ static void BM_ReduceWindowAddF32OverlappingWindows(
       ->Arg(512)                \
       ->Arg(1024)               \
       ->Arg(8192)               \
-      ->Arg(16384)              \
-      ->MeasureProcessCPUTime();
+      ->Arg(16384)
 
 BENCHMARK_SIZES(BM_ReduceAddF32);
 BENCHMARK_SIZES(BM_ReduceAddBF16);
@@ -207,8 +206,7 @@ BENCHMARK_SIZES(BM_ReduceAddBF16);
 XLA_CPU_BENCHMARK(BM_ReduceAddF32OverDimension)
     ->ArgName("reduce_dim")
     ->Arg(0)
-    ->Arg(1)
-    ->MeasureProcessCPUTime();
+    ->Arg(1);
 
 XLA_CPU_BENCHMARK(BM_ReduceWindowAddF32OuterAndInnerDim)
     ->MeasureProcessCPUTime()
@@ -219,8 +217,7 @@ XLA_CPU_BENCHMARK(BM_ReduceWindowAddF32OuterAndInnerDim)
     ->Args({32, 4})
     ->Args({32, 8})
     ->Args({32, 16})
-    ->Args({32, 32})
-    ->MeasureProcessCPUTime();
+    ->Args({32, 32});
 
 XLA_CPU_BENCHMARK(BM_ReduceWindowAddF32SkippingData)->MeasureProcessCPUTime();
 

@@ -26,118 +26,25 @@ limitations under the License.
 
 #include <string>
 
-#include "absl/base/attributes.h"
-#include "absl/base/macros.h"
-#include "absl/strings/str_format.h"
+#include "xla/tsl/platform/macros.h"
+#include "xla/tsl/platform/types.h"
 
 namespace tsl {
 namespace strings {
 
 // Return a C++ string
-ABSL_DEPRECATE_AND_INLINE()
-inline std::string Printf(const absl::FormatSpec<>& format) {
-  return absl::StrFormat(format);
-}
-
-template <typename Arg1>
-ABSL_DEPRECATE_AND_INLINE()
-std::string Printf(const absl::FormatSpec<Arg1>& format, Arg1 arg1) {
-  return absl::StrFormat(format, arg1);
-}
-
-template <typename Arg1, typename Arg2>
-ABSL_DEPRECATE_AND_INLINE()
-std::string
-    Printf(const absl::FormatSpec<Arg1, Arg2>& format, Arg1 arg1, Arg2 arg2) {
-  return absl::StrFormat(format, arg1, arg2);
-}
-
-template <typename Arg1, typename Arg2, typename Arg3>
-ABSL_DEPRECATE_AND_INLINE()
-std::string Printf(const absl::FormatSpec<Arg1, Arg2, Arg3>& format, Arg1 arg1,
-                   Arg2 arg2, Arg3 arg3) {
-  return absl::StrFormat(format, arg1, arg2, arg3);
-}
-
-template <typename Arg1, typename Arg2, typename Arg3, typename Arg4>
-ABSL_DEPRECATE_AND_INLINE()
-std::string Printf(const absl::FormatSpec<Arg1, Arg2, Arg3, Arg4>& format,
-                   Arg1 arg1, Arg2 arg2, Arg3 arg3, Arg4 arg4) {
-  return absl::StrFormat(format, arg1, arg2, arg3, arg4);
-}
-
-template <typename Arg1, typename Arg2, typename Arg3, typename Arg4,
-          typename Arg5>
-ABSL_DEPRECATE_AND_INLINE()
-std::string Printf(const absl::FormatSpec<Arg1, Arg2, Arg3, Arg4, Arg5>& format,
-                   Arg1 arg1, Arg2 arg2, Arg3 arg3, Arg4 arg4, Arg5 arg5) {
-  return absl::StrFormat(format, arg1, arg2, arg3, arg4, arg5);
-}
-
-template <typename Arg1, typename Arg2, typename Arg3, typename Arg4,
-          typename Arg5, typename... AV>
-ABSL_DEPRECATED("Use absl::StrFormat instead.")
-std::string
-    Printf(const absl::FormatSpec<Arg1, Arg2, Arg3, Arg4, Arg5, AV...>& format,
-           Arg1 arg1, Arg2 arg2, Arg3 arg3, Arg4 arg4, Arg5 arg5, AV... args) {
-  return absl::StrFormat(format, arg1, arg2, arg3, arg4, arg5,
-                         std::forward<AV>(args)...);
-}
+std::string Printf(const char* format, ...)
+    // Tell the compiler to do printf format string checking.
+    TF_PRINTF_ATTRIBUTE(1, 2);
 
 // Append result to a supplied string
-ABSL_DEPRECATE_AND_INLINE()
-inline void Appendf(std::string* dst, const absl::FormatSpec<>& format) {
-  absl::StrAppendFormat(dst, format);
-}
+void Appendf(std::string* dst, const char* format, ...)
+    // Tell the compiler to do printf format string checking.
+    TF_PRINTF_ATTRIBUTE(2, 3);
 
-template <typename Arg1>
-ABSL_DEPRECATE_AND_INLINE()
-void Appendf(std::string* dst, const absl::FormatSpec<Arg1>& format,
-             Arg1 arg1) {
-  absl::StrAppendFormat(dst, format, arg1);
-}
-
-template <typename Arg1, typename Arg2>
-ABSL_DEPRECATE_AND_INLINE()
-void Appendf(std::string* dst, const absl::FormatSpec<Arg1, Arg2>& format,
-             Arg1 arg1, Arg2 arg2) {
-  absl::StrAppendFormat(dst, format, arg1, arg2);
-}
-
-template <typename Arg1, typename Arg2, typename Arg3>
-ABSL_DEPRECATE_AND_INLINE()
-void Appendf(std::string* dst, const absl::FormatSpec<Arg1, Arg2, Arg3>& format,
-             Arg1 arg1, Arg2 arg2, Arg3 arg3) {
-  absl::StrAppendFormat(dst, format, arg1, arg2, arg3);
-}
-
-template <typename Arg1, typename Arg2, typename Arg3, typename Arg4>
-ABSL_DEPRECATE_AND_INLINE()
-void Appendf(std::string* dst,
-             const absl::FormatSpec<Arg1, Arg2, Arg3, Arg4>& format, Arg1 arg1,
-             Arg2 arg2, Arg3 arg3, Arg4 arg4) {
-  absl::StrAppendFormat(dst, format, arg1, arg2, arg3, arg4);
-}
-
-template <typename Arg1, typename Arg2, typename Arg3, typename Arg4,
-          typename Arg5>
-ABSL_DEPRECATE_AND_INLINE()
-void Appendf(std::string* dst,
-             const absl::FormatSpec<Arg1, Arg2, Arg3, Arg4, Arg5>& format,
-             Arg1 arg1, Arg2 arg2, Arg3 arg3, Arg4 arg4, Arg5 arg5) {
-  absl::StrAppendFormat(dst, format, arg1, arg2, arg3, arg4, arg5);
-}
-
-template <typename Arg1, typename Arg2, typename Arg3, typename Arg4,
-          typename Arg5, typename... AV>
-ABSL_DEPRECATED("Use absl::StrAppendFormat instead.")
-void Appendf(
-    std::string* dst,
-    const absl::FormatSpec<Arg1, Arg2, Arg3, Arg4, Arg5, AV...>& format,
-    Arg1 arg1, Arg2 arg2, Arg3 arg3, Arg4 arg4, Arg5 arg5, AV... args) {
-  absl::StrAppendFormat(dst, format, arg1, arg2, arg3, arg4, arg5,
-                        std::forward<AV>(args)...);
-}
+// Lower-level routine that takes a va_list and appends to a specified
+// string.  All other routines are just convenience wrappers around it.
+void Appendv(std::string* dst, const char* format, va_list ap);
 
 }  // namespace strings
 }  // namespace tsl

@@ -120,10 +120,6 @@ absl::StatusOr<std::unique_ptr<Serializable>> DeserializeUnchecked(
 //
 // Returns an error if the `Serializable` type does not have a corresponding
 // `SerDes` registered or the `SerDes` returns an error.
-absl::Status Serialize(const Serializable& serializable,
-                       std::unique_ptr<SerializeOptions> options,
-                       Serialized& proto);
-
 absl::StatusOr<Serialized> Serialize(const Serializable& serializable,
                                      std::unique_ptr<SerializeOptions> options);
 

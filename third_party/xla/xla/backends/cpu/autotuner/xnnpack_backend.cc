@@ -16,22 +16,23 @@ limitations under the License.
 #include "xla/backends/cpu/autotuner/xnnpack_backend.h"
 
 #include <memory>
-#include <utility>
 #include <vector>
 
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "xla/backends/autotuner/codegen_backend.h"
-#include "xla/backends/cpu/xnn_fusion_options.pb.h"
-#include "xla/backends/cpu/xnn_support.h"
+#include "xla/backends/cpu/xnn_fusion.h"
+#include "xla/backends/cpu/xnnpack_config.pb.h"
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/ir/hlo_opcode.h"
 #include "xla/service/compiler.h"
 #include "xla/service/cpu/backend_config.pb.h"
+#include "xla/status_macros.h"
 #include "xla/tsl/platform/errors.h"
 #include "xla/tsl/platform/statusor.h"
 #include "xla/util.h"
+#include "tsl/platform/casts.h"
 
 namespace xla::cpu {
 
@@ -78,30 +79,24 @@ XnnpackBackend::GetSupportedConfigs(const HloInstruction& instr) {
   TF_RETURN_IF_ERROR(CheckIfXnnFusion(instr));
   std::vector<std::unique_ptr<xla::BackendConfig>> configs;
   {
-    XnnFusionOptions options;
-    options.set_use_threadpool(true);
-    auto any = std::make_unique<xla::BackendConfig>();
-    any->PackFrom(options);
-    configs.push_back(std::move(any));
+    Config config;
+    config.set_use_threadpool(true);
+    configs.push_back(std::make_unique<Config>(config));
   }
 
   {
-    XnnFusionOptions options;
-    options.set_use_threadpool(false);
-    auto any = std::make_unique<xla::BackendConfig>();
-    any->PackFrom(options);
-    configs.push_back(std::move(any));
+    Config config;
+    config.set_use_threadpool(false);
+    configs.push_back(std::make_unique<Config>(config));
   }
   return configs;
 }
 absl::StatusOr<std::unique_ptr<xla::BackendConfig>>
 XnnpackBackend::GetDefaultConfig(const HloInstruction& instr) {
   TF_RETURN_IF_ERROR(CheckIfXnnFusion(instr));
-  auto config = std::make_unique<XnnFusionOptions>();
+  auto config = std::make_unique<Config>();
   config->set_use_threadpool(true);
-  auto any = std::make_unique<xla::BackendConfig>();
-  any->PackFrom(*config);
-  return any;
+  return config;
 }
 
 absl::Status XnnpackBackend::ApplyConfig(HloInstruction& instr,
@@ -110,11 +105,12 @@ absl::Status XnnpackBackend::ApplyConfig(HloInstruction& instr,
   TF_ASSIGN_OR_RETURN(auto backend_config,
                       instr.backend_config<xla::cpu::BackendConfig>());
 
-  XnnFusionOptions options;
-  config.UnpackTo(&options);
+  const XnnpackBackend::Config* xnn_config =
+      tsl::down_cast<const XnnpackBackend::Config*>(&config);
+  TF_RET_CHECK(xnn_config != nullptr);
 
-  *backend_config.mutable_fusion_config()->mutable_xnn_fusion_options() =
-      options;
+  *backend_config.mutable_fusion_config()->mutable_xnn_fusion_config() =
+      *xnn_config;
 
   TF_RETURN_IF_ERROR(instr.set_backend_config(backend_config));
 

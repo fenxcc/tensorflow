@@ -60,9 +60,9 @@ string JoinPathImpl(std::initializer_list<absl::string_view> paths) {
     if (IsAbsolutePath(path)) path = path.substr(1);
 
     if (result[result.size() - 1] == kPathSep[0]) {
-      absl::StrAppend(&result, path);
+      strings::StrAppend(&result, path);
     } else {
-      absl::StrAppend(&result, kPathSep, path);
+      strings::StrAppend(&result, kPathSep, path);
     }
   }
 
@@ -254,7 +254,7 @@ string CreateURI(absl::string_view scheme, absl::string_view host,
   if (scheme.empty()) {
     return string(path);
   }
-  return absl::StrCat(scheme, "://", host, path);
+  return strings::StrCat(scheme, "://", host, path);
 }
 
 // Returns a unique number every time it is called.
@@ -328,13 +328,14 @@ string GetTempFilename(const string& extension) {
       string tmp_filepath;
       int fd;
       if (extension.length()) {
-        tmp_filepath =
-            io::JoinPath(dir, absl::StrCat("tmp_file_tensorflow_", UniqueId(),
-                                           "_XXXXXX.", extension));
+        tmp_filepath = io::JoinPath(
+            dir, strings::StrCat("tmp_file_tensorflow_", UniqueId(), "_XXXXXX.",
+                                 extension));
         fd = mkstemps(&tmp_filepath[0], extension.length() + 1);
       } else {
         tmp_filepath = io::JoinPath(
-            dir, absl::StrCat("tmp_file_tensorflow_", UniqueId(), "_XXXXXX"));
+            dir,
+            strings::StrCat("tmp_file_tensorflow_", UniqueId(), "_XXXXXX"));
         fd = mkstemp(&tmp_filepath[0]);
       }
       if (fd < 0) {

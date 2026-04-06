@@ -22,6 +22,7 @@ limitations under the License.
 #include <string>
 #include <tuple>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "absl/algorithm/container.h"
@@ -38,16 +39,15 @@ limitations under the License.
 #include "xla/primitive_util.h"
 #include "xla/service/algorithm_util.h"
 #include "xla/service/gpu/backend_configs.pb.h"
-#include "xla/service/gpu/transforms/dot_algorithm_rewriter.h"
-#include "xla/service/matmul_indexing_utils.h"
+#include "xla/service/gpu/matmul_indexing_utils.h"
 #include "xla/shape.h"
 #include "xla/shape_util.h"
 #include "xla/status_macros.h"
 #include "xla/stream_executor/blas.h"
 #include "xla/stream_executor/device_description.h"
 #include "xla/stream_executor/device_memory.h"
-#include "xla/stream_executor/engine_options.h"
 #include "xla/stream_executor/gpu/gpu_blas_lt.h"
+#include "xla/stream_executor/numeric_options.h"
 #include "xla/stream_executor/stream.h"
 #include "xla/stream_executor/stream_executor.h"
 #include "xla/types.h"
@@ -213,6 +213,9 @@ std::vector<int64_t> NormalizedRelativeOrder(absl::Span<const int64_t> dims) {
 
 absl::StatusOr<bool> CanFoldTransposeOperandIntoDot(const HloInstruction& dot,
                                                     int64_t operand_idx) {
+  if (Cast<HloDotInstruction>(&dot)->sparse_operands()) {
+    return false;
+  }
   TF_RET_CHECK(dot.opcode() == HloOpcode::kDot);
   TF_RET_CHECK(dot.operand_count() > operand_idx);
 
@@ -323,7 +326,7 @@ absl::StatusOr<bool> CanFoldTransposeOperandIntoDot(const HloInstruction& dot,
   Shape c_matrix_shape = c_shape;
   // hipBlasLt does not yet support the C matrix to be BF16 for fp8 matmul
   // with fp8 output. Thus only do this for CUDA side.
-  if (gpu_version.IsCuda() &&
+  if (std::holds_alternative<se::CudaComputeCapability>(gpu_version) &&
       primitive_util::IsF8Type(lhs_shape.element_type()) &&
       primitive_util::IsF8Type(output_shape.element_type()) && (beta == 0.0)) {
     // By default, if c is not present (i.e., beta is 0), c_shape will be the
@@ -533,7 +536,7 @@ absl::Status DoGemmWithAlgorithm(const se::gpu::MatrixDescriptor& lhs,
                                  PrecisionConfig::Algorithm precision_algorithm,
                                  se::blas::AlgorithmType algorithm,
                                  se::blas::ComputePrecision compute_precision,
-                                 const se::EngineOptions& engine_options,
+                                 const se::NumericOptions& numeric_options,
                                  se::blas::ProfileResult* profile_result,
                                  se::blas::CallContext context) {
   CHECK(output.transpose == se::blas::Transpose::kNoTranspose);
@@ -559,14 +562,14 @@ absl::Status DoGemmWithAlgorithm(const se::gpu::MatrixDescriptor& lhs,
         alpha, lhs.cast<Input>(), lhs.leading_dim_stride, lhs.batch_stride,
         rhs.cast<Input>(), rhs.leading_dim_stride, rhs.batch_stride, beta,
         &output_data, output.leading_dim_stride, output.batch_stride,
-        output.batch_size, computation_type, algorithm, engine_options,
+        output.batch_size, computation_type, algorithm, numeric_options,
         profile_result, context);
   }
   return blas->BlasGemmWithAlgorithm(
       stream, lhs.transpose, rhs.transpose, output.m, output.n, output.k, alpha,
       lhs.cast<Input>(), lhs.leading_dim_stride, rhs.cast<Input>(),
       rhs.leading_dim_stride, beta, &output_data, output.leading_dim_stride,
-      computation_type, algorithm, engine_options, profile_result, context);
+      computation_type, algorithm, numeric_options, profile_result, context);
 }
 
 template <typename Scale, typename Input, typename Output>
@@ -578,7 +581,7 @@ absl::Status DoGemm(const se::gpu::MatrixDescriptor& lhs,
                     PrecisionConfig::Algorithm precision_algorithm,
                     std::optional<se::blas::AlgorithmType> algorithm,
                     se::blas::ComputePrecision compute_precision,
-                    const se::EngineOptions& engine_options,
+                    const se::NumericOptions& numeric_options,
                     se::blas::ProfileResult* profile_result,
                     se::blas::CallContext context) {
   CHECK(output.transpose == se::blas::Transpose::kNoTranspose);
@@ -591,7 +594,8 @@ absl::Status DoGemm(const se::gpu::MatrixDescriptor& lhs,
   if (algorithm) {
     return DoGemmWithAlgorithm<Scale, Input, Output>(
         lhs, rhs, output, workspace, alpha, beta, stream, precision_algorithm,
-        *algorithm, compute_precision, engine_options, profile_result, context);
+        *algorithm, compute_precision, numeric_options, profile_result,
+        context);
   }
 
   // Set a workspace for all Blas operations launched below.
@@ -603,14 +607,14 @@ absl::Status DoGemm(const se::gpu::MatrixDescriptor& lhs,
         alpha, lhs.cast<Input>(), lhs.leading_dim_stride, lhs.batch_stride,
         rhs.cast<Input>(), rhs.leading_dim_stride, rhs.batch_stride, beta,
         &output_data, output.leading_dim_stride, output.batch_stride,
-        output.batch_size, engine_options, context);
+        output.batch_size, numeric_options, context);
   }
 
   return blas->BlasGemm(stream, lhs.transpose, rhs.transpose, output.m,
                         output.n, output.k, alpha, lhs.cast<Input>(),
                         lhs.leading_dim_stride, rhs.cast<Input>(),
                         rhs.leading_dim_stride, beta, &output_data,
-                        output.leading_dim_stride, engine_options, context);
+                        output.leading_dim_stride, numeric_options, context);
 }
 
 }  // namespace
@@ -628,11 +632,10 @@ absl::Status RunGemm(const GemmConfig& config, se::DeviceMemoryBase lhs_buffer,
       GemmConfig::DescriptorsTuple desc,
       config.GetMatrixDescriptors(lhs_buffer, rhs_buffer, output_buffer));
 
-  se::EngineOptions engine_options{
+  se::NumericOptions numeric_options{
       deterministic_ops,
-      /*allow_tf32=*/
-      IsTf32Allowed(config.precision_algorithm, config.compute_precision),
-      /*require_command_buffer=*/false};
+      /*allow_tf32=*/IsTf32Allowed(config.precision_algorithm,
+                                   config.compute_precision)};
 
   if (!algorithm) {
     algorithm = config.algorithm;
@@ -672,7 +675,7 @@ absl::Status RunGemm(const GemmConfig& config, se::DeviceMemoryBase lhs_buffer,
         static_cast<NativeScaleType>(config.alpha.real()),                  \
         static_cast<NativeScaleType>(config.beta), stream,                  \
         config.precision_algorithm, algorithm, config.compute_precision,    \
-        engine_options, profile_result, context);                           \
+        numeric_options, profile_result, context);                          \
   }
 
 #define TYPED_GEMM_COMPLEX(SCALENTYPE, ATYPE, BTYPE, CTYPE)                 \
@@ -686,7 +689,7 @@ absl::Status RunGemm(const GemmConfig& config, se::DeviceMemoryBase lhs_buffer,
         static_cast<NativeScaleType>(config.alpha),                         \
         static_cast<NativeScaleType>(config.beta), stream,                  \
         config.precision_algorithm, algorithm, config.compute_precision,    \
-        engine_options, profile_result, context);                           \
+        numeric_options, profile_result, context);                          \
   }
 
   if (config.output_layout.dtype == S32) {
@@ -699,7 +702,7 @@ absl::Status RunGemm(const GemmConfig& config, se::DeviceMemoryBase lhs_buffer,
         desc.lhs, desc.rhs, desc.output, workspace_buffer,
         static_cast<int32_t>(config.alpha.real()),
         static_cast<int32_t>(config.beta), stream, PrecisionConfig::ALG_UNSET,
-        *algorithm, se::blas::kDefaultComputePrecision, engine_options,
+        *algorithm, se::blas::kDefaultComputePrecision, numeric_options,
         profile_result, context);
   }
 
@@ -805,10 +808,10 @@ absl::StatusOr<se::gpu::BlasLt::Epilogue> AsBlasLtEpilogue(
   TF_RET_CHECK(proto.num_warps() > 0);
   TF_RET_CHECK(proto.num_ctas() > 0);
 
-  return TritonGemmConfig(
-      proto.block_m(), proto.block_n(), proto.block_k(), proto.split_k(),
-      proto.num_stages(), proto.num_warps(), proto.num_ctas(),
-      proto.is_tma_allowed(), proto.is_warp_specialization_allowed());
+  return TritonGemmConfig(proto.block_m(), proto.block_n(), proto.block_k(),
+                          proto.split_k(), proto.num_stages(),
+                          proto.num_warps(), proto.num_ctas(),
+                          proto.is_tma_allowed());
 }
 
 AutotuneResult::TritonGemmKey TritonGemmConfig::ToProto() const {
@@ -821,17 +824,15 @@ AutotuneResult::TritonGemmKey TritonGemmConfig::ToProto() const {
   key.set_num_warps(num_warps);
   key.set_num_ctas(num_ctas);
   key.set_is_tma_allowed(is_tma_allowed);
-  key.set_is_warp_specialization_allowed(is_warp_specialization_allowed);
   return key;
 }
 
 std::string TritonGemmConfig::ToString() const {
-  return absl::StrCat(
-      "{block_m:", block_m, ",block_n:", block_n, ",block_k:", block_k,
-      ",split_k:", split_k, ",num_stages:", num_stages,
-      ",num_warps:", num_warps, ",num_ctas:", num_ctas,
-      ",is_tma_allowed:", is_tma_allowed,
-      ",is_warp_specialization_allowed:", is_warp_specialization_allowed, "}");
+  return absl::StrCat("{block_m:", block_m, ",block_n:", block_n,
+                      ",block_k:", block_k, ",split_k:", split_k,
+                      ",num_stages:", num_stages, ",num_warps:", num_warps,
+                      ",num_ctas:", num_ctas,
+                      ",is_tma_allowed:", is_tma_allowed, "}");
 }
 
 absl::StatusOr<bool> IsMatrixMultiplicationTooSmallForRewriting(
@@ -887,47 +888,24 @@ bool IsDotSupportedByClassicalEmitters(const HloInstruction& dot) {
   }
 }
 
-PrimitiveType GetGemmAccumulatorType(const HloDotInstruction* dot) {
+PrimitiveType GetGemmAccumulatorType(HloDotInstruction* dot) {
   // Return the accumulator type if it is explicitly specified as dot algorithm.
   auto accumulator_type = algorithm_util::GetDotAccumulatorType(
       dot->precision_config().algorithm());
   if (accumulator_type.ok()) {
     return accumulator_type.value();
   }
-
-  PrimitiveType shape_type = dot->shape().element_type();
-  // If the output type is a floating point type with less than or equal to 32
-  // bits, use f32 as the accumulator type.
-  if (primitive_util::IsFloatingPointType(shape_type) &&
-      primitive_util::BitWidth(shape_type) <= primitive_util::BitWidth(F32)) {
-    return F32;
-  }
-  return shape_type;
-}
-
-absl::StatusOr<HloInstruction*> MakeMultiplyForDotPrecisionAlgorithm(
-    HloInstruction* lhs, HloInstruction* rhs,
-    const PrecisionConfig::Algorithm& algorithm) {
-  switch (algorithm) {
-    case PrecisionConfig::ALG_DOT_BF16_BF16_F32:
-      return DotAlgorithmRewriter::MakeMultiplyForBF16BF16F32(lhs, rhs);
-    case PrecisionConfig::ALG_DOT_BF16_BF16_F32_X3:
-      return DotAlgorithmRewriter::MakeMultiplyForBF16BF16F32X3(lhs, rhs);
-    case PrecisionConfig::ALG_DOT_BF16_BF16_F32_X6:
-      return DotAlgorithmRewriter::MakeMultiplyForBF16BF16F32X6(lhs, rhs);
-    case PrecisionConfig::ALG_DOT_BF16_BF16_F32_X9:
-      return DotAlgorithmRewriter::MakeMultiplyForBF16BF16F32X9(lhs, rhs);
-    case PrecisionConfig::ALG_DOT_TF32_TF32_F32:
-      return DotAlgorithmRewriter::MakeMultiplyForTF32TF32F32(lhs, rhs);
-    case PrecisionConfig::ALG_DOT_TF32_TF32_F32_X3:
-      return DotAlgorithmRewriter::MakeMultiplyForTF32TF32F32X3(lhs, rhs);
-    case PrecisionConfig::ALG_DOT_F32_F32_F32:
-    case PrecisionConfig::ALG_UNSET:
-      return lhs->parent()->AddInstruction(HloInstruction::CreateBinary(
-          lhs->shape(), HloOpcode::kMultiply, lhs, rhs));
+  // Otherwise, return the default accumulator type for the output type.
+  PrimitiveType output_type = dot->shape().element_type();
+  switch (output_type) {
+    case PrimitiveType::F16:
+    case PrimitiveType::BF16:
+      return PrimitiveType::F32;
+    case PrimitiveType::F32:
+    case PrimitiveType::F64:
+    case PrimitiveType::S32:
     default:
-      return absl::InvalidArgumentError(
-          absl::StrCat("Unsupported dot precision algorithm: ", algorithm));
+      return output_type;
   }
 }
 

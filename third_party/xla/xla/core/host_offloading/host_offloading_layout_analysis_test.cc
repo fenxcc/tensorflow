@@ -19,15 +19,16 @@ limitations under the License.
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include "absl/status/status_matchers.h"
 #include "absl/strings/string_view.h"
 #include "xla/hlo/ir/hlo_module.h"
 #include "xla/hlo/parser/hlo_parser.h"
 #include "xla/hlo/testlib/hlo_hardware_independent_test_base.h"
+#include "xla/tsl/platform/status_matchers.h"
 #include "xla/tsl/platform/statusor.h"
 
 namespace xla {
 namespace {
+using tsl::testing::IsOkAndHolds;
 
 class NeedsLayoutConversionTest : public HloHardwareIndependentTestBase {};
 
@@ -43,7 +44,7 @@ ENTRY main {
   TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<HloModule> module,
                           ParseAndReturnUnverifiedModule(hlo_string));
   EXPECT_THAT(HostOffloadingLayoutAnalysis::NeedsLayoutConversion(module.get()),
-              absl_testing::IsOkAndHolds(false));
+              IsOkAndHolds(false));
 }
 
 TEST_F(NeedsLayoutConversionTest, NonElementWise) {
@@ -60,7 +61,7 @@ ENTRY dot {
                           ParseAndReturnUnverifiedModule(hlo_string));
   // Dot is not elementwise.
   EXPECT_THAT(HostOffloadingLayoutAnalysis::NeedsLayoutConversion(module.get()),
-              absl_testing::IsOkAndHolds(true));
+              IsOkAndHolds(true));
 }
 
 TEST_F(NeedsLayoutConversionTest, Tuple) {
@@ -75,7 +76,7 @@ ENTRY main {
   TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<HloModule> module,
                           ParseAndReturnUnverifiedModule(hlo_string));
   EXPECT_THAT(HostOffloadingLayoutAnalysis::NeedsLayoutConversion(module.get()),
-              absl_testing::IsOkAndHolds(false));
+              IsOkAndHolds(false));
 }
 
 TEST_F(NeedsLayoutConversionTest, ScalarBroadcast) {
@@ -90,7 +91,7 @@ ENTRY main {
   TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<HloModule> module,
                           ParseAndReturnUnverifiedModule(hlo_string));
   EXPECT_THAT(HostOffloadingLayoutAnalysis::NeedsLayoutConversion(module.get()),
-              absl_testing::IsOkAndHolds(false));
+              IsOkAndHolds(false));
 }
 
 TEST_F(NeedsLayoutConversionTest, NonScalarBroadcast) {
@@ -106,7 +107,7 @@ ENTRY main {
                           ParseAndReturnUnverifiedModule(hlo_string));
   // Non-scalar broadcast in column major -- must use layout conversion.
   EXPECT_THAT(HostOffloadingLayoutAnalysis::NeedsLayoutConversion(module.get()),
-              absl_testing::IsOkAndHolds(true));
+              IsOkAndHolds(true));
 }
 
 TEST_F(NeedsLayoutConversionTest, Call) {
@@ -126,7 +127,7 @@ ENTRY main {
   TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<HloModule> module,
                           ParseAndReturnUnverifiedModule(hlo_string));
   EXPECT_THAT(HostOffloadingLayoutAnalysis::NeedsLayoutConversion(module.get()),
-              absl_testing::IsOkAndHolds(false));
+              IsOkAndHolds(false));
 }
 
 TEST_F(NeedsLayoutConversionTest, PaddedTensor) {
@@ -142,7 +143,7 @@ ENTRY main {
                           ParseAndReturnUnverifiedModule(hlo_string));
   // The tiling used here creates padding, which requires layout conversion.
   EXPECT_THAT(HostOffloadingLayoutAnalysis::NeedsLayoutConversion(module.get()),
-              absl_testing::IsOkAndHolds(true));
+              IsOkAndHolds(true));
 }
 
 }  // namespace

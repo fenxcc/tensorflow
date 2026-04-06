@@ -30,7 +30,6 @@ limitations under the License.
 #include "tensorflow/lite/kernels/internal/optimized/depthwiseconv_multithread.h"
 #include "tensorflow/lite/kernels/internal/optimized/integer_ops/depthwise_conv_hybrid.h"
 #include "tensorflow/lite/kernels/internal/optimized/neon_check.h"
-#include "tensorflow/lite/kernels/internal/portable_tensor_utils.h"
 #include "tensorflow/lite/kernels/internal/quantization_util.h"
 #include "tensorflow/lite/kernels/internal/reference/depthwiseconv_float.h"
 #include "tensorflow/lite/kernels/internal/reference/depthwiseconv_uint8.h"
@@ -417,9 +416,9 @@ TfLiteStatus EvalQuantizedPerChannel(TfLiteContext* context, TfLiteNode* node,
   auto unpacked_filter_data = std::make_unique<int8_t[]>(bytes_unpacked);
 
   if (filter->type == kTfLiteInt4) {
-    tflite::tensor_utils::UnpackPackedIntToInt8(
+    tflite::tensor_utils::UnpackDenseInt4IntoInt8(
         GetTensorData<int8_t>(filter), GetTensorShape(filter).FlatSize(),
-        /*bit_width=*/4, unpacked_filter_data.get());
+        unpacked_filter_data.get());
     filter_data = unpacked_filter_data.get();
   } else {
     filter_data = GetTensorData<int8>(filter);

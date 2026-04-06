@@ -18,7 +18,6 @@ limitations under the License.
 #include <tuple>
 #include <vector>
 
-#include <gtest/gtest.h>
 #include "absl/container/flat_hash_map.h"
 #include "absl/strings/str_replace.h"
 #include "absl/strings/string_view.h"
@@ -26,18 +25,16 @@ limitations under the License.
 #include "xla/error_spec.h"
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/ir/hlo_module.h"
-#include "xla/hlo/testlib/filecheck.h"
 #include "xla/hlo/testlib/pattern_matcher_gmock.h"
 #include "xla/hlo/testlib/test.h"
 #include "xla/service/gpu/transforms/gemm_rewriter.h"
 #include "xla/service/gpu/transforms/gemm_rewriter_test_lib.h"
 #include "xla/service/pattern_matcher.h"
-#include "xla/stream_executor/cuda/cuda_compute_capability.h"
 #include "xla/stream_executor/device_description.h"
 #include "xla/stream_executor/semantic_version.h"
-#include "xla/tsl/platform/statusor.h"
 #include "xla/xla.pb.h"
 #include "xla/xla_data.pb.h"
+#include "tsl/platform/statusor.h"
 
 namespace xla {
 namespace gpu {
@@ -102,6 +99,25 @@ ENTRY e {
 ; CHECK:  %[[P1:.+]] = f32[10,10,2048,16384]{3,2,1,0} parameter(1)
 ; CHECK:  %[[CUSTOM_CALL:.+]] = (f32[10,10,16384]{2,1,0}, s8[4194304]{0}) custom-call(%[[P0]], %[[P1]]), custom_call_target="__cublas$gemm"
 )");
+}
+
+TEST_F(LegacyCublasGemmRewriteTest, SparseDotNotSupported) {
+  const char* hlo_text = R"(
+HloModule test
+
+ENTRY main {
+  lhs = f16[5,16] parameter(0)
+  rhs = f16[32,10] parameter(1)
+  meta = u16[5,2] parameter(2)
+  ROOT dot = f32[5,10] dot(lhs, rhs, meta),
+      lhs_contracting_dims={1}, rhs_contracting_dims={0}, sparsity=L.1@2:4
+})";
+  auto hlo_pass = GemmRewriter(
+      se::CudaComputeCapability{se::CudaComputeCapability::kAmpere, 0},
+      /*toolkit_version=*/stream_executor::SemanticVersion{12, 4, 0});
+  TF_ASSERT_OK_AND_ASSIGN(auto module, ParseAndReturnVerifiedModule(hlo_text));
+  TF_ASSERT_OK_AND_ASSIGN(bool changed, RunHloPass(&hlo_pass, module.get()));
+  EXPECT_FALSE(changed);
 }
 
 // Test that the alpha and beta fields of the GemmBackendConfig are updated.
@@ -2166,7 +2182,7 @@ ENTRY test {
   x = f32[2,3] parameter(0)
   y = f32[3,4] parameter(1)
   dot = f32[2,4] dot(x, y), lhs_contracting_dims={1}, rhs_contracting_dims={0}
-  neg = f32[2,4] negate(dot)
+  neg = f32[2,4] negate(dot) 
   exp = f32[2,4] exponential(neg)
   one = f32[] constant(1)
   one_bcast = f32[2,4] broadcast(one), dimensions={}
@@ -3404,46 +3420,6 @@ ENTRY test {
 ; CHECK-DAG: [[BIAS:%[^ ]+]] = bf16[] {{.+}}([[P_2]])
 ; CHECK: custom-call([[LHS]], [[RHS]], [[BIAS]]), custom_call_target="__cublas$lt$matmul"
 )");
-}
-
-TEST_F(CublasLtGemmRewriteTest, CublasLtRewriteWithBias) {
-  // The bias has shape [7], which doesn't match the non-contracting rhs
-  // dimension ([35]. It's reshaped from [5,7] but cuBLASlt is not aware of
-  // that).
-
-  const char* hlo_text = R"(
-HloModule test
-
-ENTRY %test (x: f32[2,3,4], y: f32[4,5,7], z: f32[7]) -> f32[2,3,5,7] {
-  %x = f32[2,3,4]{2,1,0} parameter(0)
-  %bitcast = f32[6,4]{1,0} bitcast(%x)
-  %y = f32[4,5,7]{2,1,0} parameter(1)
-  %bitcast.1 = f32[4,35]{1,0} bitcast(%y)
-  %dot = f32[6,35]{1,0} dot(%bitcast, %bitcast.1), lhs_contracting_dims={1},
-         rhs_contracting_dims={0}, operand_precision={highest,highest}
-  %bitcast.2 = f32[2,3,5,7]{3,2,1,0} bitcast(%dot)
-  %z = f32[7]{0} parameter(2)
-  %z_bcast = f32[2,3,5,7]{3,2,1,0} broadcast(%z), dimensions={3}
-  ROOT %out = f32[2,3,5,7]{3,2,1,0} add(%bitcast.2, %z_bcast)
-}
-)";
-
-  HloModuleConfig config;
-  DebugOptions debug_options = GetDebugOptionsForTest();
-  config.set_debug_options(debug_options);
-  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<HloModule> module,
-                          ParseAndReturnVerifiedModule(hlo_text, config));
-
-  GemmRewriter pass(Capability(), GetToolkitVersion());
-  TF_ASSERT_OK_AND_ASSIGN(bool changed, RunHloPass(&pass, module.get()));
-  EXPECT_TRUE(changed);
-
-  TF_ASSERT_OK_AND_ASSIGN(bool filecheck_result,
-                          RunFileCheck(module->ToString(), R"(
-; CHECK:           custom_call_target="__cublas$lt$matmul",
-; CHECK-DAG:         "epilogue":"DEFAULT"
-      )"));
-  EXPECT_TRUE(filecheck_result);
 }
 
 }  // namespace

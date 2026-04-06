@@ -19,7 +19,6 @@ limitations under the License.
 #include <cmath>
 #include <vector>
 
-#include "absl/status/status.h"
 #include "grpcpp/grpcpp.h"
 #include "xla/tsl/distributed_runtime/rpc/test_request.pb.h"
 #include "xla/tsl/platform/errors.h"
@@ -33,10 +32,10 @@ namespace {
 using tsl::proto_testing::EqualsProto;
 using tsl::test::TestRequest;
 
-std::string ToString(const grpc::ByteBuffer& buf) {
+string ToString(const grpc::ByteBuffer& buf) {
   std::vector<grpc::Slice> slices;
   CHECK(buf.Dump(&slices).ok());
-  std::string result;
+  string result;
   for (const grpc::Slice& s : slices) {
     result.append(reinterpret_cast<const char*>(s.begin()), s.size());
   }
@@ -44,7 +43,7 @@ std::string ToString(const grpc::ByteBuffer& buf) {
 }
 
 // Return a ByteBuffer that contains str split up into num_slices slices.
-grpc::ByteBuffer MakeBuffer(const std::string& str, int num_slices) {
+grpc::ByteBuffer MakeBuffer(const string& str, int num_slices) {
   // Convert to a ByteBuffer.
   std::vector<::grpc::Slice> slices;
   const size_t per_slice = (str.size() + num_slices - 1) / num_slices;
@@ -66,7 +65,7 @@ TestRequest MakeProto(int size) {
   int index = 0;
   while (approx_size < size) {
     int item_size = std::min(size - approx_size, 1024);
-    proto.add_data(std::string(item_size, 'a' + static_cast<char>(index % 26)));
+    proto.add_data(string(item_size, 'a' + static_cast<char>(index % 26)));
     approx_size += item_size + 3;  // +3 for encoding overhead.
     index++;
   }
@@ -74,7 +73,7 @@ TestRequest MakeProto(int size) {
 }
 
 TEST(PayloadSerialization, PayloadsAreTransmitted) {
-  absl::Status status = absl::InvalidArgumentError("invalid arg message");
+  absl::Status status = errors::InvalidArgument("invalid arg message");
   status.SetPayload("a", absl::Cord("\\xFF\\x02\\x03"));
   absl::Status status_recovered = FromGrpcStatus(ToGrpcStatus(status));
 
@@ -106,7 +105,7 @@ TEST(GrpcProto, UnparseToString) {
   TestRequest proto;
   proto.add_data("hello");
   proto.add_data("world");
-  std::string str;
+  string str;
   CHECK(proto.SerializeToString(&str));
   grpc::ByteBuffer buf;
   ASSERT_TRUE(GrpcMaybeUnparseProto(str, &buf).ok());
@@ -154,7 +153,7 @@ TEST(GrpcProto, ParseFromString) {
        }) {
     TestRequest proto = MakeProto(c.length);
     ::grpc::ByteBuffer src = MakeBuffer(proto.SerializeAsString(), c.slices);
-    std::string parsed_str;
+    string parsed_str;
     TestRequest parsed;
     ASSERT_TRUE(GrpcMaybeParseProto(&src, &parsed_str))
         << c.length << " " << c.slices;
@@ -180,7 +179,7 @@ static void BM_UnparseString(::testing::benchmark::State& state) {
   auto proto = MakeProto(size);
 
   for (auto s : state) {
-    std::string buf;
+    string buf;
     proto.SerializeToString(&buf);
   }
 }
@@ -208,7 +207,7 @@ static void BM_ParseString(::testing::benchmark::State& state) {
   const int size = state.range(0);
 
   TestRequest proto = MakeProto(size);
-  std::string serial = proto.SerializeAsString();
+  string serial = proto.SerializeAsString();
 
   for (auto s : state) {
     CHECK(proto.ParseFromString(serial));

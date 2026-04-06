@@ -4,9 +4,7 @@
 load(
     "//xla:xla.default.bzl",
     "xla_cc_test",
-    "xla_py_proto_library",
 )
-load("//xla/tests:build_defs.bzl", "xla_test")
 load("//xla/tsl:tsl.bzl", "internal_visibility")
 load(
     "//xla/tsl/platform:build_config.bzl",
@@ -33,11 +31,6 @@ tf_proto_library(
     make_default_target_header_only = True,
 )
 
-xla_py_proto_library(
-    name = "memory_space_assignment_proto_py_pb2",
-    deps = [":memory_space_assignment_proto"],
-)
-
 cc_library(
     name = "memory_space_assignment",
     srcs = ["memory_space_assignment.cc"],
@@ -58,11 +51,11 @@ cc_library(
         "//xla/hlo/analysis:hlo_dataflow_analysis",
         "//xla/hlo/ir:hlo",
         "//xla/hlo/utils:hlo_live_range",
+        "//xla/service:buffer_value",
         "//xla/service:hlo_buffer",
         "//xla/service:hlo_proto_cc",
         "//xla/service:hlo_value",
         "//xla/service/heap_simulator",
-        "//xla/tsl/platform:errors",
         "//xla/tsl/platform:statusor",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/container:flat_hash_map",
@@ -75,18 +68,16 @@ cc_library(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:span",
         "@local_tsl//tsl/platform:casts",
+        "@local_tsl//tsl/platform:errors",
+        "@local_tsl//tsl/platform:logging",
+        "@local_tsl//tsl/platform:status",
+        "@local_tsl//tsl/platform:statusor",
     ],
 )
 
-xla_test(
+xla_cc_test(
     name = "memory_space_assignment_test",
     srcs = ["memory_space_assignment_test.cc"],
-    backends = [
-        "cpu",
-    ],
-    tags = [
-        "test_migrated_to_hlo_runner_pjrt",
-    ],
     deps = [
         ":algorithm",
         ":allocation",
@@ -125,6 +116,8 @@ xla_test(
         "//xla/tests:xla_internal_test_main",
         "//xla/tsl/lib/core:status_test_util",
         "//xla/tsl/platform:errors",
+        "//xla/tsl/platform:status",
+        "//xla/tsl/platform:status_matchers",
         "//xla/tsl/platform:statusor",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/container:flat_hash_map",
@@ -132,12 +125,12 @@ xla_test(
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:status_matchers",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:span",
         "@com_google_googletest//:gtest",
         "@local_tsl//tsl/platform:protobuf",
+        "@local_tsl//tsl/platform:statusor",
     ],
 )
 
@@ -169,6 +162,8 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:span",
+        "@local_tsl//tsl/platform:logging",
+        "@local_tsl//tsl/platform:status",
     ],
 )
 
@@ -194,15 +189,14 @@ cc_library(
         "//xla/service:hlo_cost_analysis",
         "//xla/service:hlo_value",
         "//xla/service/cost_modelling:op_cost",
-        "//xla/tests:hlo_pjrt_test_base",
+        "//xla/tests:hlo_test_base",
         "//xla/tsl/lib/core:status_test_util",
-        "//xla/tsl/platform:statusor",
         "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/container:flat_hash_set",
-        "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/types:span",
-        "@com_google_googletest//:gtest_for_library",
+        "@local_tsl//tsl/platform:status",
+        "@local_tsl//tsl/platform:statusor",
+        "@local_tsl//tsl/platform:test",
     ],
 )
 
@@ -223,12 +217,8 @@ cc_library(
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:string_view",
         "@com_googlesource_code_re2//:re2",
-        "@highwayhash",
-        "@highwayhash//:arch_specific",
-        "@highwayhash//:hh_types",
         "@local_tsl//tsl/platform:statusor",
     ],
 )
@@ -361,7 +351,6 @@ cc_library(
     deps = [
         "//xla:shape_util",
         "//xla:util",
-        "//xla/hlo/analysis:alias_info",
         "//xla/hlo/analysis:hlo_alias_analysis",
         "//xla/hlo/analysis:while_loop_analysis",
         "//xla/hlo/ir:hlo",
@@ -387,7 +376,6 @@ xla_cc_test(
     deps = [
         ":cost_analysis",
         "//xla:shape_util",
-        "//xla/hlo/analysis:alias_info",
         "//xla/hlo/ir:hlo",
         "//xla/hlo/testlib:hlo_hardware_independent_test_base",
         "//xla/service:hlo_cost_analysis",
@@ -431,7 +419,6 @@ xla_cc_test(
         ":cost_analysis",
         ":simulator",
         "//xla:shape_util",
-        "//xla/hlo/analysis:alias_info",
         "//xla/hlo/analysis:hlo_alias_analysis",
         "//xla/hlo/ir:hlo",
         "//xla/hlo/testlib:hlo_hardware_independent_test_base",
@@ -482,7 +469,6 @@ cc_library(
     deps = [
         ":cost_analysis",
         "//xla:shape_util",
-        "//xla/hlo/analysis:alias_info",
         "//xla/hlo/analysis:hlo_alias_analysis",
         "//xla/hlo/ir:hlo",
         "//xla/hlo/utils:hlo_live_range",
@@ -517,20 +503,18 @@ cc_library(
         "//xla/service:hlo_value",
         "//xla/service/heap_simulator",
         "//xla/service/heap_simulator:allocation_block",
-        "//xla/tsl/platform:errors",
         "@com_google_absl//absl/algorithm:container",
-        "@com_google_absl//absl/base:nullability",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/log:check",
-        "@com_google_absl//absl/log:die_if_null",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:span",
+        "@local_tsl//tsl/platform:errors",
     ],
 )
 
@@ -597,12 +581,10 @@ cc_library(
         "//xla:shape_util",
         "//xla:util",
         "//xla:xla_data_proto_cc",
-        "//xla/hlo/analysis:alias_info",
         "//xla/hlo/analysis:hlo_alias_analysis",
         "//xla/hlo/analysis:hlo_dataflow_analysis",
         "//xla/hlo/analysis:hlo_operand_index",
         "//xla/hlo/ir:hlo",
-        "//xla/hlo/transforms:memory_space_propagation",
         "//xla/hlo/utils:hlo_live_range",
         "//xla/service:buffer_value",
         "//xla/service:call_graph",

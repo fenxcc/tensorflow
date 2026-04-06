@@ -13,31 +13,29 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
+#if defined(INTEL_MKL)
+
 #include "xla/service/cpu/onednn_memory_util.h"
 
 #include <algorithm>
-#include <cstdint>
+#include <cmath>
 #include <initializer_list>
 #include <iostream>
-#include <utility>
 #include <vector>
 
-#include "absl/algorithm/container.h"
-#include "absl/log/log.h"
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "absl/types/span.h"
-#include "oneapi/dnnl/dnnl.hpp"
+#include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constants.h"
-#include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/FMF.h"
+#include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Intrinsics.h"
+#include "llvm/IR/IntrinsicsX86.h"
+#include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Value.h"
-#include "xla/literal.h"
+#include "xla/service/cpu/runtime_lightweight_check.h"
 #include "xla/service/llvm_ir/ir_array.h"
 #include "xla/service/llvm_ir/llvm_util.h"
-#include "xla/shape.h"
 
 namespace xla {
 namespace cpu {
@@ -47,17 +45,17 @@ namespace cpu {
 struct MemrefInfoPOD {
   int64_t dtype;
   int64_t rank;
-  const void* data;
+  void* data;
   int64_t unused;  // This unused value pads the struct to align with a 64-byte
                    // cacheline
   int64_t dims[kOneDnnMaxNDims];
   int64_t strides[kOneDnnMaxNDims];
 };
 
-MemrefInfoHandler CreateMemrefFromShape(const Shape& shape, const void* buf) {
+MemrefInfoHandler CreateMemrefFromShape(const Shape& shape, void* const buf) {
   MemrefInfoHandler result(new MemrefInfoPOD);
   result->dtype = shape.element_type();
-  result->rank = shape.dimensions().size();
+  result->rank = shape.dimensions_size();
   auto dimensions = shape.dimensions();
   std::copy(dimensions.begin(), dimensions.end(),
             absl::MakeSpan(result->dims).begin());
@@ -73,14 +71,15 @@ MemrefInfoHandler CreateMemrefFromShape(const Shape& shape, const void* buf) {
 
 MemrefInfoHandler CreateMemrefInfoFromLiteral(const Literal* literal) {
   const auto& shape = literal->shape();
-  return CreateMemrefFromShape(shape, literal->untyped_data());
+  void* const buf = const_cast<void*>(literal->untyped_data());
+  return CreateMemrefFromShape(shape, buf);
 }
 
 std::pair<std::vector<int64_t>, std::vector<int64_t>> GetDimsStrides(
     const Shape& shape) {
   // oneDNN handles scalar as a vector of size 1.
-  const bool is_scalar = shape.dimensions().empty();
-  int64_t rank = is_scalar ? 1 : shape.dimensions().size();
+  const bool is_scalar = shape.dimensions_size() == 0;
+  int64_t rank = is_scalar ? 1 : shape.dimensions_size();
   std::vector<int64_t> strides(rank);
   std::vector<int64_t> scalar_shape(1, 1);
   absl::Span<const int64_t> dimensions =
@@ -102,7 +101,7 @@ StackAlloca GetAllocaAndEmitMemrefInfo(llvm::IRBuilderBase& builder,
                                        const llvm_ir::IrArray& ir_array) {
   const Shape& shape = ir_array.GetShape();
   // oneDNN handles scalar as a vector of size 1.
-  int64_t rank = shape.dimensions().empty() ? 1 : shape.dimensions().size();
+  int64_t rank = shape.dimensions_size() == 0 ? 1 : shape.dimensions_size();
   auto [dims, strides] = GetDimsStrides(shape);
 
   // Type of struct
@@ -141,7 +140,7 @@ StackAlloca GetAllocaAndEmitMemrefInfo(llvm::IRBuilderBase& builder,
   // Allocate MemrefInfo on the stack
   llvm::Value* memref_info_ptr = llvm_ir::EmitAllocaAtFunctionEntry(
       memref_info_type, "memref.info", &builder);
-  builder.CreateLifetimeStart(memref_info_ptr);
+  builder.CreateLifetimeStart(memref_info_ptr, builder.getInt64(-1));
   builder.CreateStore(memref_info_val, memref_info_ptr);
 
   return {&builder, memref_info_ptr};
@@ -171,10 +170,7 @@ dnnl::memory::desc MemrefInfo::GetOneDnnMemDesc() const {
   return dnnl::memory::desc{dims, dtype, strides};
 }
 
-void* MemrefInfo::Data() {
-  // NOLINTNEXTLINE: For dnnl::memory constructor.
-  return const_cast<void*>(pod_->data);
-}
+void* MemrefInfo::Data() { return pod_->data; }
 
 void MemrefInfo::Print() {
   std::cout << "Data type: " << pod_->dtype << "\t";
@@ -203,7 +199,7 @@ absl::StatusOr<dnnl::memory::desc> TransposeLastTwoDims(
     return absl::InvalidArgumentError("Requires at least 2D shape.");
   }
   std::vector<int> permutation(ndims);
-  absl::c_iota(permutation, 0);
+  std::iota(permutation.begin(), permutation.end(), 0);
   std::swap(permutation[ndims - 1], permutation[ndims - 2]);
   return md.permute_axes(permutation);
 }
@@ -230,3 +226,5 @@ Shape MemDescToXlaShapeFlattened(const dnnl::memory::desc& md) {
 
 }  // namespace cpu
 }  // namespace xla
+
+#endif  // INTEL_MKL

@@ -36,11 +36,11 @@ struct Endpoint {
   int index;
 
   // Returns the string name represents this endpoint.
-  std::string name() const {
+  string name() const {
     if (index == 0) {
       return node->name();
     } else {
-      return absl::StrCat(node->name(), ":", index);
+      return strings::StrCat(node->name(), ":", index);
     }
   }
 
@@ -285,11 +285,11 @@ bool IsFunctionCall(const FunctionLibraryDefinition& lib_def,
   return node.IsFunctionCall();
 }
 
-std::string NewName(const Node* n, bool pretty) {
+string NewName(const Node* n, bool pretty) {
   if (pretty) {
-    return absl::StrCat(n->type_string(), n->id());
+    return strings::StrCat(n->type_string(), n->id());
   } else {
-    return absl::StrCat("n", n->id());
+    return strings::StrCat("n", n->id());
   }
 }
 
@@ -347,20 +347,20 @@ void ToGraphDef(const Graph* g, GraphDef* gdef, bool pretty) {
         ndef->add_input("unknown");
         continue;
       }
-      const std::string srcname = NewName(e->src(), pretty);
+      const string srcname = NewName(e->src(), pretty);
       if (!e->src()->IsOp()) {
       } else if (e->IsControlEdge()) {
-        ndef->add_input(absl::StrCat("^", srcname));
+        ndef->add_input(strings::StrCat("^", srcname));
       } else if (e->src_output() == 0) {
         ndef->add_input(srcname);
       } else {
-        ndef->add_input(absl::StrCat(srcname, ":", e->src_output()));
+        ndef->add_input(strings::StrCat(srcname, ":", e->src_output()));
       }
     }
   });
 }
 
-std::string DebugString(const Graph* g) {
+string DebugString(const Graph* g) {
   GraphDef gdef;
   ToGraphDef(g, &gdef);
   return DebugString(gdef);

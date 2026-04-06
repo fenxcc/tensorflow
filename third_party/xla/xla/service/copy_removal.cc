@@ -48,6 +48,7 @@ limitations under the License.
 #include "xla/shape.h"
 #include "xla/shape_util.h"
 #include "xla/status_macros.h"
+#include "xla/tsl/platform/status.h"
 #include "xla/util.h"
 
 using absl::StrAppend;
@@ -319,7 +320,7 @@ bool ComputeRelativeLocation::AddControlDependenceForUnorderedOps() {
         VLOG(3) << "   Adding control dependence between:";
         VLOG(3) << "     predecessor: " << entry2->name();
         VLOG(3) << "       successor: " << entry1->name();
-        CHECK_OK(entry2->AddControlDependencyTo(entry1));
+        TF_CHECK_OK(entry2->AddControlDependencyTo(entry1));
       }
       reachability_map.UpdateReachabilityThroughInstruction(entry1);
       for (HloInstruction* entry2 : instr_it.second) {
@@ -346,9 +347,8 @@ bool ComputeRelativeLocation::ForceRuntimeOrder(
                "kBeforeStart or kAfterEnd";
     return false;
   }
-  auto ModifiesNonCopy = [this](HloInstruction* instr,
-                                const HloInstruction* op) {
-    auto in_place = alias_info_->GetInPlaceInputOutputPairs(instr);
+  auto ModifiesNonCopy = [](HloInstruction* instr, const HloInstruction* op) {
+    auto in_place = HloDataflowAnalysis::GetInPlaceInputOutputPairs(instr);
     if (in_place.empty()) {
       return false;
     }
@@ -436,7 +436,7 @@ bool ComputeRelativeLocation::InstructionCanIntercept(
     // If the instruction only uses the value, it can intercept only if it
     // modifies the buffer in place.
     for (const auto& operand_and_output_index :
-         alias_info_->GetInPlaceInputOutputPairs(instr)) {
+         HloDataflowAnalysis::GetInPlaceInputOutputPairs(instr)) {
       const HloOperandIndex& operand_index = operand_and_output_index.first;
       if (region.contains(
               instr->mutable_operand(operand_index.operand_number))) {
@@ -611,7 +611,7 @@ CopyRemover::CopyRemover(
   // Instruction indices based on post order traversal of computations and
   // instructions. Used as an enhancement for getting strict weak ordering
   // used for sorting below.
-  absl::flat_hash_map<int64_t, int64_t> instruction_ids;
+  absl::flat_hash_map<int, int64_t> instruction_ids;
   int64_t id = 0;
 
   // Generate instruction ids for all instructions in the module, starting at
@@ -731,7 +731,7 @@ CopyRemover::CopyRemover(
   CreateCopyMap(module, value_to_node);
 
   XLA_VLOG_LINES(3, ToString());
-  DCHECK_OK(Verify());
+  TF_DCHECK_OK(Verify());
 }
 
 // Add a list containing the given values to CopyRemover. This
@@ -1031,42 +1031,6 @@ bool CopyRemover::TryElideCopy(
     VLOG(2) << "TryElideCopy - copy (" << copy->name()
             << ") defines the first value in its buffer.";
     // Live range of (s_x, s_{x-1},...) must be before 'next_dest' (d_1);
-
-    // For a copy feeding into a variadic scatter (fusion), if the copy's source
-    // also feeds into the same scatter, the copy cannot be removed. Thus only
-    // one copy can be removed for each shared operand of the variadic scatter.
-    auto get_variadic_scatter_instruction =
-        [](HloInstruction* instruction) -> HloInstruction* {
-      HloInstruction* scatter_instruction = nullptr;
-      if (instruction->opcode() == HloOpcode::kScatter) {
-        scatter_instruction = instruction;
-      } else if (instruction->opcode() == HloOpcode::kFusion &&
-                 instruction->fused_expression_root()->opcode() ==
-                     HloOpcode::kScatter) {
-        scatter_instruction = instruction->fused_expression_root();
-      } else {
-        return nullptr;
-      }
-      if (scatter_instruction->shape().IsTuple()) {
-        return instruction;
-      }
-      return nullptr;
-    };
-    HloInstruction* variadic_scatter_instruction =
-        Next(*copy_node.dest) == nullptr
-            ? nullptr
-            : get_variadic_scatter_instruction(
-                  Next(*copy_node.dest)->value->defining_instruction());
-    if (variadic_scatter_instruction != nullptr) {
-      auto uses = copy_node.src->uses;
-      for (auto use : uses) {
-        if (use->instruction == variadic_scatter_instruction) {
-          VLOG(6) << "copy src is already used by scatter (fusion)";
-          return false;
-        }
-      }
-    }
-
     bool src_use_before_first_dest_def =
         CheckLiveRangeBefore(copy_node.src, Next(*copy_node.dest));
     std::string a = copy_node.src->value->ToShortString();
@@ -1193,7 +1157,7 @@ bool CopyRemover::TryElideCopy(
   RemoveCopyValue(copy_node.dest);
 
   XLA_VLOG_LINES(4, ToString());
-  DCHECK_OK(Verify());
+  TF_DCHECK_OK(Verify());
   VLOG(3) << "TryElideCopy succeeded for: " << copy->name();
   return true;
 }
@@ -1294,7 +1258,7 @@ bool CopyRemover::ValuesInterfere(const ValueNode* src, const ValueNode* dest,
   VLOG(5) << "    ValuesInterfere destination live range:\n"
           << dest_live_range.ToString();
 
-  ComputeRelativeLocation relative_location_analysis(ordering_, alias_info_);
+  ComputeRelativeLocation relative_location_analysis(ordering_);
   auto rel1 = relative_location_analysis.ComputeBetweenLiveRangeRegions(
       src_live_range, dest_live_range);
   VLOG(3) << "    ValuesInterfere - location of dest in relation to src: ";

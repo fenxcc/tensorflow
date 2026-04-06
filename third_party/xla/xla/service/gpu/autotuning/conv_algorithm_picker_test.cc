@@ -88,10 +88,8 @@ ENTRY main {
   changed = false;
   DebugOptions opts = DefaultDebugOptionsIgnoringFlags();
 
-  TF_ASSERT_OK_AND_ASSIGN(
-      AutotuneConfig cfg,
-      AutotuneConfig::FromDebugOptions(
-          DeviceOrDevicelessConfig{DeviceConfig{stream_exec, nullptr}}, opts));
+  AutotuneConfig cfg = AutotuneConfig::FromDebugOptions(
+      DeviceOrDevicelessConfig{DeviceConfig{stream_exec, nullptr}}, opts);
   TF_ASSERT_OK_AND_ASSIGN(changed,
                           RunHloPass(GpuConvAlgorithmPicker(cfg), m.get()));
   ASSERT_TRUE(changed);
@@ -132,8 +130,9 @@ ENTRY main {
   // Algorithm 14 is disabled for cuDNN 9 on V100
   TF_ASSERT_OK_AND_ASSIGN(auto dnn_version, GetDnnVersionInfo(stream_exec));
   if (dnn_version.major_version() >= 9 && dnn_version.major_version() < 10 &&
-      cc.IsCuda() && cc.cuda_compute_capability()->major == 7 &&
-      cc.cuda_compute_capability()->minor == 0) {
+      std::holds_alternative<stream_executor::CudaComputeCapability>(cc) &&
+      std::get<stream_executor::CudaComputeCapability>(cc).major == 7 &&
+      std::get<stream_executor::CudaComputeCapability>(cc).minor == 0) {
     EXPECT_TRUE(conv->backend_config<GpuBackendConfig>()
                     ->has_cudnn_conv_backend_config() &&
                 conv->backend_config<GpuBackendConfig>()
@@ -202,10 +201,8 @@ ENTRY main {
   ASSERT_TRUE(changed);
 
   DebugOptions opts = DefaultDebugOptionsIgnoringFlags();
-  TF_ASSERT_OK_AND_ASSIGN(
-      AutotuneConfig cfg,
-      AutotuneConfig::FromDebugOptions(
-          DeviceOrDevicelessConfig{DeviceConfig{stream_exec, nullptr}}, opts));
+  AutotuneConfig cfg = AutotuneConfig::FromDebugOptions(
+      DeviceOrDevicelessConfig{DeviceConfig{stream_exec, nullptr}}, opts);
   TF_ASSERT_OK_AND_ASSIGN(changed,
                           RunHloPass(GpuConvAlgorithmPicker(cfg), m.get()));
   ASSERT_TRUE(changed);

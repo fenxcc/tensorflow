@@ -17,7 +17,6 @@ limitations under the License.
 
 #include <gtest/gtest.h>
 #include "xla/error_spec.h"
-#include "xla/stream_executor/cuda/cuda_compute_capability.h"
 #include "xla/stream_executor/device_description.h"
 
 #if GOOGLE_CUDA
@@ -287,7 +286,7 @@ TEST_F(CudnnNormRewriterTest, LayerNorm4D2) {
 
 ; CHECK-LABEL: ENTRY %test ({{.*}}: f32[2,4,6,8], {{.*}}: f32[6], {{.*}}: f32[6]) -> f32[2,4,6,8] {
 ; CHECK-NEXT:    [[P0:%[^ ]+]] = f32[2,4,6,8]{3,2,1,0} parameter(0)
-; CHECK-NEXT:    [[TRANSPOSE:%[^ ]+]] = f32[8,8,6]{2,1,0} fusion([[P0]])
+; CHECK-NEXT:    [[TRANSPOSE:%[^ ]+]] = f32[8,8,6]{2,1,0} fusion([[P0]]), kind=kLoop, calls={{.*}}
 ; CHECK-NEXT:    [[P0_BITCAST:%[^ ]+]] = f32[64,6,1,1]{3,2,1,0} bitcast([[TRANSPOSE]])
 ; CHECK-NEXT:    [[P1:%[^ ]+]] = f32[6]{0} parameter(1)
 ; CHECK-NEXT:    [[P1_BITCAST:%[^ ]+]] = f32[1,6,1,1]{3,2,1,0} bitcast([[P1]])
@@ -299,7 +298,7 @@ TEST_F(CudnnNormRewriterTest, LayerNorm4D2) {
 ; CHECK-DAG:         "epsilon":0.001
 ; CHECK:           }
 ; CHECK-NEXT:    [[GTE:%[^ ]+]] = f32[64,6,1,1]{3,2,1,0} get-tuple-element([[CC]]), index=0
-; CHECK-NEXT:    [[FUSION:%[^ ]+]] = f32[8,6,8]{2,1,0} fusion([[GTE]]), kind={{.*}}, calls=[[FUSED_COMPUTATION:%[^ ]+]]
+; CHECK-NEXT:    [[FUSION:%[^ ]+]] = f32[8,6,8]{2,1,0} fusion([[GTE]]), kind=kLoop, calls=[[FUSED_COMPUTATION:%[^ ]+]]
 ; CHECK-NEXT:  ROOT {{.*}} = f32[2,4,6,8]{3,2,1,0} bitcast([[FUSION]])
   )";
 
@@ -348,7 +347,7 @@ TEST_F(CudnnNormRewriterTest, LayerNorm4D2Degenerate1) {
 
 ; CHECK-LABEL: ENTRY %test ({{.*}}: f32[2,1,6,8], {{.*}}: f32[6], {{.*}}: f32[6]) -> f32[2,1,6,8] {
 ; CHECK-NEXT:    [[P0:%[^ ]+]] = f32[2,1,6,8]{3,2,1,0} parameter(0)
-; CHECK-NEXT:    [[TRANSPOSE:%[^ ]+]] = f32[2,8,6]{2,1,0} fusion([[P0]])
+; CHECK-NEXT:    [[TRANSPOSE:%[^ ]+]] = f32[2,8,6]{2,1,0} fusion([[P0]]), kind=kLoop, calls={{.*}}
 ; CHECK-NEXT:    [[P0_BITCAST:%[^ ]+]] = f32[16,6,1,1]{3,2,1,0} bitcast([[TRANSPOSE]])
 ; CHECK-NEXT:    [[P1:%[^ ]+]] = f32[6]{0} parameter(1)
 ; CHECK-NEXT:    [[P1_BITCAST:%[^ ]+]] = f32[1,6,1,1]{3,2,1,0} bitcast([[P1]])
@@ -360,7 +359,7 @@ TEST_F(CudnnNormRewriterTest, LayerNorm4D2Degenerate1) {
 ; CHECK-DAG:         "epsilon":0.001
 ; CHECK:           }
 ; CHECK-NEXT:    [[GTE:%[^ ]+]] = f32[16,6,1,1]{3,2,1,0} get-tuple-element([[CC]]), index=0
-; CHECK-NEXT:    [[FUSION:%[^ ]+]] = f32[2,6,8]{2,1,0} fusion([[GTE]]), kind={{.*}}, calls=[[FUSED_COMPUTATION:%[^ ]+]]
+; CHECK-NEXT:    [[FUSION:%[^ ]+]] = f32[2,6,8]{2,1,0} fusion([[GTE]]), kind=kLoop, calls=[[FUSED_COMPUTATION:%[^ ]+]]
 ; CHECK-NEXT:  ROOT {{.*}} = f32[2,1,6,8]{3,2,1,0} bitcast([[FUSION]])
   )";
 
@@ -409,7 +408,7 @@ TEST_F(CudnnNormRewriterTest, LayerNorm4D12) {
 
 ; CHECK-LABEL: ENTRY %test ({{.*}}: f32[2,4,6,8], {{.*}}: f32[4,6], {{.*}}: f32[4,6]) -> f32[2,4,6,8] {
 ; CHECK-NEXT:    [[P0:%[^ ]+]] = f32[2,4,6,8]{3,2,1,0} parameter(0)
-; CHECK-NEXT:    [[TRANSPOSE:%[^ ]+]] = f32[2,8,24]{2,1,0} fusion([[P0]])
+; CHECK-NEXT:    [[TRANSPOSE:%[^ ]+]] = f32[2,8,24]{2,1,0} fusion([[P0]]), kind=kLoop, calls={{.*}}
 ; CHECK-NEXT:    [[P0_BITCAST:%[^ ]+]] = f32[16,4,6,1]{3,2,1,0} bitcast([[TRANSPOSE]])
 ; CHECK-NEXT:    [[P1:%[^ ]+]] = f32[4,6]{1,0} parameter(1)
 ; CHECK-NEXT:    [[P1_BITCAST:%[^ ]+]] = f32[1,4,6,1]{3,2,1,0} bitcast([[P1]])
@@ -421,7 +420,7 @@ TEST_F(CudnnNormRewriterTest, LayerNorm4D12) {
 ; CHECK-DAG:         "epsilon":0.001
 ; CHECK:           }
 ; CHECK-NEXT:    [[GTE:%[^ ]+]] = f32[16,4,6,1]{3,2,1,0} get-tuple-element([[CC]]), index=0
-; CHECK-NEXT:    [[FUSION:%[^ ]+]] = f32[2,24,8]{2,1,0} fusion([[GTE]]), kind={{.*}}, calls=[[FUSED_COMPUTATION:%[^ ]+]]
+; CHECK-NEXT:    [[FUSION:%[^ ]+]] = f32[2,24,8]{2,1,0} fusion([[GTE]]), kind=kLoop, calls=[[FUSED_COMPUTATION:%[^ ]+]]
 ; CHECK-NEXT:  ROOT {{.*}} = f32[2,4,6,8]{3,2,1,0} bitcast([[FUSION]])
   )";
 
@@ -470,7 +469,7 @@ TEST_F(CudnnNormRewriterTest, LayerNorm4D12Degenerate2) {
 
 ; CHECK-LABEL: ENTRY %test ({{.*}}: f32[2,4,1,8], {{.*}}: f32[4,1], {{.*}}: f32[4,1]) -> f32[2,4,1,8] {
 ; CHECK-NEXT:    [[P0:%[^ ]+]] = f32[2,4,1,8]{3,2,1,0} parameter(0)
-; CHECK-NEXT:    [[TRANSPOSE:%[^ ]+]] = f32[2,8,4]{2,1,0} fusion([[P0]])
+; CHECK-NEXT:    [[TRANSPOSE:%[^ ]+]] = f32[2,8,4]{2,1,0} fusion([[P0]]), kind=kLoop, calls={{.*}}
 ; CHECK-NEXT:    [[P0_BITCAST:%[^ ]+]] = f32[16,4,1,1]{3,2,1,0} bitcast([[TRANSPOSE]])
 ; CHECK-NEXT:    [[P1:%[^ ]+]] = f32[4,1]{1,0} parameter(1)
 ; CHECK-NEXT:    [[P1_BITCAST:%[^ ]+]] = f32[1,4,1,1]{3,2,1,0} bitcast([[P1]])
@@ -482,7 +481,7 @@ TEST_F(CudnnNormRewriterTest, LayerNorm4D12Degenerate2) {
 ; CHECK-DAG:         "epsilon":0.001
 ; CHECK:           }
 ; CHECK-NEXT:    [[GTE:%[^ ]+]] = f32[16,4,1,1]{3,2,1,0} get-tuple-element([[CC]]), index=0
-; CHECK-NEXT:    [[FUSION:%[^ ]+]] = f32[2,4,8]{2,1,0} fusion([[GTE]]), kind={{.*}}, calls=[[FUSED_COMPUTATION:%[^ ]+]]
+; CHECK-NEXT:    [[FUSION:%[^ ]+]] = f32[2,4,8]{2,1,0} fusion([[GTE]]), kind=kLoop, calls=[[FUSED_COMPUTATION:%[^ ]+]]
 ; CHECK-NEXT:  ROOT {{.*}} = f32[2,4,1,8]{3,2,1,0} bitcast([[FUSION]])
   )";
 
@@ -707,7 +706,7 @@ TEST_F(CudnnNormRewriterTest, LayerNormTrain2D1) {
 ; CHECK-NEXT:    [[GTE1_BITCAST:%[^ ]+]] = f32[2]{0} bitcast([[GTE1]])
 ; CHECK-NEXT:    [[GTE2:%[^ ]+]] = f32[2,1,1,1]{3,2,1,0} get-tuple-element([[CC]]), index=2
 ; CHECK-NEXT:    [[GTE2_BITCAST:%[^ ]+]] = f32[2]{0} bitcast([[GTE2]])
-; CHECK-NEXT:    [[FUSION:%[^ ]+]] = f32[2]{0} fusion([[GTE2]]), kind={{.*}}, calls=[[FUSED_COMPUTATION:%[^ ]+]]
+; CHECK-NEXT:    [[FUSION:%[^ ]+]] = f32[2]{0} fusion([[GTE2]]), kind=kLoop, calls=[[FUSED_COMPUTATION:%[^ ]+]]
 ; CHECK-NEXT:  ROOT [[OUT:%[^ ]+]] = (f32[2,4]{1,0}, f32[2]{0}, f32[2]{0}, f32[2]{0}) tuple([[GTE0_BITCAST]], [[GTE1_BITCAST]], [[GTE2_BITCAST]], [[FUSION]])
   )";
 
@@ -774,7 +773,7 @@ TEST_F(CudnnNormRewriterTest, LayerNormTrain4D3) {
 ; CHECK-NEXT:    [[GTE1_BITCAST:%[^ ]+]] = f32[2,4,6]{2,1,0} bitcast([[GTE1]])
 ; CHECK-NEXT:    [[GTE2:%[^ ]+]] = f32[48,1,1,1]{3,2,1,0} get-tuple-element([[CC]]), index=2
 ; CHECK-NEXT:    [[GTE2_BITCAST:%[^ ]+]] = f32[2,4,6]{2,1,0} bitcast([[GTE2]])
-; CHECK-NEXT:    [[FUSION:%[^ ]+]] = f32[2,4,6]{2,1,0} fusion([[GTE2]]), kind={{.*}}, calls=[[FUSED_COMPUTATION:%[^ ]+]]
+; CHECK-NEXT:    [[FUSION:%[^ ]+]] = f32[2,4,6]{2,1,0} fusion([[GTE2]]), kind=kLoop, calls=[[FUSED_COMPUTATION:%[^ ]+]]
 ; CHECK-NEXT:  ROOT [[OUT:%[^ ]+]] = (f32[2,4,6,8]{3,2,1,0}, f32[2,4,6]{2,1,0}, f32[2,4,6]{2,1,0}, f32[2,4,6]{2,1,0}) tuple([[GTE0_BITCAST]], [[GTE1_BITCAST]], [[GTE2_BITCAST]], [[FUSION]])
   )";
 
@@ -825,7 +824,7 @@ TEST_F(CudnnNormRewriterTest, LayerNormTrain4D12) {
 
 ; CHECK-LABEL: ENTRY %test ({{.*}}: f32[2,4,6,8], {{.*}}: f32[4,6], {{.*}}: f32[4,6]) -> (f32[2,4,6,8], f32[2,8], f32[2,8], f32[2,8]) {
 ; CHECK-NEXT:    [[P0:%[^ ]+]] = f32[2,4,6,8]{3,2,1,0} parameter(0)
-; CHECK-NEXT:    [[TRANSPOSE:%[^ ]+]] = f32[2,8,24]{2,1,0} fusion([[P0]])
+; CHECK-NEXT:    [[TRANSPOSE:%[^ ]+]] = f32[2,8,24]{2,1,0} fusion([[P0]]), kind=kLoop, calls={{.*}}
 ; CHECK-NEXT:    [[P0_BITCAST:%[^ ]+]] = f32[16,4,6,1]{3,2,1,0} bitcast([[TRANSPOSE]])
 ; CHECK-NEXT:    [[P1:%[^ ]+]] = f32[4,6]{1,0} parameter(1)
 ; CHECK-NEXT:    [[P1_BITCAST:%[^ ]+]] = f32[1,4,6,1]{3,2,1,0} bitcast([[P1]])
@@ -885,7 +884,7 @@ TEST_F(CudnnNormRewriterTest, LayerNormTrain4D12Degenerate2) {
 
 ; CHECK-LABEL: ENTRY %test ({{.*}}: f32[2,4,1,8], {{.*}}: f32[4,1], {{.*}}: f32[4,1]) -> (f32[2,4,1,8], f32[2,8], f32[2,8], f32[2,8]) {
 ; CHECK-NEXT:    [[P0:%[^ ]+]] = f32[2,4,1,8]{3,2,1,0} parameter(0)
-; CHECK-NEXT:    [[TRANSPOSE:%[^ ]+]] = f32[2,8,4]{2,1,0} fusion([[P0]])
+; CHECK-NEXT:    [[TRANSPOSE:%[^ ]+]] = f32[2,8,4]{2,1,0} fusion([[P0]]), kind=kLoop, calls={{.*}}
 ; CHECK-NEXT:    [[P0_BITCAST:%[^ ]+]] = f32[16,4,1,1]{3,2,1,0} bitcast([[TRANSPOSE]])
 ; CHECK-NEXT:    [[P1:%[^ ]+]] = f32[4,1]{1,0} parameter(1)
 ; CHECK-NEXT:    [[P1_BITCAST:%[^ ]+]] = f32[1,4,1,1]{3,2,1,0} bitcast([[P1]])
@@ -1181,7 +1180,7 @@ TEST_F(CudnnNormRewriterTest, LayerNormTrainBackward4D2) {
 
 ; CHECK-LABEL: ENTRY %test ({{.*}}: f32[2,4,6,8], {{.*}}: f32[6], {{.*}}: f32[6], {{.*}}: f32[2,4,6,8]) -> (f32[2,4,6,8], f32[2,4,6,8], f32[6], f32[6]) {
 ; CHECK-NEXT:    [[P0:%[^ ]+]] = f32[2,4,6,8]{3,2,1,0} parameter(0)
-; CHECK-NEXT:    [[TRANSPOSE0:%[^ ]+]] = f32[8,8,6]{2,1,0} fusion([[P0]])
+; CHECK-NEXT:    [[TRANSPOSE0:%[^ ]+]] = f32[8,8,6]{2,1,0} fusion([[P0]]), kind=kLoop, calls={{.*}}
 ; CHECK-NEXT:    [[P0_BITCAST:%[^ ]+]] = f32[64,6,1,1]{3,2,1,0} bitcast([[TRANSPOSE0]])
 ; CHECK-NEXT:    [[P1:%[^ ]+]] = f32[6]{0} parameter(1)
 ; CHECK-NEXT:    [[P1_BITCAST:%[^ ]+]] = f32[1,6,1,1]{3,2,1,0} bitcast([[P1]])
@@ -1274,7 +1273,7 @@ TEST_F(CudnnNormRewriterTest, LayerNormTrainBackward4D12) {
 
 ; CHECK-LABEL: ENTRY %test ({{.*}}: f32[2,4,6,8], {{.*}}: f32[4,6], {{.*}}: f32[4,6], {{.*}}: f32[2,4,6,8]) -> (f32[2,4,6,8], f32[2,4,6,8], f32[4,6], f32[4,6]) {
 ; CHECK-NEXT:    [[P0:%[^ ]+]] = f32[2,4,6,8]{3,2,1,0} parameter(0)
-; CHECK-NEXT:    [[TRANSPOSE0:%[^ ]+]] = f32[2,8,24]{2,1,0} fusion([[P0]])
+; CHECK-NEXT:    [[TRANSPOSE0:%[^ ]+]] = f32[2,8,24]{2,1,0} fusion([[P0]]), kind=kLoop, calls={{.*}}
 ; CHECK-NEXT:    [[P0_BITCAST:%[^ ]+]] = f32[16,4,6,1]{3,2,1,0} bitcast([[TRANSPOSE0]])
 ; CHECK-NEXT:    [[P1:%[^ ]+]] = f32[4,6]{1,0} parameter(1)
 ; CHECK-NEXT:    [[P1_BITCAST:%[^ ]+]] = f32[1,4,6,1]{3,2,1,0} bitcast([[P1]])
@@ -1367,7 +1366,7 @@ TEST_F(CudnnNormRewriterTest, LayerNormTrainBackward4D12Degenerate2) {
 
 ; CHECK-LABEL: ENTRY %test ({{.*}}: f32[2,4,1,8], {{.*}}: f32[4,1], {{.*}}: f32[4,1], {{.*}}: f32[2,4,1,8]) -> (f32[2,4,1,8], f32[2,4,1,8], f32[4,1], f32[4,1]) {
 ; CHECK-NEXT:    [[P0:%[^ ]+]] = f32[2,4,1,8]{3,2,1,0} parameter(0)
-; CHECK-NEXT:    [[TRANSPOSE0:%[^ ]+]] = f32[2,8,4]{2,1,0} fusion([[P0]])
+; CHECK-NEXT:    [[TRANSPOSE0:%[^ ]+]] = f32[2,8,4]{2,1,0} fusion([[P0]]), kind=kLoop, calls={{.*}}
 ; CHECK-NEXT:    [[P0_BITCAST:%[^ ]+]] = f32[16,4,1,1]{3,2,1,0} bitcast([[TRANSPOSE0]])
 ; CHECK-NEXT:    [[P1:%[^ ]+]] = f32[4,1]{1,0} parameter(1)
 ; CHECK-NEXT:    [[P1_BITCAST:%[^ ]+]] = f32[1,4,1,1]{3,2,1,0} bitcast([[P1]])
@@ -1477,7 +1476,7 @@ TEST_F(CudnnNormRewriterTest,
 ; CHECK:           }
 ; CHECK-DAG:     [[GTE0:%[^ ]+]] = f32[96,4,1,1]{3,2,1,0} get-tuple-element([[CC0]]), index=0
 ; CHECK-DAG:     [[P3:%[^ ]+]] = f32[2,4,48]{2,1,0} parameter(3)
-; CHECK-DAG:     [[FUSION0:%[^ ]+]] = f32[2,6,8,4]{3,2,1,0} fusion([[P3]])
+; CHECK-DAG:     [[FUSION0:%[^ ]+]] = f32[2,6,8,4]{3,2,1,0} fusion([[P3]]), kind=kLoop, calls=[[FUSED_COMPUTATION0:%[^ ]+]]
 ; CHECK-DAG:     [[FUSION0_BITCAST:%[^ ]+]] = f32[96,4,1,1]{3,2,1,0} bitcast([[FUSION0]])
 ; CHECK-DAG:     [[GTE1:%[^ ]+]] = f32[96,1,1,1]{3,2,1,0} get-tuple-element([[CC0]]), index=1
 ; CHECK-DAG:     [[GTE2:%[^ ]+]] = f32[96,1,1,1]{3,2,1,0} get-tuple-element([[CC0]]), index=2
@@ -1488,7 +1487,7 @@ TEST_F(CudnnNormRewriterTest,
 ; CHECK-DAG:         "kind":"LAYER_BWD"
 ; CHECK:           }
 ; CHECK-DAG:     [[GTE3:%[^ ]+]] = f32[96,4,1,1]{3,2,1,0} get-tuple-element([[CC1]]), index=0
-; CHECK-DAG:     [[FUSION1:%[^ ]+]] = (f32[2,4,6,8]{3,2,1,0}, f32[2,4,6,8]{3,2,1,0}) fusion([[GTE0]], [[GTE3]]), kind={{.*}}, calls=[[FUSED_COMPUTATION1:%[^ ]+]]
+; CHECK-DAG:     [[FUSION1:%[^ ]+]] = (f32[2,4,6,8]{3,2,1,0}, f32[2,4,6,8]{3,2,1,0}) fusion([[GTE0]], [[GTE3]]), kind=kLoop, calls=[[FUSED_COMPUTATION1:%[^ ]+]]
 ; CHECK-DAG:     [[GTEF1:%[^ ]+]] = f32[2,4,6,8]{3,2,1,0} get-tuple-element([[FUSION1]]), index=0
 ; CHECK-DAG:     [[GTEF2:%[^ ]+]] = f32[2,4,6,8]{3,2,1,0} get-tuple-element([[FUSION1]]), index=1
 ; CHECK-DAG:     [[GTE4:%[^ ]+]] = f32[1,4,1,1]{3,2,1,0} get-tuple-element([[CC1]]), index=1
@@ -1588,7 +1587,7 @@ TEST_F(CudnnNormRewriterTest,
 ; CHECK:           }
 ; CHECK-DAG:     [[GTE0:%[^ ]+]] = f32[96,4,1,1]{3,2,1,0} get-tuple-element([[CC0]]), index=0
 ; CHECK-DAG:     [[P3:%[^ ]+]] = f32[2,4,6,2,2,2]{5,4,3,2,1,0} parameter(3)
-; CHECK-DAG:     [[FUSION0:%[^ ]+]] = f32[2,6,8,4]{3,2,1,0} fusion([[P3]]), kind={{.*}}, calls=[[FUSED_COMPUTATION0:%[^ ]+]]
+; CHECK-DAG:     [[FUSION0:%[^ ]+]] = f32[2,6,8,4]{3,2,1,0} fusion([[P3]]), kind=kLoop, calls=[[FUSED_COMPUTATION0:%[^ ]+]]
 ; CHECK-DAG:     [[FUSION0_BITCAST:%[^ ]+]] = f32[96,4,1,1]{3,2,1,0} bitcast([[FUSION0]])
 ; CHECK-DAG:     [[GTE1:%[^ ]+]] = f32[96,1,1,1]{3,2,1,0} get-tuple-element([[CC0]]), index=1
 ; CHECK-DAG:     [[GTE2:%[^ ]+]] = f32[96,1,1,1]{3,2,1,0} get-tuple-element([[CC0]]), index=2
@@ -1599,7 +1598,7 @@ TEST_F(CudnnNormRewriterTest,
 ; CHECK-DAG:         "kind":"LAYER_BWD"
 ; CHECK:           }
 ; CHECK-DAG:     [[GTE3:%[^ ]+]] = f32[96,4,1,1]{3,2,1,0} get-tuple-element([[CC1]]), index=0
-; CHECK-DAG:     [[FUSION1:%[^ ]+]] = (f32[2,4,6,8]{3,2,1,0}, f32[2,4,6,8]{3,2,1,0}) fusion([[GTE0]], [[GTE3]]), kind={{.*}}, calls=[[FUSED_COMPUTATION1:%[^ ]+]]
+; CHECK-DAG:     [[FUSION1:%[^ ]+]] = (f32[2,4,6,8]{3,2,1,0}, f32[2,4,6,8]{3,2,1,0}) fusion([[GTE0]], [[GTE3]]), kind=kLoop, calls=[[FUSED_COMPUTATION1:%[^ ]+]]
 ; CHECK-DAG:     [[GTEF1:%[^ ]+]] = f32[2,4,6,8]{3,2,1,0} get-tuple-element([[FUSION1]]), index=0
 ; CHECK-DAG:     [[GTEF2:%[^ ]+]] = f32[2,4,6,8]{3,2,1,0} get-tuple-element([[FUSION1]]), index=1
 ; CHECK-DAG:     [[GTE4:%[^ ]+]] = f32[1,4,1,1]{3,2,1,0} get-tuple-element([[CC1]]), index=1

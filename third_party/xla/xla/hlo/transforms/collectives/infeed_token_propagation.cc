@@ -16,7 +16,6 @@ limitations under the License.
 #include "xla/hlo/transforms/collectives/infeed_token_propagation.h"
 
 #include <cstdint>
-#include <queue>
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"
@@ -172,10 +171,8 @@ absl::StatusOr<HloInstruction*> InsertTokenIntoTuple(HloInstruction* tuple,
   HloInstruction* original_tuple = TupleUtil::Duplicate(tuple);
   for (HloInstruction* original_user : original_users) {
     for (int64_t idx : original_user->operand_indices(tuple)) {
-      // We expect the shape to be same, but checking that it is the same is
-      // expensive.
       TF_RETURN_IF_ERROR(
-          original_user->ReplaceOperandWithDifferentShape(idx, original_tuple));
+          original_user->ReplaceOperandWith(idx, original_tuple));
     }
   }
 
@@ -233,10 +230,8 @@ absl::Status CanonicalizeConditionalInstruction(HloInstruction* conditional) {
     // insert tokens into the input tuple.
     if (branch_tuple->opcode() == HloOpcode::kParameter) {
       branch_tuple = TupleUtil::Duplicate(branch_tuple);
-      // We expect the shape to be same, but checking that it is the same is
-      // expensive.
-      TF_RETURN_IF_ERROR(conditional->ReplaceOperandWithDifferentShape(
-          branch_operand_idx, branch_tuple));
+      TF_RETURN_IF_ERROR(
+          conditional->ReplaceOperandWith(branch_operand_idx, branch_tuple));
     }
 
     // Explicitly make the root of the branch a tuple.
@@ -330,9 +325,7 @@ absl::Status CanonicalizeWhileInstruction(HloInstruction* loop) {
   // insert tokens into the input tuple.
   if (loop_tuple->opcode() == HloOpcode::kParameter) {
     loop_tuple = TupleUtil::Duplicate(loop_tuple);
-    // We expect the shape to be same, but checking that it is the same is
-    // expensive.
-    TF_RETURN_IF_ERROR(loop->ReplaceOperandWithDifferentShape(0, loop_tuple));
+    TF_RETURN_IF_ERROR(loop->ReplaceOperandWith(0, loop_tuple));
   }
 
   // Explicitly make the root of the body a tuple.
@@ -472,10 +465,7 @@ absl::Status InfeedTokenPropagation::PropagateToken(
           // Parent outfeed happens after child infeed. Stitch via parent input
           // token.
           CHECK_EQ(begin->opcode(), HloOpcode::kOutfeed);
-          // We expect the shape to be same, but checking that it is the same
-          // is expensive.
-          TF_RETURN_IF_ERROR(
-              begin->ReplaceOperandWithDifferentShape(1, output_token_));
+          TF_RETURN_IF_ERROR(begin->ReplaceOperandWith(1, output_token_));
           output_token_ = end;
         } else {
           LOG(WARNING) << absl::StrFormat(
@@ -519,7 +509,7 @@ absl::Status InfeedTokenPropagation::PropagateToken(
   return PropagateToken(ordering);
 }
 
-absl::StatusOr<bool> InfeedTokenPropagation::RunImpl(
+absl::StatusOr<bool> InfeedTokenPropagation::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   VLOG(5) << "Before InfeedTokenPropagation:";
@@ -560,35 +550,10 @@ absl::StatusOr<bool> InfeedTokenPropagation::RunImpl(
 
   if (changed) {
     call_graph_ = CallGraph::Build(module, execution_threads);
-
-    absl::flat_hash_set<HloComputation*> visited;
-    std::queue<HloComputation*> worklist;
-    for (const std::vector<HloInstruction*>& inst_vector :
-         {dangling_infeeds, dangling_outfeeds}) {
-      for (HloInstruction* instruction : inst_vector) {
-        if (visited.insert(instruction->parent()).second) {
-          worklist.push(instruction->parent());
-        }
-      }
+    if (!call_graph_->IsFlattened()) {
+      return FailedPrecondition(
+          "Call graph must be flattened before infeed token propagation.");
     }
-
-    while (!worklist.empty()) {
-      HloComputation* computation = worklist.front();
-      worklist.pop();
-      const CallGraphNode& node = call_graph_->GetNode(computation);
-      if (node.caller_callsites().empty()) {
-        continue;
-      }
-      if (node.caller_callsites().size() > 1) {
-        return FailedPrecondition(
-            "Call graph must be flattened before infeed token propagation.");
-      }
-      HloComputation* parent = node.callers()[0];
-      if (visited.insert(parent).second) {
-        worklist.push(parent);
-      }
-    }
-
     DependencyHloOrdering ordering = DependencyHloOrdering(module);
 
     for (HloInstruction* dangling_infeed : dangling_infeeds) {

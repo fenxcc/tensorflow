@@ -20,14 +20,17 @@ limitations under the License.
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include "absl/status/status.h"
-#include "absl/status/status_matchers.h"
 #include "xla/stream_executor/semantic_version.h"
-#include "xla/tsl/platform/statusor.h"
 #include "tsl/platform/path.h"
+#include "tsl/platform/status_matchers.h"
+#include "tsl/platform/statusor.h"
+#include "tsl/platform/test.h"
 
 namespace stream_executor {
 namespace {
 using testing::Not;
+using tsl::testing::IsOkAndHolds;
+using tsl::testing::StatusIs;
 
 TEST(SubprocessCompilationTest, GetToolVersion) {
   std::string cuda_dir;
@@ -102,23 +105,22 @@ TEST(SubprocessCompilationTest, FindCudaExecutable) {
 
   std::string ptxas_path = tsl::io::JoinPath(cuda_dir, "bin", "ptxas");
 
-  EXPECT_THAT(FindCudaExecutable("ptxas", cuda_dir),
-              absl_testing::IsOkAndHolds(ptxas_path));
+  EXPECT_THAT(FindCudaExecutable("ptxas", cuda_dir), IsOkAndHolds(ptxas_path));
   EXPECT_THAT(
       FindCudaExecutable("ptxas", cuda_dir, SemanticVersion{0, 0, 0}, {}),
-      absl_testing::IsOkAndHolds(ptxas_path));
+      IsOkAndHolds(ptxas_path));
   EXPECT_THAT(
       FindCudaExecutable("ptxas", cuda_dir, SemanticVersion{111, 2, 3}, {}),
-      absl_testing::IsOkAndHolds(ptxas_path));
+      IsOkAndHolds(ptxas_path));
   EXPECT_THAT(
       FindCudaExecutable("ptxas", cuda_dir, SemanticVersion{111, 2, 4}, {}),
-      absl_testing::StatusIs(absl::StatusCode::kNotFound));
+      StatusIs(absl::StatusCode::kNotFound));
   EXPECT_THAT(FindCudaExecutable("ptxas", cuda_dir, SemanticVersion{0, 0, 0},
                                  {{111, 2, 3}}),
-              Not(absl_testing::IsOkAndHolds(ptxas_path)));
+              Not(IsOkAndHolds(ptxas_path)));
   EXPECT_THAT(FindCudaExecutable("ptxas", cuda_dir, SemanticVersion{99, 0, 0},
                                  {{111, 2, 3}}),
-              absl_testing::StatusIs(absl::StatusCode::kNotFound));
+              StatusIs(absl::StatusCode::kNotFound));
 }
 
 }  // namespace

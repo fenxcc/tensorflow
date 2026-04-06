@@ -37,9 +37,10 @@ limitations under the License.
 #include "xla/literal_util.h"
 #include "xla/shape.h"
 #include "xla/shape_util.h"
-#include "xla/tsl/platform/statusor.h"
 #include "xla/util.h"
 #include "xla/xla_data.pb.h"
+#include "tsl/platform/status.h"
+#include "tsl/platform/statusor.h"
 
 namespace xla {
 
@@ -145,7 +146,7 @@ bool BatchNormExpanderVisitor::Run(HloComputation* computation,
       /*rewrite_training_op=*/rewrite_training_op,
       /*rewrite_inference_op=*/rewrite_inference_op,
       /*rewrite_grad_op=*/rewrite_grad_op);
-  CHECK_OK(computation->Accept(&visitor));
+  TF_CHECK_OK(computation->Accept(&visitor));
   return visitor.changed();
 }
 
@@ -293,7 +294,7 @@ absl::Status BatchNormExpanderVisitor::HandleBatchNormTraining(
     }
     tuple->set_sharding(sharding);
   }
-  CHECK_OK(ReplaceWithNewInstruction(batch_norm, std::move(tuple)));
+  TF_CHECK_OK(ReplaceWithNewInstruction(batch_norm, std::move(tuple)));
   return absl::OkStatus();
 }
 
@@ -385,7 +386,7 @@ absl::Status BatchNormExpanderVisitor::HandleBatchNormInference(
     }
     shifted_normalized->set_sharding(sharding);
   }
-  CHECK_OK(ReplaceInstruction(batch_norm, shifted_normalized));
+  TF_CHECK_OK(ReplaceInstruction(batch_norm, shifted_normalized));
   return absl::OkStatus();
 }
 
@@ -575,16 +576,15 @@ absl::Status BatchNormExpanderVisitor::HandleBatchNormGrad(
     tuple->set_sharding(sharding);
   }
 
-  CHECK_OK(ReplaceWithNewInstruction(batch_norm, std::move(tuple)));
+  TF_CHECK_OK(ReplaceWithNewInstruction(batch_norm, std::move(tuple)));
 
   return absl::OkStatus();
 }
 
-absl::StatusOr<bool> BatchNormExpander::RunImpl(
+absl::StatusOr<bool> BatchNormExpander::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
-  XLA_VLOG_LINES(
-      2, "BatchNormExpander::RunImpl(), before:\n" + module->ToString());
+  XLA_VLOG_LINES(2, "BatchNormExpander::Run(), before:\n" + module->ToString());
   bool changed = false;
   for (HloComputation* computation :
        module->MakeNonfusionComputations(execution_threads)) {
@@ -594,8 +594,7 @@ absl::StatusOr<bool> BatchNormExpander::RunImpl(
       changed = true;
     }
   }
-  XLA_VLOG_LINES(2,
-                 "BatchNormExpander::RunImpl(), after:\n" + module->ToString());
+  XLA_VLOG_LINES(2, "BatchNormExpander::Run(), after:\n" + module->ToString());
   return changed;
 }
 

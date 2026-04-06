@@ -58,7 +58,7 @@ class NodeDefBuilderTest : public ::testing::Test {
     TF_EXPECT_OK(status);
     if (!status.ok()) return;
     NodeDef expected;
-    protobuf::TextFormat::ParseFromString(absl::StrCat("name: 'n' ", proto),
+    protobuf::TextFormat::ParseFromString(strings::StrCat("name: 'n' ", proto),
                                           &expected);
     EXPECT_EQ(node_def.DebugString(), expected.DebugString());
 
@@ -79,12 +79,12 @@ class NodeDefBuilderTest : public ::testing::Test {
   // Calls Finalize() and verifies it returns an error.
   // Each message must appear as a substring of the error.
   void ExpectFailures(NodeDefBuilder& builder,  // NOLINT
-                      const std::vector<std::string>& messages) {
+                      const std::vector<string>& messages) {
     NodeDef node_def;
     absl::Status status = builder.Finalize(&node_def);
     EXPECT_FALSE(status.ok()) << SummarizeNodeDef(node_def);
     if (status.ok()) return;
-    for (const std::string& message : messages) {
+    for (const string& message : messages) {
       EXPECT_TRUE(absl::StrContains(status.message(), message))
           << status << ", " << message;
     }
@@ -93,14 +93,14 @@ class NodeDefBuilderTest : public ::testing::Test {
   // Calls Finalize() and verifies it returns an error.
   // Message must appear as a substring of the error.
   void ExpectFailure(NodeDefBuilder& builder,  // NOLINT
-                     const std::string& message) {
+                     const string& message) {
     ExpectFailures(builder, {message});
   }
 
   // Like ExpectFailure(), except that the error can come from
   // ValidateNodeDef().
   void ExpectInvalid(NodeDefBuilder& builder,  // NOLINT
-                     const std::string& message) {
+                     const string& message) {
     NodeDef node_def;
     absl::Status status = builder.Finalize(&node_def);
     if (status.ok()) {
@@ -822,9 +822,9 @@ TEST_F(NodeDefBuilderTest, AttrManyDefault) {
                     .Input(FakeInput(DT_FLOAT))
                     .Attr("a", "foo")
                     .Attr("e", "foo")
-                    .Attr("b", std::vector<std::string>({"bar", "baz"}))
+                    .Attr("b", std::vector<string>({"bar", "baz"}))
                     .Attr("f", 1.0f),
-                {DT_FLOAT}, {}, R"pb(
+                {DT_FLOAT}, {}, R"proto(
     op: "AttrManyDefaultAndInferred"
     input: "a"
     attr {
@@ -854,7 +854,7 @@ TEST_F(NodeDefBuilderTest, AttrManyDefault) {
     attr {
       key: "d"
       value { f: 0.3 }
-    })pb");
+    })proto");
 }
 
 TEST_F(NodeDefBuilderTest, AttrListDefault) {

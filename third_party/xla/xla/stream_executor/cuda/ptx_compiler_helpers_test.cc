@@ -18,12 +18,14 @@ limitations under the License.
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include "absl/status/status.h"
-#include "absl/status/status_matchers.h"
 #include "absl/strings/string_view.h"
-#include "xla/stream_executor/kernel_stats.h"
+#include "tsl/platform/status_matchers.h"
+#include "tsl/platform/test.h"
 
 namespace stream_executor {
 namespace {
+using ::tsl::testing::IsOk;
+using ::tsl::testing::StatusIs;
 
 // When the compilation succeeds, then the error log is empty.
 constexpr absl::string_view kPtxasLogSuccessfulCompilation = R"(
@@ -50,15 +52,7 @@ ptxas fatal   : Ptx assembly aborted due to errors
 
 constexpr absl::string_view kPtxasLogRegisterSpillWarning = R"(
 // Something in the log before the warning.
-ptxas warning : Registers are spilled to local memory in function '__kernel', 18 bytes spill stores, 8 bytes spill loads
-// Something in the log after the warning.
-)";
-
-constexpr absl::string_view kPtxasLogMultipleKernelsSpillingRegisters = R"(
-// Something in the log before the warning.
-ptxas warning : Registers are spilled to local memory in function '__kernel', 18 bytes spill stores, 8 bytes spill loads
-// Log log log.
-ptxas warning : Registers are spilled to local memory in function '__kernel2', 1024 bytes spill stores, 1099 bytes spill loads
+ptxas warning : Registers are spilled to local memory in function '__kernel', 8 bytes spill stores, 8 bytes spill loads
 // Something in the log after the warning.
 )";
 
@@ -73,7 +67,7 @@ TEST(PtxCompilerHelpersTest, CreateErrorFromPTXASLogNoError) {
   EXPECT_THAT(CreateErrorFromPTXASLog(kPtxasLogSuccessfulCompilation,
                                       kDefaultArchitecture,
                                       /*cancel_if_reg_spill=*/true),
-              absl_testing::IsOk());
+              IsOk());
 }
 
 TEST(PtxCompilerHelpersTest,
@@ -81,14 +75,14 @@ TEST(PtxCompilerHelpersTest,
   EXPECT_THAT(CreateErrorFromPTXASLog(kPtxasLogRegisterAllocationError,
                                       kDefaultArchitecture,
                                       /*cancel_if_reg_spill=*/true),
-              absl_testing::StatusIs(absl::StatusCode::kResourceExhausted));
+              StatusIs(absl::StatusCode::kResourceExhausted));
 }
 
 TEST(PtxCompilerHelpersTest, CreateErrorFromPTXASLogDetectsPtxAsTooOldError) {
   EXPECT_THAT(
       CreateErrorFromPTXASLog(kPtxasLogTooOldError, kDefaultArchitecture,
                               /*cancel_if_reg_spill=*/true),
-      absl_testing::StatusIs(absl::StatusCode::kUnimplemented));
+      StatusIs(absl::StatusCode::kUnimplemented));
 }
 
 TEST(PtxCompilerHelpersTest,
@@ -96,7 +90,7 @@ TEST(PtxCompilerHelpersTest,
   EXPECT_THAT(CreateErrorFromPTXASLog(kPtxasLogRegisterSpillWarning,
                                       kDefaultArchitecture,
                                       /*cancel_if_reg_spill=*/true),
-              absl_testing::StatusIs(absl::StatusCode::kCancelled));
+              StatusIs(absl::StatusCode::kCancelled));
 }
 
 TEST(PtxCompilerHelpersTest,
@@ -104,7 +98,7 @@ TEST(PtxCompilerHelpersTest,
   EXPECT_THAT(CreateErrorFromPTXASLog(kPtxasLogRegisterSpillWarning,
                                       kDefaultArchitecture,
                                       /*cancel_if_reg_spill=*/false),
-              absl_testing::IsOk());
+              IsOk());
 }
 
 TEST(PtxCompilerHelpersTest, IsPtxRegisterAllocationErrorStatus) {
@@ -113,23 +107,6 @@ TEST(PtxCompilerHelpersTest, IsPtxRegisterAllocationErrorStatus) {
   EXPECT_FALSE(
       IsPtxRegisterAllocationError(absl::ResourceExhaustedError("OOM")));
   EXPECT_FALSE(IsPtxRegisterAllocationError(absl::OkStatus()));
-}
-
-TEST(PtxCompilerHelpersTest, ModuleStatsAreCorrectlyExtractedFromLog) {
-  ModuleStats kernel_stats_map =
-      ExtractModuleStatsFromLog(kPtxasLogRegisterSpillWarning);
-  EXPECT_EQ(kernel_stats_map.size(), 1);
-  EXPECT_EQ(kernel_stats_map["__kernel"].store_bytes_spilled, 18);
-  EXPECT_EQ(kernel_stats_map["__kernel"].load_bytes_spilled, 8);
-  kernel_stats_map =
-      ExtractModuleStatsFromLog(kPtxasLogMultipleKernelsSpillingRegisters);
-  EXPECT_EQ(kernel_stats_map.size(), 2);
-  EXPECT_EQ(kernel_stats_map["__kernel"].store_bytes_spilled, 18);
-  EXPECT_EQ(kernel_stats_map["__kernel"].load_bytes_spilled, 8);
-  EXPECT_EQ(kernel_stats_map["__kernel2"].store_bytes_spilled, 1024);
-  EXPECT_EQ(kernel_stats_map["__kernel2"].load_bytes_spilled, 1099);
-  kernel_stats_map = ExtractModuleStatsFromLog(kPtxasLogSuccessfulCompilation);
-  EXPECT_EQ(kernel_stats_map.size(), 0);
 }
 
 }  // namespace

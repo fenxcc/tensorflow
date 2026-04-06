@@ -35,10 +35,6 @@ pytype_strict_library(
 tf_py_strict_test(
     name = "sharding_policies_test",
     srcs = ["sharding_policies_test.py"],
-    tags = [
-        "notap",
-        "oss_excluded",
-    ],  # See b/455621783.
     deps = [
         ":sharding_policies",
         ":sharding_util",

@@ -27,9 +27,8 @@ namespace checkpoint {
 
 const char kSavedTensorSlicesKey[] = "";
 
-std::string EncodeTensorNameSlice(const std::string& name,
-                                  const TensorSlice& slice) {
-  std::string buffer;
+string EncodeTensorNameSlice(const string& name, const TensorSlice& slice) {
+  string buffer;
   // All the tensor slice keys will start with a 0
   tensorflow::strings::OrderedCode::WriteNumIncreasing(&buffer, 0);
   tensorflow::strings::OrderedCode::WriteString(&buffer, name);
@@ -45,10 +44,10 @@ std::string EncodeTensorNameSlice(const std::string& name,
   return buffer;
 }
 
-absl::Status DecodeTensorNameSlice(const std::string& code, std::string* name,
+absl::Status DecodeTensorNameSlice(const string& code, string* name,
                                    tensorflow::TensorSlice* slice) {
   absl::string_view src(code);
-  uint64_t x;
+  uint64 x;
   if (!tensorflow::strings::OrderedCode::ReadNumIncreasing(&src, &x)) {
     return errors::Internal("Failed to parse the leading number: src = ", src);
   }
@@ -66,11 +65,11 @@ absl::Status DecodeTensorNameSlice(const std::string& code, std::string* name,
     return errors::Internal("Expecting positive rank of the tensor, got ", x,
                             ", src = ", src);
   }
-  if (x >= std::numeric_limits<int32_t>::max()) {
+  if (x >= kint32max) {
     return errors::Internal("Too many elements ", x);
   }
   slice->SetFullSlice(x);
-  for (int d = 0; d < static_cast<int32_t>(x); ++d) {
+  for (int d = 0; d < static_cast<int32>(x); ++d) {
     // We expected 2x integers
     int64_t start, length;
     if (!tensorflow::strings::OrderedCode::ReadSignedNumIncreasing(&src,
@@ -90,13 +89,13 @@ absl::Status DecodeTensorNameSlice(const std::string& code, std::string* name,
   return absl::OkStatus();
 }
 
-absl::Status ParseShapeAndSlice(const std::string& shape_and_slice,
+absl::Status ParseShapeAndSlice(const string& shape_and_slice,
                                 TensorShape* shape, TensorSlice* slice,
                                 TensorShape* shape_slice) {
   CHECK(!shape_and_slice.empty());
   // Syntax: dim0 dim1 dim2 ... <slice string>
   // Where slice string is defined in core/framework/tensor_slice.h
-  std::vector<std::string> splits = str_util::Split(shape_and_slice, ' ');
+  std::vector<string> splits = str_util::Split(shape_and_slice, ' ');
 
   // Must have at least 2 strings.
   if (splits.size() < 2) {

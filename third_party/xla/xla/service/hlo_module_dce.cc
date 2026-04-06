@@ -105,7 +105,7 @@ absl::StatusOr<bool> RunWhileDCE(
 
 }  // namespace
 
-absl::StatusOr<bool> HloModuleDCE::RunImpl(
+absl::StatusOr<bool> HloModuleDCE::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   VLOG(2) << "Before HloModuleDCE:";

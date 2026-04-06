@@ -22,8 +22,6 @@ limitations under the License.
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include "absl/log/check.h"
-#include "absl/status/status_matchers.h"
 #include "absl/strings/ascii.h"
 #include "absl/types/span.h"
 #include "xla/service/platform_util.h"
@@ -34,11 +32,14 @@ limitations under the License.
 #include "xla/stream_executor/platform_manager.h"
 #include "xla/stream_executor/stream.h"
 #include "xla/stream_executor/stream_executor.h"
+#include "xla/tsl/platform/status.h"
+#include "xla/tsl/platform/status_matchers.h"
 #include "xla/tsl/platform/statusor.h"
 
 namespace stream_executor::gpu {
 namespace {
 using ::testing::ElementsAreArray;
+using ::tsl::testing::IsOk;
 
 class RepeatBufferKernelTest : public testing::Test {
  public:
@@ -67,7 +68,7 @@ TEST_F(RepeatBufferKernelTest, CreateRepeatedBufferAndTestResult) {
   DeviceMemory<float> buffer =
       executor_->AllocateArray<float>(kNumberOfTotalElements);
 
-  CHECK_OK(stream->MemcpyH2D(absl::MakeConstSpan(kInitialBuf), &buffer));
+  TF_CHECK_OK(stream->MemcpyH2D(absl::MakeConstSpan(kInitialBuf), &buffer));
 
   TF_ASSERT_OK_AND_ASSIGN(
       RepeatBufferKernel::KernelType kernel,
@@ -81,13 +82,13 @@ TEST_F(RepeatBufferKernelTest, CreateRepeatedBufferAndTestResult) {
           static_cast<const DeviceMemoryBase&>(buffer),
           static_cast<int64_t>(kNumberOfRepeatedElements * sizeof(float)),
           static_cast<int64_t>(kNumberOfTotalElements * sizeof(float))),
-      absl_testing::IsOk());
+      IsOk());
 
   std::array<float, kNumberOfTotalElements> result_buffer{};
   absl::Span<const float> result = absl::MakeConstSpan(result_buffer);
 
-  CHECK_OK(stream->MemcpyD2H(buffer, absl::MakeSpan(result_buffer)));
-  CHECK_OK(stream->BlockHostUntilDone());
+  TF_CHECK_OK(stream->MemcpyD2H(buffer, absl::MakeSpan(result_buffer)));
+  TF_CHECK_OK(stream->BlockHostUntilDone());
 
   for (int offset = 0; offset < kNumberOfTotalElements;
        offset += kNumberOfRepeatedElements) {

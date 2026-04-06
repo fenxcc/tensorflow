@@ -26,7 +26,7 @@ class MapAndBatchFusion : public TFDataOptimizerBase {
   MapAndBatchFusion() = default;
   ~MapAndBatchFusion() override = default;
 
-  std::string name() const override { return "map_and_batch_fusion"; };
+  string name() const override { return "map_and_batch_fusion"; };
 
   bool UsesFunctionLibrary() const override { return false; }
 

@@ -13,6 +13,8 @@
 // limitations under the License.
 // ==============================================================================
 
+#include <algorithm>
+#include <cctype>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -22,7 +24,6 @@
 #include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/ascii.h"
 #include "absl/strings/str_cat.h"
 #include "json/json.h"
 #include "xla/tools/benchmarks/proto/benchmark_config.pb.h"
@@ -70,7 +71,8 @@ constexpr char kUsageText[] = R"(
 absl::StatusOr<xla::WorkflowType> GetWorkflowTypeFromStr(
     std::string workflow_type_arg_str) {
   // Convert to uppercase for matching with enum names
-  absl::AsciiStrToUpper(&workflow_type_arg_str);
+  std::transform(workflow_type_arg_str.begin(), workflow_type_arg_str.end(),
+                 workflow_type_arg_str.begin(), ::toupper);
 
   static const absl::NoDestructor<
       absl::flat_hash_map<std::string, xla::WorkflowType>>

@@ -36,7 +36,7 @@ FUZZ_TEST(TensorFuzz, BuildTensorAlwaysSucceedsWithValidTensorShape)
                                      /*dim_upper_bound=*/10));
 
 void DebugStringCheck(const Tensor& tensor) {
-  std::string out = tensor.DeviceSafeDebugString();
+  string out = tensor.DeviceSafeDebugString();
 }
 FUZZ_TEST(TensorFuzz, DebugStringCheck)
     .WithDomains(

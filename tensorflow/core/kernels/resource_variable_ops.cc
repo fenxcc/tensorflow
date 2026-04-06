@@ -45,6 +45,10 @@ limitations under the License.
 //   (use_locking=false), we never copy even if the variable's
 //   reference count is >1.
 
+#include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
+#include "tensorflow/core/framework/op_requires.h"
+#include "tensorflow/core/framework/types.pb.h"
 #define EIGEN_USE_THREADS
 
 #if GOOGLE_CUDA || TENSORFLOW_USE_ROCM
@@ -53,25 +57,18 @@ limitations under the License.
 #include "tensorflow/core/platform/stream_executor.h"
 #endif
 
-#include <limits>
 #include <memory>
 #include <type_traits>
 #include <vector>
 
-#include "absl/status/status.h"
-#include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
-#include "absl/synchronization/notification.h"
 #include "tensorflow/core/common_runtime/device.h"
 #include "tensorflow/core/framework/bounds_check.h"
 #include "tensorflow/core/framework/op_kernel.h"
-#include "tensorflow/core/framework/op_requires.h"
 #include "tensorflow/core/framework/register_types.h"
 #include "tensorflow/core/framework/resource_mgr.h"
 #include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/tensor_types.h"
-#include "tensorflow/core/framework/types.h"
-#include "tensorflow/core/framework/types.pb.h"
 #include "tensorflow/core/framework/variant_op_registry.h"
 #include "tensorflow/core/kernels/dense_update_functor.h"
 #include "tensorflow/core/kernels/gather_functor.h"
@@ -105,7 +102,7 @@ namespace {
 absl::Status CopyVariable(int output_idx, OpKernelContext* ctx,
                           const Tensor* t) {
   Tensor* output;
-  absl::Notification n;
+  Notification n;
   absl::Status status;
   AllocatorAttributes attr;
   if (t->dtype() == DT_VARIANT) {
@@ -135,15 +132,13 @@ absl::Status CopyVariable(int output_idx, OpKernelContext* ctx,
       TF_CALL_ALL_TYPES(HANDLER);
       TF_CALL_float8_e5m2(HANDLER);
       TF_CALL_float8_e4m3fn(HANDLER);
-      TF_CALL_float4_e2m1fn(HANDLER);
       TF_CALL_int4(HANDLER);
       TF_CALL_uint4(HANDLER);
       TF_CALL_int2(HANDLER);
       TF_CALL_uint2(HANDLER);
 #undef HANDLER
       default:
-        return absl::InternalError(
-            absl::StrCat("Unsupported dtype: ", DataTypeString(t->dtype())));
+        return errors::Internal("Unsupported dtype", t->dtype());
     }
   }
   return absl::OkStatus();
@@ -156,12 +151,12 @@ void ReadVariableOp::Compute(OpKernelContext* ctx) {
   const ResourceHandle& handle = HandleFromInput(ctx, 0);
   const auto status = LookupResource(ctx, handle, &variable);
   OP_REQUIRES(ctx, status.ok(),
-              absl::FailedPreconditionError(absl::StrCat(
+              errors::FailedPrecondition(
                   "Could not find variable ", handle.name(), ". ",
                   "This could mean that the variable has been deleted. ",
                   "In TF1, it can also mean the variable is uninitialized. ",
                   "Debug info: container=", handle.container(),
-                  ", status error message=", status.message())));
+                  ", status error message=", status.message()));
 
   tf_shared_lock ml(*variable->mu());
   // We're acquiring a reference to the underlying buffer while
@@ -171,9 +166,9 @@ void ReadVariableOp::Compute(OpKernelContext* ctx) {
   if (!variable->copy_on_read_mode.load()) {
     OP_REQUIRES(
         ctx, dtype_ == t->dtype(),
-        absl::InvalidArgumentError(absl::StrCat(
+        errors::InvalidArgument(
             "Trying to read variable with wrong dtype. Expected ",
-            DataTypeString(dtype_), " got ", DataTypeString(t->dtype()))));
+            DataTypeString(dtype_), " got ", DataTypeString(t->dtype())));
     ctx->set_output(0, *t);
   } else {
     OP_REQUIRES_OK(ctx, CopyVariable(0, ctx, t));
@@ -185,9 +180,9 @@ ReadVariablesOp::ReadVariablesOp(OpKernelConstruction* c) : OpKernel(c) {
   OP_REQUIRES_OK(c, c->GetAttr("N", &n));
   OP_REQUIRES_OK(c, c->GetAttr("dtypes", &dtypes_));
   OP_REQUIRES(c, n == dtypes_.size(),
-              absl::InvalidArgumentError(absl::StrCat(
+              errors::InvalidArgument(
                   "Mismatched number of arguments to ReadVariablesOp (", n,
-                  " vs. ", dtypes_.size(), ")")));
+                  " vs. ", dtypes_.size(), ")"));
 }
 
 void ReadVariablesOp::Compute(OpKernelContext* ctx) {
@@ -207,10 +202,10 @@ void ReadVariablesOp::Compute(OpKernelContext* ctx) {
   }
 
   OP_REQUIRES(ctx, uninitialized_vars.empty(),
-              absl::FailedPreconditionError(absl::StrCat(
+              errors::FailedPrecondition(
                   "In ReadVariablesOp the following variables were "
                   "found uninitialized: ",
-                  absl::StrJoin(uninitialized_vars, ", "))));
+                  absl::StrJoin(uninitialized_vars, ", ")));
 
   for (size_t i = 0; i < dtypes_.size(); ++i) {
     // We're acquiring a reference to the underlying buffer while
@@ -218,11 +213,11 @@ void ReadVariablesOp::Compute(OpKernelContext* ctx) {
     // writes.
     tf_shared_lock ml(*variables[i]->mu());
     OP_REQUIRES(ctx, dtypes_[i] == variables[i]->tensor()->dtype(),
-                absl::InvalidArgumentError(absl::StrCat(
+                errors::InvalidArgument(
                     "Trying to read variable ", handles[i]->name(),
                     " from Container: ", handles[i]->container(),
                     " with wrong dtype. Expected ", DataTypeString(dtypes_[i]),
-                    " got ", DataTypeString(variables[i]->tensor()->dtype()))));
+                    " got ", DataTypeString(variables[i]->tensor()->dtype())));
     if (variables[i]->copy_on_read_mode.load()) {
       OP_REQUIRES_OK(ctx, CopyVariable(i, ctx, variables[i]->tensor()));
     } else {
@@ -387,12 +382,12 @@ void DisableCopyOnReadOp::Compute(OpKernelContext* ctx) {
   const ResourceHandle& handle = HandleFromInput(ctx, 0);
   const auto status = LookupResource(ctx, handle, &variable);
   OP_REQUIRES(ctx, status.ok(),
-              absl::FailedPreconditionError(absl::StrCat(
+              errors::FailedPrecondition(
                   "Could not find variable ", handle.name(), ". ",
                   "This could mean that the variable has been deleted. ",
                   "In TF1, it can also mean the variable is uninitialized. ",
                   "Debug info: container=", handle.container(),
-                  ", status error message=", status.message())));
+                  ", status error message=", status.message()));
   // If the variable is currently in copy-on-read mode, its refcount is 1
   if (variable->copy_on_read_mode.load()) {
     // Obtain an exclusive lock on the variable and change the access mode
@@ -424,10 +419,10 @@ class AssignVariableOp : public OpKernel {
 
   void Compute(OpKernelContext* context) override {
     OP_REQUIRES(context, dtype_ == context->input(1).dtype(),
-                absl::InvalidArgumentError(absl::StrCat(
+                errors::InvalidArgument(
                     "Variable and value dtypes don't match; respectively, ",
                     DataTypeString(dtype_), " and ",
-                    DataTypeString(context->input(1).dtype()))));
+                    DataTypeString(context->input(1).dtype())));
     core::RefCountPtr<Var> variable;
     const Tensor& value = context->input(1);
     // Note: every resource-variable-manipulating op assumes copy-on-write
@@ -458,20 +453,20 @@ class AssignVariableOp : public OpKernel {
                 (variable->tensor()->dtype() == DT_INVALID &&
                  !variable->is_initialized) ||
                     variable->tensor()->dtype() == dtype_,
-                absl::InvalidArgumentError(absl::StrCat(
+                errors::InvalidArgument(
                     "Trying to assign variable with wrong dtype. Expected ",
                     DataTypeString(variable->tensor()->dtype()), " got ",
-                    DataTypeString(dtype_))));
+                    DataTypeString(dtype_)));
     if (validate_shape_) {
       OP_REQUIRES(
           context,
           (!variable->is_initialized ||
            variable->tensor()->shape().IsSameSize(value.shape())),
-          absl::InvalidArgumentError(absl::StrCat(
+          errors::InvalidArgument(
               "Trying to assign to variable with tensor with wrong shape."
               " Expected ",
               variable->tensor()->shape().DebugString(), " got ",
-              value.shape().DebugString())));
+              value.shape().DebugString()));
     }
     if (variable->copy_on_read_mode.load()) {
       AllocatorAttributes attr;
@@ -500,10 +495,9 @@ class AssignVariableOp<Device, Variant> : public OpKernel {
  public:
   explicit AssignVariableOp(OpKernelConstruction* c) : OpKernel(c) {
     OP_REQUIRES_OK(c, c->GetAttr("dtype", &dtype_));
-    OP_REQUIRES(
-        c, dtype_ == DT_VARIANT,
-        absl::InternalError(absl::StrCat("Variant kernel called with dtype: ",
-                                         DataTypeString(dtype_))));
+    OP_REQUIRES(c, dtype_ == DT_VARIANT,
+                errors::Internal("Variant kernel called with dtype: ",
+                                 DataTypeString(dtype_)));
   }
 
   void Compute(OpKernelContext* context) override {
@@ -537,10 +531,10 @@ class AssignVariableOp<Device, Variant> : public OpKernel {
 
     mutex_lock ml(*variable->mu());
     OP_REQUIRES(context, variable->tensor()->dtype() == DT_VARIANT,
-                absl::InvalidArgumentError(absl::StrCat(
+                errors::InvalidArgument(
                     "Trying to assign variable with wrong dtype. Expected ",
                     DataTypeString(variable->tensor()->dtype()), " got ",
-                    DataTypeString(DT_VARIANT))));
+                    DataTypeString(DT_VARIANT)));
     variable->is_initialized = true;
     *variable->tensor() = Tensor(DT_VARIANT, value.shape());
 
@@ -579,7 +573,6 @@ TF_CALL_ALL_TYPES(REGISTER_KERNELS);
 TF_CALL_QUANTIZED_TYPES(REGISTER_KERNELS);
 TF_CALL_float8_e5m2(REGISTER_KERNELS);
 TF_CALL_float8_e4m3fn(REGISTER_KERNELS);
-TF_CALL_float4_e2m1fn(REGISTER_KERNELS);
 TF_CALL_int4(REGISTER_KERNELS);
 TF_CALL_uint4(REGISTER_KERNELS);
 TF_CALL_int2(REGISTER_KERNELS);
@@ -598,7 +591,6 @@ TF_CALL_GPU_ALL_TYPES(REGISTER_GPU_KERNELS);
 TF_CALL_INTEGRAL_TYPES_NO_INT32(REGISTER_GPU_KERNELS);
 TF_CALL_float8_e5m2(REGISTER_GPU_KERNELS);
 TF_CALL_float8_e4m3fn(REGISTER_GPU_KERNELS);
-TF_CALL_float4_e2m1fn(REGISTER_GPU_KERNELS);
 TF_CALL_int4(REGISTER_GPU_KERNELS);
 TF_CALL_uint4(REGISTER_GPU_KERNELS);
 TF_CALL_int2(REGISTER_GPU_KERNELS);
@@ -640,7 +632,7 @@ class AssignUpdateVariableOp : public OpKernel {
     OP_REQUIRES_OK(context, ValidateAssignUpdateVariableOpShapes(
                                 var_tensor->shape(), value.shape()));
     OP_REQUIRES(context, var_tensor->dtype() == value.dtype(),
-                absl::InvalidArgumentError(
+                errors::InvalidArgument(
                     "DType of variable handle and value does not match."));
     OP_REQUIRES_OK(
         context, PrepareToUpdateVariable<Device, T>(
@@ -753,21 +745,21 @@ class ResourceGatherOp : public OpKernel {
     const Tensor& indices = c->input(1);
     OP_REQUIRES(
         c, TensorShapeUtils::IsVectorOrHigher(params.shape()),
-        absl::InvalidArgumentError("params must be at least 1 dimensional"));
-    OP_REQUIRES(c, params.shape().dims() >= batch_dims_,
-                absl::InvalidArgumentError(
-                    absl::StrCat("params must have at least ", batch_dims_,
-                                 " (batch_dims) dimensions but it has shape ",
-                                 params.shape().DebugString())));
+        errors::InvalidArgument("params must be at least 1 dimensional"));
+    OP_REQUIRES(
+        c, params.shape().dims() >= batch_dims_,
+        errors::InvalidArgument("params must have at least ", batch_dims_,
+                                " (batch_dims) dimensions but it has shape ",
+                                params.shape().DebugString()));
 
     // Check that we have enough index space
     const int64_t N = indices.NumElements();
-    OP_REQUIRES(c, params.dim_size(0) <= std::numeric_limits<Index>::max(),
-                absl::InvalidArgumentError(
-                    absl::StrCat("params.shape[0] too large for ",
-                                 DataTypeString(DataTypeToEnum<Index>::v()),
-                                 " indexing: ", params.dim_size(0), " > ",
-                                 std::numeric_limits<Index>::max())));
+    OP_REQUIRES(
+        c, params.dim_size(0) <= std::numeric_limits<Index>::max(),
+        errors::InvalidArgument("params.shape[0] too large for ",
+                                DataTypeString(DataTypeToEnum<Index>::v()),
+                                " indexing: ", params.dim_size(0), " > ",
+                                std::numeric_limits<Index>::max()));
 
     // The result shape is params.shape[:batch_dims] +
     // indices.shape[batch_dims:] + params.shape[batch_dims+1:].
@@ -824,11 +816,11 @@ class ResourceGatherOp : public OpKernel {
       functor::GatherFunctor<Device, T, Index> functor;
       int64_t bad_i = functor(c, params_flat, indices_flat, out_flat);
 
-      OP_REQUIRES(c, bad_i < 0,
-                  absl::InvalidArgumentError(absl::StrCat(
-                      "indices", SliceDebugString(indices.shape(), bad_i),
-                      " = ", indices_flat(bad_i), " is not in [0, ",
-                      params.dim_size(0), ")")));
+      OP_REQUIRES(
+          c, bad_i < 0,
+          errors::InvalidArgument(
+              "indices", SliceDebugString(indices.shape(), bad_i), " = ",
+              indices_flat(bad_i), " is not in [0, ", params.dim_size(0), ")"));
     }
   }
 
@@ -845,8 +837,8 @@ class ResourceGatherOp : public OpKernel {
     }
     OP_REQUIRES(
         ctx, batch_size != 0,
-        absl::InvalidArgumentError(
-            "Inner size of indices would result in batch_size of 0 and a "
+        errors::InvalidArgument(
+            "Inner size of indices would result in batch_size of 0 and a ",
             "division by 0 in the implementation. This is illegal"));
 
     auto indices_flat = indices->flat<Index>();
@@ -1021,7 +1013,7 @@ Status CopyTensorToHost(OpKernelContext* c, const Tensor& device_tensor,
   TF_RETURN_IF_ERROR(stream->Memcpy(host_tensor->flat<T>().data(), device_ptr,
                                     device_tensor.NumElements() * sizeof(T)));
   if (!stream) {
-    return absl::InternalError("Failed to copy indices to host");
+    return errors::Internal("Failed to copy indices to host");
   }
   return OkStatus();
 }
@@ -1034,9 +1026,9 @@ template <typename T, typename Index, scatter_op::UpdateOp Op>
 Status DoScatterOnCpu(OpKernelContext* c, Tensor* params, const Tensor& indices,
                       const Tensor& updates, Index num_indices) {
   if (!DataTypeCanUseMemcpy(params->dtype())) {
-    return absl::UnimplementedError(absl::StrCat(
+    return errors::Unimplemented(
         "GPU Scatter ops for dtype ", DataTypeString(params->dtype()),
-        " do not yet have a deterministic implementation"));
+        " do not yet have a deterministic implementation");
   }
   auto stream = c->op_device_context()->stream();
 
@@ -1057,7 +1049,7 @@ Status DoScatterOnCpu(OpKernelContext* c, Tensor* params, const Tensor& indices,
   TF_RETURN_IF_ERROR(stream->Memcpy(&params_ptr, host_params.flat<T>().data(),
                                     host_params.NumElements() * sizeof(T)));
   if (!stream) {
-    return absl::InternalError("Failed to copy params to device");
+    return errors::Internal("Failed to copy params to device");
   }
   // Deallocate host_params' buffer once the host-to-device copy is complete.
   // host_params is captured by value in the lambda so that its buffer is only
@@ -1097,17 +1089,17 @@ absl::Status DoScatter(OpKernelContext* c, Tensor* params,
       const Index bad_i = functor(c, c->template eigen_device<Device>(),
                                   params_flat, update, indices_flat);
       if (bad_i >= 0) {
-        return absl::InvalidArgumentError(absl::StrCat(
+        return errors::InvalidArgument(
             "indices", SliceDebugString(indices.shape(), bad_i), " = ",
-            indices_flat(bad_i), " is not in [0, ", params->dim_size(0), ")"));
+            indices_flat(bad_i), " is not in [0, ", params->dim_size(0), ")");
       }
     } else {
       int64_t num_updates = updates.NumElements();
       if (!TensorShapeUtils::StartsWith(updates.shape(), indices.shape())) {
-        return absl::InvalidArgumentError(absl::StrCat(
+        return errors::InvalidArgument(
             "The shape of indices (", indices.shape().DebugString(),
             ") must be a prefix of the shape of updates (",
-            updates.shape().DebugString(), ")"));
+            updates.shape().DebugString(), ")");
       }
       auto updates_flat =
           updates.shaped<T, 2>({num_indices, num_updates / num_indices});
@@ -1115,9 +1107,9 @@ absl::Status DoScatter(OpKernelContext* c, Tensor* params,
       const Index bad_i = functor(c, c->template eigen_device<Device>(),
                                   params_flat, updates_flat, indices_flat);
       if (bad_i >= 0) {
-        return absl::InvalidArgumentError(absl::StrCat(
+        return errors::InvalidArgument(
             "indices", SliceDebugString(indices.shape(), bad_i), " = ",
-            indices_flat(bad_i), " is not in [0, ", params->dim_size(0), ")"));
+            indices_flat(bad_i), " is not in [0, ", params->dim_size(0), ")");
       }
     }
   }
@@ -1145,7 +1137,7 @@ class ResourceScatterUpdateOp : public OpKernel {
     // Check data type of update and resource to scatter.
     const DataType update_dtype = c->input(2).dtype();
     OP_REQUIRES(c, v->tensor()->dtype() == update_dtype,
-                absl::InvalidArgumentError(
+                errors::InvalidArgument(
                     "DType of scatter resource and updates does not match."));
 
     OP_REQUIRES_OK(c, EnsureSparseVariableAccess<Device, T>(c, v.get()));
@@ -1173,32 +1165,33 @@ class ResourceScatterUpdateOp : public OpKernel {
     OP_REQUIRES(c,
                 updates.dims() == 0 ||
                     updates.dims() == indices.dims() + params->dims() - 1,
-                absl::InvalidArgumentError(absl::StrCat(
+                errors::InvalidArgument(
                     "Must have updates.shape = indices.shape + "
                     "params.shape[1:] or updates.shape = [], got ",
                     "updates.shape ", updates.shape().DebugString(),
                     ", indices.shape ", indices.shape().DebugString(),
-                    ", params.shape ", params->shape().DebugString())));
+                    ", params.shape ", params->shape().DebugString()));
 
     // Check that we have enough index space
     const int64_t N_big = indices.NumElements();
-    OP_REQUIRES(c, N_big <= std::numeric_limits<Index>::max(),
-                absl::InvalidArgumentError(absl::StrCat(
-                    "indices has too many elements for ",
-                    DataTypeString(DataTypeToEnum<Index>::v()), " indexing: ",
-                    N_big, " > ", std::numeric_limits<Index>::max())));
+    OP_REQUIRES(
+        c, N_big <= std::numeric_limits<Index>::max(),
+        errors::InvalidArgument("indices has too many elements for ",
+                                DataTypeString(DataTypeToEnum<Index>::v()),
+                                " indexing: ", N_big, " > ",
+                                std::numeric_limits<Index>::max()));
     const Index N = static_cast<Index>(N_big);
-    OP_REQUIRES(c, params->dim_size(0) <= std::numeric_limits<Index>::max(),
-                absl::InvalidArgumentError(
-                    absl::StrCat("params.shape[0] too large for ",
-                                 DataTypeString(DataTypeToEnum<Index>::v()),
-                                 " indexing: ", params->dim_size(0), " > ",
-                                 std::numeric_limits<Index>::max())));
+    OP_REQUIRES(
+        c, params->dim_size(0) <= std::numeric_limits<Index>::max(),
+        errors::InvalidArgument("params.shape[0] too large for ",
+                                DataTypeString(DataTypeToEnum<Index>::v()),
+                                " indexing: ", params->dim_size(0), " > ",
+                                std::numeric_limits<Index>::max()));
 
     // Prevent division by 0
     if (isCPUDevice<Device>() && op == tensorflow::scatter_op::UpdateOp::DIV) {
       OP_REQUIRES(c, ValidateInput<T>(updates),
-                  absl::InvalidArgumentError("updates must not contain 0"));
+                  errors::InvalidArgument("updates must not contain 0"));
     }
 
     if (N > 0) {

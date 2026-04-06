@@ -11,17 +11,11 @@ load(
 load("@rules_python//python:repositories.bzl", "python_register_toolchains")
 load("@rules_python//python:versions.bzl", "MINOR_MAPPING", "PLATFORMS")
 
-def get_toolchain_name_per_python_version(name):
-    return "{name}_{version}".format(
-        name = name,
-        version = HERMETIC_PYTHON_VERSION.replace(".", "_"),
-    )
-
 def python_init_toolchains(name = "python", python_version = None, **kwargs):
     """Register hermetic python toolchains.
 
     Args:
-        name: prefix of the toolchain, "python" by default (it is strongly
+        name: name of the toolchain, "python" by default (it is strongly
           recommended to rely on the default).
         python_version: version of the python to register; if set it will bypass
           kwargs to underlying python_register_toolchains as is (manual
@@ -33,7 +27,7 @@ def python_init_toolchains(name = "python", python_version = None, **kwargs):
 
     if python_version:
         python_register_toolchains(
-            name = get_toolchain_name_per_python_version(name),
+            name = name,
             python_version = python_version,
             **kwargs
         )
@@ -50,7 +44,7 @@ def python_init_toolchains(name = "python", python_version = None, **kwargs):
                 sha256s[platform] = HERMETIC_PYTHON_SHA256
 
         python_register_toolchains(
-            name = get_toolchain_name_per_python_version(name),
+            name = name,
             base_url = url_components[0] + "://",
             ignore_root_user_error = True,
             python_version = tool_version,
@@ -65,7 +59,7 @@ def python_init_toolchains(name = "python", python_version = None, **kwargs):
         )
     elif HERMETIC_PYTHON_VERSION in MINOR_MAPPING:
         python_register_toolchains(
-            name = get_toolchain_name_per_python_version(name),
+            name = name,
             ignore_root_user_error = True,
             python_version = HERMETIC_PYTHON_VERSION,
             python_version_kind = HERMETIC_PYTHON_VERSION_KIND,

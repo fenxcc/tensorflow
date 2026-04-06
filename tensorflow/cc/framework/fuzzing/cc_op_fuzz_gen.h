@@ -25,7 +25,7 @@ namespace tensorflow {
 namespace cc_op {
 
 // String with single fuzzer file content.
-std::string WriteSingleFuzzer(const OpInfo& op_info, bool is_fuzzable);
+string WriteSingleFuzzer(const OpInfo& op_info, bool is_fuzzable);
 
 // Do we have all we need to create a fuzzer
 bool OpFuzzingIsOk(const OpInfo& op_info);

@@ -52,9 +52,6 @@ tf_cc_binary(
         "@llvm-project//mlir:AllExtensions",
         "@llvm-project//mlir:AllPassesAndDialects",
         "@llvm-project//mlir:MlirOptLib",
-        "@llvm-project//mlir:RegisterAllDialects",
-        "@llvm-project//mlir:RegisterAllExtensions",
-        "@llvm-project//mlir:RegisterAllPasses",
         "@stablehlo//:register",
     ],
 )

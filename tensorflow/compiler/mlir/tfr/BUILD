@@ -179,7 +179,6 @@ tf_cc_binary(
         "@llvm-project//mlir:FuncExtensions",
         "@llvm-project//mlir:MlirOptLib",
         "@llvm-project//mlir:QuantOps",
-        "@llvm-project//mlir:RegisterAllPasses",
         "@llvm-project//mlir:SCFDialect",
         "@llvm-project//mlir:ShapeDialect",
     ],
@@ -308,7 +307,7 @@ py_strict_library(
         "//tensorflow/python/framework:op_def_registry",
         "//tensorflow/python/platform:tf_logging",
         "//tensorflow/python/util:tf_inspect",
-        "@pypi//gast",
+        "@pypi_gast//:pkg",
     ],
 )
 
@@ -339,7 +338,7 @@ py_strict_library(
         "//tensorflow/python/autograph/pyct:transpiler",
         "//tensorflow/python/framework:op_def_registry",
         "//tensorflow/python/util:tf_inspect",
-        "@pypi//gast",
+        "@pypi_gast//:pkg",
     ],
 )
 

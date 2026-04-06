@@ -165,7 +165,7 @@ class ResourceGatherOp : public XlaOpKernel {
   }
 
  private:
-  int32_t batch_dims_;
+  int32 batch_dims_;
 };
 REGISTER_XLA_OP(Name("ResourceGather"), ResourceGatherOp);
 

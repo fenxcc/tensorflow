@@ -41,7 +41,6 @@ cc_library(
         "@llvm-project//mlir:IR",
         "@llvm-project//mlir:Parser",
         "@llvm-project//mlir:Pass",
-        "@llvm-project//mlir:RegisterAllPasses",
         "//tensorflow/core/common_runtime:graph_constructor",
         "@llvm-project//mlir:Support",
         "@stablehlo//:register",

@@ -1,6 +1,4 @@
 load("@llvm-project//mlir:tblgen.bzl", "gentbl_cc_library", "td_library")
-load("//xla/tsl:tsl.default.bzl", "get_compatible_with_portable")
-load("//xla/tsl/platform:rules_cc.bzl", "cc_library")
 
 package(
     # copybara:uncomment default_applicable_licenses = ["//tensorflow:license"],
@@ -18,7 +16,6 @@ package_group(
 td_library(
     name = "triton_xla_td_files",
     srcs = glob(["*.td"]),
-    compatible_with = get_compatible_with_portable(),
     includes = ["."],
     deps = [
         "@llvm-project//mlir:BuiltinDialectTdFiles",
@@ -29,7 +26,6 @@ td_library(
 
 gentbl_cc_library(
     name = "triton_xla_dialect_inc_gen",
-    compatible_with = get_compatible_with_portable(),
     strip_include_prefix = ".",
     tbl_outs = {
         "triton_xla_dialect.h.inc": ["-gen-dialect-decls"],
@@ -42,7 +38,6 @@ gentbl_cc_library(
 
 gentbl_cc_library(
     name = "triton_xla_ops_inc_gen",
-    compatible_with = get_compatible_with_portable(),
     strip_include_prefix = ".",
     tbl_outs = {
         "triton_xla_ops.h.inc": ["-gen-op-decls"],
@@ -61,7 +56,6 @@ gentbl_cc_library(
 
 gentbl_cc_library(
     name = "triton_xla_attrs_inc_gen",
-    compatible_with = get_compatible_with_portable(),
     strip_include_prefix = ".",
     tbl_outs = {
         "triton_xla_enums.h.inc": ["-gen-enum-decls"],
@@ -95,13 +89,13 @@ cc_library(
         ":triton_xla_attrs_inc_gen",
         ":triton_xla_dialect_inc_gen",
         ":triton_xla_ops_inc_gen",
-        "//xla/codegen/xtile/ir:xtile",
         "@llvm-project//llvm:Support",
         "@llvm-project//mlir:DialectUtils",
         "@llvm-project//mlir:IR",
         "@llvm-project//mlir:InferTypeOpInterface",
         "@llvm-project//mlir:SideEffectInterfaces",
         "@llvm-project//mlir:Support",
+        "@llvm-project//mlir:ViewLikeInterface",
         "@triton//:TritonDialects",
     ],
 )

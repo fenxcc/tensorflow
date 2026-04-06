@@ -27,7 +27,7 @@ class FilterFusion : public TFDataOptimizerBase {
   FilterFusion() = default;
   ~FilterFusion() override = default;
 
-  std::string name() const override { return "filter_fusion"; };
+  string name() const override { return "filter_fusion"; };
 
   bool UsesFunctionLibrary() const override { return false; }
 

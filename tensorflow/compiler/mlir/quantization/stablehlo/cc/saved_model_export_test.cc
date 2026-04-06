@@ -22,7 +22,6 @@ limitations under the License.
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include "absl/status/status.h"
-#include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "llvm/ADT/STLExtras.h"
@@ -30,6 +29,7 @@ limitations under the License.
 #include "mlir/IR/OwningOpRef.h"  // from @llvm-project
 #include "tensorflow/compiler/mlir/quantization/common/test_base.h"
 #include "tensorflow/compiler/mlir/quantization/tensorflow/exported_model.pb.h"
+#include "xla/tsl/platform/status_matchers.h"
 #include "xla/tsl/platform/statusor.h"
 #include "tensorflow/core/framework/graph.pb.h"
 #include "tensorflow/core/framework/node_def.pb.h"
@@ -51,6 +51,8 @@ using ::testing::IsEmpty;
 using ::testing::SizeIs;
 using ::testing::StrEq;
 using ::tsl::protobuf::TextFormat;
+using ::tsl::testing::IsOk;
+using ::tsl::testing::StatusIs;
 
 TEST(CreateExportedModelTest, CreateExportedModelBasicFieldsSet) {
   GraphDef graph_def{};
@@ -165,7 +167,7 @@ TEST(CreateSaverDefTest, ReturnsErrorStatusIfSaverDefNodesPartiallyExist) {
       CreateSaverDef(control_ret_node_names, graph_def);
   EXPECT_THAT(
       saver_def,
-      absl_testing::StatusIs(
+      StatusIs(
           absl::StatusCode::kInternal,
           HasSubstr(
               "should be either all empty strings or all non-empty strings")));
@@ -195,7 +197,7 @@ TEST_F(ConvertMlirModuleToExportedModelTest, SimpleGraphDefSet) {
                                        /*function_aliases=*/{},
                                        /*asset_file_defs=*/{});
 
-  ASSERT_THAT(exported_model, absl_testing::IsOk());
+  ASSERT_THAT(exported_model, IsOk());
   // There are 2 nodes in the graph, one for arg and another for retval.
   ASSERT_THAT(exported_model->graph_def().node(), SizeIs(2));
 
@@ -246,7 +248,7 @@ TEST_F(ConvertMlirModuleToExportedModelTest, CheckpointDirSet) {
                                        /*function_aliases=*/{},
                                        /*asset_file_defs=*/{});
 
-  ASSERT_THAT(exported_model, absl_testing::IsOk());
+  ASSERT_THAT(exported_model, IsOk());
   EXPECT_THAT(exported_model->checkpoint_dir(), StrEq("my_checkpoint_dir"));
 }
 
@@ -287,7 +289,7 @@ TEST_F(ConvertMlirModuleToExportedModelTest, FunctionAliasesSet) {
           {{"alias_1", "function_1"}, {"alias_2", "function_2"}},
           /*asset_file_defs=*/{});
 
-  ASSERT_THAT(exported_model, absl_testing::IsOk());
+  ASSERT_THAT(exported_model, IsOk());
   ASSERT_THAT(exported_model->function_aliases(), SizeIs(2));
   EXPECT_THAT(exported_model->function_aliases().at("alias_1"),
               StrEq("function_1"));
@@ -321,7 +323,7 @@ TEST_F(ConvertMlirModuleToExportedModelTest, AssetFileDefSet) {
                                        /*function_aliases=*/{},
                                        /*asset_file_defs=*/asset_file_defs);
 
-  ASSERT_THAT(exported_model, absl_testing::IsOk());
+  ASSERT_THAT(exported_model, IsOk());
   ASSERT_THAT(exported_model->asset_file_defs(), SizeIs(1));
   EXPECT_THAT(exported_model->asset_file_defs()[0].filename(),
               StrEq("vocab_file.txt"));
@@ -357,7 +359,7 @@ TEST_F(ConvertMlirModuleToExportedModelTest,
                                        /*function_aliases=*/{},
                                        /*asset_file_defs=*/{});
 
-  ASSERT_THAT(exported_model, absl_testing::IsOk());
+  ASSERT_THAT(exported_model, IsOk());
   EXPECT_THAT(exported_model->init_node_name(),
               StrEq("init_op_init_all_tables"));
 
@@ -405,7 +407,7 @@ TEST_F(ConvertMlirModuleToExportedModelTest, InitNodeNotSetIfLocNameMismatch) {
                                        /*function_aliases=*/{},
                                        /*asset_file_defs=*/{});
 
-  ASSERT_THAT(exported_model, absl_testing::IsOk());
+  ASSERT_THAT(exported_model, IsOk());
   EXPECT_THAT(exported_model->init_node_name(), IsEmpty());
 }
 
@@ -429,9 +431,8 @@ TEST_F(ConvertMlirModuleToExportedModelTest,
                                        /*function_aliases=*/{},
                                        /*asset_file_defs=*/{});
   EXPECT_THAT(exported_model,
-              absl_testing::StatusIs(
-                  absl::StatusCode::kFailedPrecondition,
-                  HasSubstr("entry function `main` must be present")));
+              StatusIs(absl::StatusCode::kFailedPrecondition,
+                       HasSubstr("entry function `main` must be present")));
 }
 
 }  // namespace

@@ -52,10 +52,11 @@ limitations under the License.
 #include "xla/stream_executor/device_memory.h"
 #include "xla/stream_executor/device_memory_allocator.h"
 #include "xla/stream_executor/dnn.h"
-#include "xla/stream_executor/engine_options.h"
 #include "xla/stream_executor/event_based_timer.h"
+#include "xla/stream_executor/numeric_options.h"
 #include "xla/stream_executor/platform/initialize.h"
 #include "xla/stream_executor/plugin_registry.h"
+#include "xla/stream_executor/rocm/rocm_diagnostics.h"
 #include "xla/stream_executor/rocm/rocm_platform_id.h"
 #include "xla/stream_executor/scratch_allocator.h"
 #include "xla/stream_executor/stream.h"
@@ -63,6 +64,7 @@ limitations under the License.
 #include "xla/tsl/platform/errors.h"
 #include "xla/tsl/platform/logging.h"
 #include "xla/tsl/platform/macros.h"
+#include "xla/tsl/platform/status.h"
 #include "xla/tsl/platform/statusor.h"
 #include "xla/tsl/util/determinism.h"
 #include "xla/tsl/util/env_var.h"
@@ -626,7 +628,7 @@ class CachedFusionPlans {
                            miopenFusionPlanDescriptor_t* fusion_plan,
                            miopenFusionDirection_t fusion_direction,
                            miopenTensorDescriptor_t input_descriptor) {
-    absl::MutexLock lock{cached_plans_mutex};
+    absl::MutexLock lock{&cached_plans_mutex};
 
     bool found_cached_plan = false;
 
@@ -652,7 +654,7 @@ class CachedFusionPlans {
 
   // Need to figure out the right place to call this routine
   static void Clear() {
-    absl::MutexLock lock{cached_plans_mutex};
+    absl::MutexLock lock{&cached_plans_mutex};
 
     for (auto it : cached_plans) {
       auto status = wrap::miopenDestroyFusionPlan(it.second);
@@ -669,13 +671,13 @@ class CachedFusionPlans {
 
   // Is the Fusion plan corresponding to this hash unsupported
   static bool IsUnsupportedFusionPlan(uint64_t hash) {
-    absl::MutexLock lock{cached_plans_mutex};
+    absl::MutexLock lock{&cached_plans_mutex};
     return unsupported_plans.count(hash) > 0;
   }
 
   // Mark the given hash value as corresponding to an unsupported fusion plan
   static void MarkFusionPlanUnsupported(uint64_t hash) {
-    absl::MutexLock lock{cached_plans_mutex};
+    absl::MutexLock lock{&cached_plans_mutex};
     unsupported_plans.insert(hash);
   }
 
@@ -745,7 +747,7 @@ class MIOpenAccess {
   explicit MIOpenAccess(miopenHandle_t handle) : handle_(handle) {}
 
   ~MIOpenAccess() {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
     wrap::miopenDestroy(handle_);
   }
 
@@ -789,19 +791,19 @@ MIOpenSupport::MIOpenSupport(StreamExecutor* parent) : parent_(parent) {
   return_best_algo_only_ = false;
   // but if the env var TF_ROCM_RETURN_BEST_ALGO_ONLY is set, only the best
   // (i.e. most efficient) algorithm will be returned
-  CHECK_OK(tsl::ReadBoolFromEnvVar("TF_ROCM_RETURN_BEST_ALGO_ONLY", false,
-                                   &return_best_algo_only_));
+  TF_CHECK_OK(tsl::ReadBoolFromEnvVar("TF_ROCM_RETURN_BEST_ALGO_ONLY", false,
+                                      &return_best_algo_only_));
 
   // by default, use Find Mode APIs for convolution
   use_immediate_mode_ = false;
   // swich to Find Mode if env var TF_ROCM_USE_IMMEDIATE_MODE is set
 
-  CHECK_OK(tsl::ReadBoolFromEnvVar("TF_ROCM_USE_IMMEDIATE_MODE", false,
-                                   &use_immediate_mode_));
+  TF_CHECK_OK(tsl::ReadBoolFromEnvVar("TF_ROCM_USE_IMMEDIATE_MODE", false,
+                                      &use_immediate_mode_));
 
   bool enable_pooling_cache = false;
-  CHECK_OK(tsl::ReadBoolFromEnvVar("TF_ROCM_BW_POOL_CACHE", false,
-                                   &enable_pooling_cache));
+  TF_CHECK_OK(tsl::ReadBoolFromEnvVar("TF_ROCM_BW_POOL_CACHE", false,
+                                      &enable_pooling_cache));
   if (enable_pooling_cache) m_pooling_cache_allowed = true;
 }
 
@@ -809,14 +811,26 @@ absl::Status MIOpenSupport::Init() {
   std::unique_ptr<ActivateContext> context = parent_->Activate();
   miopenHandle_t miopen_handle = nullptr;
   auto status = wrap::miopenCreateWithStream(
-      reinterpret_cast<miopenHandle_t*>(&miopen_handle), (hipStream_t) nullptr);
+      reinterpret_cast<miopenHandle_t*>(&miopen_handle), (hipStream_t)(0));
   if (status == miopenStatusSuccess) {
-    miopen_ = std::make_unique<MIOpenAccess>(miopen_handle);
+    miopen_.reset(new MIOpenAccess(miopen_handle));
     return absl::OkStatus();
   }
 
   CHECK_EQ(miopen_handle, nullptr);
   LOG(ERROR) << "could not create miopen handle: " << ToString(status);
+  if (status == miopenStatusNotInitialized) {
+    auto result = rocm::Diagnostician::FindKernelDriverVersion();
+    if (!result.ok()) {
+      LOG(ERROR) << "error retrieving driver version: "
+                 << rocm::DriverVersionStatusToString(result);
+    } else {
+      const auto& version = result.value();
+      LOG(INFO) << "possibly insufficient driver version: "
+                << rocm::DriverVersionToString(version);
+    }
+  }
+
   return absl::Status{absl::StatusCode::kInternal,
                       absl::StrCat("miopen library could not create a handle: ",
                                    ToString(status))};
@@ -1028,6 +1042,10 @@ absl::StatusOr<ScopedConvolutionDescriptor> scope(
   }
   const auto& strides64 = convolution_descriptor.strides();
   const auto& padding64 = convolution_descriptor.padding();
+  if (convolution_descriptor.pad_alignment() ==
+      dnn::PadAlignment::kTensorFlowPadding) {
+    LOG(ERROR) << "TensorFlow padding alignment is not supported.";
+  }
 
   // MIOpen requires arrays of ints.
   std::vector<int> strides(convolution_descriptor.ndims());
@@ -2128,8 +2146,8 @@ class MIOpenRnnDescriptor : public MIOpenDescriptorCommon<dnn::RnnDescriptor> {
         data_type_(data_type),
         algorithm_config_(algorithm_config) {
     // Create the dropout handle
-    miopen_dropout_desc_ = std::make_unique<MIOpenDropoutDescriptor>(
-        miopen_handle, dropout, seed, state_allocator);
+    miopen_dropout_desc_.reset(new MIOpenDropoutDescriptor(
+        miopen_handle, dropout, seed, state_allocator));
     // Create the RNN handle
     auto status = wrap::miopenCreateRNNDescriptor(&rnn_desc_);
     RETURN_IF_MIOPEN_ERROR(status, "Unable to create RNN descriptor");
@@ -2142,8 +2160,8 @@ class MIOpenRnnDescriptor : public MIOpenDescriptorCommon<dnn::RnnDescriptor> {
         miopenRNNdefault /*algo*/, data_type /*dataType*/);
     RETURN_IF_MIOPEN_ERROR(status, "Unable to update RNN descriptor");
     // Create the params handle.
-    miopen_params_desc_ =
-        std::make_unique<MIOpenRnnParamsDescriptor>(miopen_handle, *this);
+    miopen_params_desc_.reset(
+        new MIOpenRnnParamsDescriptor(miopen_handle, *this));
     if (!miopen_params_desc_->ok()) {
       SetFailure(miopen_params_desc_->Status());
       return;
@@ -2799,7 +2817,7 @@ absl::Status MIOpenSupport::DoPrepareForCtcLoss(
     absl::Span<const int> labels_data,
     absl::Span<const int> labels_lengths_data,
     absl::Span<const int> input_lengths_data,
-    const EngineOptions& engine_options, ScratchAllocator* scratch_allocator,
+    const NumericOptions& numeric_options, ScratchAllocator* scratch_allocator,
     DeviceMemory<uint8_t>* scratch_memory, int* ctc_loss_algo_id) {
   auto miopen = miopen_->GetHandle(parent_, stream);
 
@@ -2921,7 +2939,7 @@ MIOpenSupport::CreateRnnDescriptor(
     int batch_size, dnn::RnnInputMode input_mode,
     dnn::RnnDirectionMode direction_mode, dnn::RnnMode rnn_mode,
     dnn::DataType data_type, const dnn::AlgorithmConfig& algorithm_config,
-    const EngineOptions& engine_options, float dropout, uint64_t seed,
+    const NumericOptions& numeric_options, float dropout, uint64_t seed,
     ScratchAllocator* state_allocator, bool use_padded_io) {
   // ROCM TODO: batch_size is used in dynamic persistent RNN algorithm and is
   // not supported by MIOpen now.
@@ -3252,6 +3270,53 @@ void MIOpenDeallocatorCallback(void* ctx, void* mem) {
   // reclaim the memory
 }
 
+absl::Status MIOpenSupport::DoPrepareForConvolution(
+    dnn::ConvolutionKind kind, dnn::DataType element_type, Stream* stream,
+    const dnn::BatchDescriptor& input_descriptor, DeviceMemoryBase input_data,
+    const dnn::FilterDescriptor& filter_descriptor,
+    DeviceMemoryBase filter_data, const dnn::BatchDescriptor& output_descriptor,
+    DeviceMemoryBase output_data,
+    const dnn::ConvolutionDescriptor& convolution_descriptor,
+    const dnn::AlgorithmConfig& algorithm_config,
+    ScratchAllocator* scratch_allocator, dnn::AlgorithmDesc* algorithm_desc,
+    DeviceMemory<uint8_t>* scratch_memory) {
+  std::optional<dnn::AlgorithmDesc> input_algo_desc =
+      algorithm_config.algorithm();
+
+  assert(input_algo_desc.has_value());
+
+  // An algorithm has been specified.
+  *algorithm_desc = *input_algo_desc;
+
+  assert(algorithm_config.scratch_size().has_value());
+
+  size_t scratch_memory_size = *(algorithm_config.scratch_size());
+
+  // allocate scratch memory
+  if (scratch_memory_size != 0) {
+    if (scratch_allocator == nullptr) {
+      return absl::InternalError(
+          "An allocator must be specified when scratch memory is needed");
+    }
+    auto allocated = scratch_allocator->AllocateBytes(scratch_memory_size);
+    if (allocated.ok()) {
+      *scratch_memory = allocated.value();
+    } else {
+      LOG(ERROR)
+          << "Failed to allocate scratch memory - "
+          << allocated.status().message() << "\n"
+          << "\tYou can set the env var TF_CUDNN_WORKSPACE_LIMIT_IN_MB to a "
+             "larger number (e.g. 8192) to increase the max memory limit.\n"
+          << "\tIncreasing the max memory limit might help resolve this "
+             "error";
+      return absl::InternalError(absl::StrCat(
+          "Failed to allocate scratch memory of size: ", scratch_memory_size));
+    }
+  }
+
+  return absl::OkStatus();
+}
+
 class RocmConvRunner : public dnn::ConvRunner {
  public:
   RocmConvRunner(StreamExecutor* parent, MIOpenAccess* miopen, int64_t algo_id,
@@ -3412,6 +3477,26 @@ class RocmConvRunner : public dnn::ConvRunner {
   ScopedConvolutionDescriptor conv_desc_;
 };
 
+absl::Status MIOpenSupport::DoConvolve(
+    dnn::ConvolutionKind kind, dnn::DataType element_type,
+    dnn::DataType output_type, Stream* stream,
+    const dnn::BatchDescriptor& input_descriptor, DeviceMemoryBase input_data,
+    const dnn::FilterDescriptor& filter_descriptor,
+    DeviceMemoryBase filter_data, const dnn::BatchDescriptor& output_descriptor,
+    DeviceMemoryBase output_data,
+    const dnn::ConvolutionDescriptor& convolution_descriptor,
+    dnn::AlgorithmDesc algorithm_desc, DeviceMemory<uint8_t> scratch_memory,
+    dnn::ProfileResult* output_profile_result) {
+  TF_ASSIGN_OR_RETURN(
+      auto runner,
+      ConvolveRunnerFromDesc(stream, algorithm_desc, kind, element_type,
+                             output_type, input_descriptor, filter_descriptor,
+                             output_descriptor, convolution_descriptor));
+
+  return (*runner)(stream, output_profile_result, scratch_memory, input_data,
+                   filter_data, output_data);
+}
+
 absl::Status MIOpenSupport::GetConvolveRunners(
     dnn::ConvolutionKind kind, dnn::DataType input_type,
     dnn::DataType output_type, Stream* stream,
@@ -3420,7 +3505,7 @@ absl::Status MIOpenSupport::GetConvolveRunners(
     DeviceMemoryBase filter_data, const dnn::BatchDescriptor& output_descriptor,
     DeviceMemoryBase output_data,
     const dnn::ConvolutionDescriptor& convolution_descriptor, bool use_fallback,
-    ScratchAllocator* scratch_allocator, const EngineOptions& engine_options,
+    ScratchAllocator* scratch_allocator, const NumericOptions& numeric_options,
     std::vector<std::unique_ptr<const dnn::ConvRunner>>* out_runners) {
   if (input_type != output_type) {
     return absl::UnimplementedError(
@@ -4202,7 +4287,7 @@ absl::Status ROCmFusedMatmulRunner::gemm(Stream* stream,
                               static_cast<DeviceMemory<T>>(b_data), _ldb,
                               static_cast<DeviceMemory<T>>(a_data), _lda,
                               static_cast<DeviceMemory<T>*>(&c_data), _ldc,
-                              EngineOptions{}, blas::CallContext::kNone);
+                              NumericOptions{}, blas::CallContext::kNone);
 }
 
 template <typename T, typename Tbias = T>
@@ -4280,7 +4365,7 @@ absl::Status MIOpenSupport::GetFusedMatmulRunners(
     dnn::DataType output_type, Stream* stream, bool trans_a, bool trans_b,
     uint64_t m, uint64_t n, uint64_t k, int64_t lda, int64_t ldb, int64_t ldc,
     dnn::ActivationMode activation_mode, bool use_fallback,
-    const EngineOptions& engine_options,
+    const NumericOptions& numeric_options,
     std::vector<std::unique_ptr<const dnn::FusedMatmulRunner>>*
         out_exec_plans) {
   out_exec_plans->clear();
@@ -4367,7 +4452,7 @@ absl::Status MIOpenSupport::DoPoolForward(
           ToString(status)));
     }
     if (workspace_size != 0) {
-      PoolingWorkspaceDescriptor* pdesc = nullptr;
+      PoolingWorkspaceDescriptor* pdesc = 0;
       bool cache_hit =
           m_pooling_cache_allowed &&
           m_pooling_cache.find(input_data.opaque(), input_dimensions,
@@ -4416,7 +4501,7 @@ bool PoolingWorkspaceCache::find(
     const dnn::BatchDescriptor& output_dimensions,
     const dnn::PoolingDescriptor& pooling_dimensions, int _type,
     PoolingWorkspaceDescriptor*& pdesc) {
-  pdesc = nullptr;
+  pdesc = 0;
   auto it = cache.find(p);
   if (it == cache.end()) {
     return false;
@@ -4435,7 +4520,7 @@ void PoolingWorkspaceCache::insert(
     const dnn::PoolingDescriptor& pooling_dimensions, int _type,
     ScopedDeviceMemory<uint8_t>& workspace, size_t wsp_size,
     hipStream_t hip_stream) {
-  PoolingWorkspaceDescriptor* desc = nullptr;
+  PoolingWorkspaceDescriptor* desc = 0;
   auto it = cache.find(p);
   if (it != cache.end()) {
     // replacing an entry with the same pointer but different attributes
@@ -4509,9 +4594,9 @@ absl::Status MIOpenSupport::DoPoolBackward(
   TF_ASSIGN_OR_RETURN(auto dest_desc, scope(output_dimensions, miopen_dtype));
   TF_ASSIGN_OR_RETURN(auto pooling_desc, scope(pooling_dimensions));
 
-  uint8_t* workspace_ptr = nullptr;
+  uint8_t* workspace_ptr = 0;
   DeviceMemory<uint8_t> workspace;
-  PoolingWorkspaceDescriptor* pdesc = nullptr;
+  PoolingWorkspaceDescriptor* pdesc = 0;
 
   size_t workspace_size_in_bytes = 0;
   auto status = wrap::miopenPoolingGetWorkSpaceSizeV2(
@@ -4529,7 +4614,7 @@ absl::Status MIOpenSupport::DoPoolBackward(
                                           output_dimensions, pooling_dimensions,
                                           miopen_dtype, pdesc);
     if (cache_hit) {
-      assert(pdesc != nullptr);
+      assert(pdesc != 0);
       workspace_ptr =
           reinterpret_cast<uint8_t*>(pdesc->workspace.ptr()->opaque());
       VLOG(1) << "Pooling cache hit";
@@ -5099,7 +5184,7 @@ absl::Status MIOpenSupport::GetFusedConvolveRunners(
     const dnn::BatchDescriptor& bias_descriptor,
     const dnn::BatchDescriptor& output_descriptor,
     const dnn::ConvolutionDescriptor& convolution_descriptor, bool use_fallback,
-    dnn::ActivationMode activation_mode, const EngineOptions& engine_options,
+    dnn::ActivationMode activation_mode, const NumericOptions& numeric_options,
     std::vector<std::unique_ptr<const dnn::FusedConvRunner>>* out_exec_plans) {
   VLOG(2) << "MIOpenSupport::GetFusedConvolveRunners";
   VLOG(2) << "filter_descriptor " << filter_descriptor.ndims();
@@ -5132,8 +5217,8 @@ bool UseNhwcLayoutForRocm() {
 #if TF_ROCM_VERSION >= 50100
   static bool is_enabled = [] {
     bool is_enabled = false;
-    CHECK_OK(tsl::ReadBoolFromEnvVar("TF_USE_ROCM_NHWC",
-                                     /*default_val=*/false, &is_enabled));
+    TF_CHECK_OK(tsl::ReadBoolFromEnvVar("TF_USE_ROCM_NHWC",
+                                        /*default_val=*/false, &is_enabled));
     return is_enabled;
   }();
   return is_enabled;

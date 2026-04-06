@@ -34,14 +34,15 @@ namespace function {
 class Attrs {
  public:
   Attrs(const std::initializer_list<  // NOLINT(runtime/explicit)
-        std::pair<std::string, FunctionDefHelper::AttrValueWrapper>>& attrs) {
+        std::pair<string, FunctionDefHelper::AttrValueWrapper>>& attrs) {
     for (const auto& aval : attrs) {
       map_.insert({aval.first, aval.second.proto});
     }
   }
 
-  Attrs(const std::vector<
-        std::pair<std::string, FunctionDefHelper::AttrValueWrapper>>& attrs) {
+  Attrs(
+      const std::vector<std::pair<string, FunctionDefHelper::AttrValueWrapper>>&
+          attrs) {
     for (const auto& aval : attrs) {
       map_.insert({aval.first, aval.second.proto});
     }
@@ -54,12 +55,12 @@ class Attrs {
 };
 
 // Helper to construct a NodeDef.
-NodeDef NDef(absl::string_view name, absl::string_view op,
-             absl::Span<const std::string> inputs,
-             absl::Span<const std::pair<std::string,
-                                        FunctionDefHelper::AttrValueWrapper>>
-                 attrs = {},
-             const std::string& device = "");
+NodeDef NDef(
+    absl::string_view name, absl::string_view op,
+    absl::Span<const string> inputs,
+    absl::Span<const std::pair<string, FunctionDefHelper::AttrValueWrapper>>
+        attrs = {},
+    const string& device = "");
 
 // Helper to construct a GraphDef proto.
 GraphDef GDef(absl::Span<const NodeDef> nodes,

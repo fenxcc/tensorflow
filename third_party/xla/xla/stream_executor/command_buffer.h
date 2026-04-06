@@ -174,29 +174,14 @@ class CommandBuffer {
                             const ThreadDim& threads, const BlockDim& blocks,
                             Args... args);
 
-  // kCloned: child command is cloned into parent command.
-  // kMoved: child command is moved into parent command.
-  enum class ChildCommandType { kCloned, kMoved };
-  virtual absl::StatusOr<const Command*> CreateChildCommand(
-      ChildCommandType type, CommandBuffer& nested,
+  // Creates a command that launches a nested command buffer.
+  virtual absl::StatusOr<const Command*> CreateNestedCommand(
+      const CommandBuffer& nested,
       absl::Span<const Command* const> dependencies) = 0;
 
   // Updates a command that launches a nested command buffer.
-  virtual absl::Status UpdateChildCommand(ChildCommandType type,
-                                          const Command* command,
-                                          const CommandBuffer& nested) = 0;
-
-  virtual absl::StatusOr<const Command*> CreateChildCommand(
-      ChildCommandType type, StreamExecutor* executor,
-      absl::AnyInvocable<absl::Status(stream_executor::CommandBuffer*)>
-          record_fn,
-      absl::Span<const Command* const> dependencies) = 0;
-
-  // Updates a command that launches a nested command buffer.
-  virtual absl::Status UpdateChildCommand(
-      ChildCommandType type, const Command* command,
-      absl::AnyInvocable<absl::Status(stream_executor::CommandBuffer*)>
-          record_fn) = 0;
+  virtual absl::Status UpdateNestedCommand(const Command* command,
+                                           const CommandBuffer& nested) = 0;
 
   // Creates a device-to-device memory copy.
   virtual absl::StatusOr<const Command*> CreateMemcpyD2D(
@@ -310,8 +295,6 @@ class CommandBuffer {
 
   // Returns command buffer state.
   virtual State state() const = 0;
-
-  virtual std::string ToString() const = 0;
 
   //--------------------------------------------------------------------------//
   // Command buffer tracing API

@@ -16,6 +16,7 @@ limitations under the License.
 #ifndef XLA_TSL_DISTRIBUTED_RUNTIME_COORDINATION_COORDINATION_SERVICE_RPC_HANDLER_H_
 #define XLA_TSL_DISTRIBUTED_RUNTIME_COORDINATION_COORDINATION_SERVICE_RPC_HANDLER_H_
 
+#include "absl/status/status.h"
 #include "absl/synchronization/mutex.h"
 #include "xla/tsl/distributed_runtime/coordination/coordination_service.h"
 #include "xla/tsl/distributed_runtime/coordination/coordination_service_agent.h"
@@ -64,9 +65,9 @@ class CoordinationServiceRpcHandler {
                          tensorflow::GetTaskStateResponse* response,
                          StatusCallback done);
 
-  void WatchJobStateAsync(const tensorflow::WatchJobStateRequest* request,
-                          tensorflow::WatchJobStateResponse* response,
-                          StatusCallback done);
+  void GetJobStateAsync(const tensorflow::GetJobStateRequest* request,
+                        tensorflow::GetJobStateResponse* response,
+                        StatusCallback done);
 
   void InsertKeyValueAsync(const tensorflow::InsertKeyValueRequest* request,
                            tensorflow::InsertKeyValueResponse* response,
@@ -75,10 +76,6 @@ class CoordinationServiceRpcHandler {
   void GetKeyValueAsync(const tensorflow::GetKeyValueRequest* request,
                         tensorflow::GetKeyValueResponse* response,
                         StatusCallback done);
-
-  void IncrementKeyValueAsync(
-      const tensorflow::IncrementKeyValueRequest* request,
-      tensorflow::IncrementKeyValueResponse* response, StatusCallback done);
 
   void TryGetKeyValueAsync(const tensorflow::TryGetKeyValueRequest* request,
                            tensorflow::TryGetKeyValueResponse* response,

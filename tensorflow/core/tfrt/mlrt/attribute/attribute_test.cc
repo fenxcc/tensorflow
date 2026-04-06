@@ -21,7 +21,6 @@ limitations under the License.
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include "absl/status/status.h"
-#include "absl/status/status_matchers.h"
 #include "absl/strings/string_view.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "mlir/IR/Attributes.h"  // from @llvm-project
@@ -195,13 +194,13 @@ TEST(AttributeTest, UnsupportedAttr) {
 
   EXPECT_THAT(
       EncodeTensorflowAttribute(emitter_context, dense_string_attr),
-      absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
-                             "String tensor attribute is not yet supported"));
+      ::tsl::testing::StatusIs(absl::StatusCode::kInvalidArgument,
+                               "String tensor attribute is not yet supported"));
 
   EXPECT_THAT(
       EncodeTensorflowAttribute(emitter_context, builder.getUnitAttr()),
-      absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
-                             "Try to encode unsupported attribute: unit"));
+      ::tsl::testing::StatusIs(absl::StatusCode::kInvalidArgument,
+                               "Try to encode unsupported attribute: unit"));
 }
 
 }  // namespace

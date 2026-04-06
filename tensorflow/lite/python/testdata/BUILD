@@ -1,5 +1,3 @@
-load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//tensorflow:strict.default.bzl", "py_strict_library")
 load(
     "//tensorflow:tensorflow.bzl",
@@ -105,10 +103,7 @@ cc_library(
     name = "double_op_and_kernels",
     testonly = 1,
     srcs = ["double_op.cc"],
-    copts = tflite_copts() + tf_opts_nortti_if_android() + select({
-        "//tensorflow:android": ["-Wno-private-header"],
-        "//conditions:default": [],
-    }),
+    copts = tflite_copts() + tf_opts_nortti_if_android(),
     features = tf_features_nolayering_check_if_ios(),
     deps = select({
         "//tensorflow:android": [

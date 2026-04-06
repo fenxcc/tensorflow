@@ -19,6 +19,7 @@ limitations under the License.
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
+#include <memory>
 #include <vector>
 
 #include "absl/algorithm/container.h"
@@ -34,7 +35,6 @@ limitations under the License.
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/ir/hlo_instructions.h"
 #include "xla/hlo/ir/hlo_opcode.h"
-#include "xla/service/gpu/alias_info.h"
 #include "xla/service/gpu/gpu_fusible.h"
 #include "xla/service/gpu/model/gpu_hlo_cost_analysis.h"
 #include "xla/service/gpu/model/gpu_performance_model.h"
@@ -43,8 +43,9 @@ limitations under the License.
 #include "xla/service/instruction_fusion.h"
 #include "xla/shape_util.h"
 #include "xla/stream_executor/device_description.h"
-#include "xla/tsl/platform/errors.h"
-#include "xla/tsl/platform/statusor.h"
+#include "tsl/platform/errors.h"
+#include "tsl/platform/status.h"
+#include "tsl/platform/statusor.h"
 
 namespace xla {
 namespace gpu {
@@ -62,38 +63,30 @@ const HloSliceInstruction* FindUniqueSlice(const HloInstruction* parent,
                                            const HloInstruction* instr) {
   if (const auto* slice = DynCast<HloSliceInstruction>(instr)) {
     return slice;
-  }
-  if (const auto* fusion = DynCast<HloFusionInstruction>(instr)) {
+  } else if (const auto* fusion = DynCast<HloFusionInstruction>(instr)) {
     const HloSliceInstruction* result = nullptr;
     for (size_t i = 0; i < fusion->operand_count(); ++i) {
       if (fusion->operand(i) == parent) {
         // Parameter used more than once -> there's no unique slice.
-        if (result) {
-          return nullptr;
-        }
+        if (result) return nullptr;
 
         auto* called_param = fusion->fused_parameter(i);
-        if (called_param->user_count() != 1) {
-          return nullptr;
-        }
+        if (called_param->user_count() != 1) return nullptr;
 
         result = FindUniqueSlice(called_param, called_param->users()[0]);
-        if (!result) {
-          return nullptr;
-        }
+        if (!result) return nullptr;
       }
     }
     return result;
+  } else {
+    return nullptr;
   }
-  return nullptr;
 }
 
 FusionDecision ParameterSlicesAreNonOverlapping(const HloInstruction& instr1,
                                                 const HloInstruction& instr2,
                                                 const HloInstruction* parent) {
-  if (parent->shape().IsTuple()) {
-    return FusionDecision::Allow();
-  }
+  if (parent->shape().IsTuple()) return FusionDecision::Allow();
   // Allow MOF if the parameter is small, even if there's no overlap. 1024 bytes
   // were arbitrarily chosen as the threshold.
   if (ShapeUtil::ByteSizeOfElements(parent->shape()) < 1024) {
@@ -102,9 +95,7 @@ FusionDecision ParameterSlicesAreNonOverlapping(const HloInstruction& instr1,
 
   const HloSliceInstruction* slice1 = FindUniqueSlice(parent, &instr1);
   const HloSliceInstruction* slice2 = FindUniqueSlice(parent, &instr2);
-  if (!slice1 || !slice2) {
-    return FusionDecision::Allow();
-  }
+  if (!slice1 || !slice2) return FusionDecision::Allow();
 
   // TODO(jreiffers): Check strides as well.
   auto& starts1 = slice1->slice_starts();
@@ -219,7 +210,7 @@ FusionDecision ProducerCandidateIsFusible(
   }
 
   GpuPerformanceModel::RunTimes t =
-      gpu_performance_model.Get().EstimateRunTimesForMultiOutputFusion(
+      gpu_performance_model.EstimateRunTimesForMultiOutputFusion(
           &producer, &consumer, cost_analysis);
   if (t.time_fused > t.time_unfused) {
     return FusionDecision::Forbid("will execute slower if fused");
@@ -231,7 +222,7 @@ FusionDecision ProducerCandidateIsFusible(
 std::vector<HloInstruction*> GetProducerConsumerMultiOutputFusionCandidates(
     const HloInstruction* producer, const HloDfsReachability& reachability,
     FusionInfoCache* fusion_info_cache,
-    const se::DeviceDescription& device_info, const GpuAliasInfo* alias_info,
+    const se::DeviceDescription& device_info,
     GpuPerformanceModelOwning& gpu_performance_model,
     GpuHloCostAnalysis* cost_analysis) {
   std::vector<HloInstruction*> fusion_candidates;
@@ -242,7 +233,7 @@ std::vector<HloInstruction*> GetProducerConsumerMultiOutputFusionCandidates(
 
   // If the producer is not a valid candidate for MOF, no need to check any of
   // its users.
-  if (!IsProducerMultiOutputFusible(*producer, alias_info, device_info)) {
+  if (!IsProducerMultiOutputFusible(*producer, device_info)) {
     return fusion_candidates;
   }
 
@@ -387,8 +378,8 @@ bool MultiOutputFusion::FuseSiblings(HloInstruction* parent,
       fusion_info_cache->Invalidate(*j);
       HloInstruction* remaining = *i;
       HloInstruction* fused = *j;
-      CHECK_OK(cost_analysis->RemoveInstruction(remaining));
-      CHECK_OK(cost_analysis->RemoveInstruction(fused));
+      TF_CHECK_OK(cost_analysis->RemoveInstruction(remaining));
+      TF_CHECK_OK(cost_analysis->RemoveInstruction(fused));
 
       DumpFusionState(*remaining,
                       absl::StrCat("About to fuse sibling |", fused->name(),
@@ -404,12 +395,12 @@ bool MultiOutputFusion::FuseSiblings(HloInstruction* parent,
       } else {
         remaining->FuseInstructionIntoMultiOutput(fused);
         CHECK_EQ(0, fused->user_count());
-        CHECK_OK(computation_->RemoveInstruction(fused));
+        TF_CHECK_OK(computation_->RemoveInstruction(fused));
       }
       DumpFusionState(*remaining,
                       absl::StrCat("Fused into |", remaining->name(),
                                    "| inside multi-output fusion"));
-      CHECK_OK(cost_analysis->RevisitInstruction(remaining));
+      TF_CHECK_OK(cost_analysis->RevisitInstruction(remaining));
       changed = true;
       siblings.erase(j);
       RecomputeReachability();
@@ -431,7 +422,7 @@ absl::StatusOr<bool> MultiOutputFusion::DoMultiOutputFusion() {
       computation_->MakeInstructionPostOrder();
 
   FusionInfoCache fusion_info_cache(device_info_);
-  GpuPerformanceModelOwning gpu_performance_model(device_info_, mlir_context_);
+  GpuPerformanceModelOwning gpu_performance_model(device_info_);
   // Traverse the HLO in uses-before-defs order.
   for (auto it = defs_before_uses.rbegin(); it != defs_before_uses.rend();
        ++it) {
@@ -454,7 +445,7 @@ absl::StatusOr<bool> MultiOutputFusion::DoMultiOutputFusion() {
     // multi-output fusion will occur before the current op in the order of
     // traversal, and hence, not get into the way of subsequent fusion attempts.
     const auto candidates = GetProducerConsumerMultiOutputFusionCandidates(
-        producer, *reachability_, &fusion_info_cache, device_info_, alias_info_,
+        producer, *reachability_, &fusion_info_cache, device_info_,
         gpu_performance_model, &cost_analysis);
     auto* consumer_for_fusion = SelectPreferredFusionCandidate(candidates);
     if (consumer_for_fusion == nullptr) {
@@ -485,7 +476,7 @@ absl::StatusOr<bool> MultiOutputFusion::DoMultiOutputFusion() {
       VLOG(2) << "Fuse producer " << producer->name() << " and its consumer "
               << consumer_for_fusion->name() << " into "
               << input_fusion->name();
-      CHECK_OK(
+      TF_CHECK_OK(
           computation_->ReplaceInstruction(consumer_for_fusion, input_fusion));
     }
 
@@ -500,7 +491,7 @@ absl::StatusOr<bool> MultiOutputFusion::DoMultiOutputFusion() {
     } else {
       input_fusion->FuseInstructionIntoMultiOutput(producer);
       CHECK_EQ(0, producer->user_count());
-      CHECK_OK(computation_->RemoveInstruction(producer));
+      TF_CHECK_OK(computation_->RemoveInstruction(producer));
     }
     TF_RETURN_IF_ERROR(cost_analysis.RevisitInstruction(input_fusion));
 
@@ -523,7 +514,7 @@ void MultiOutputFusion::DumpFusionState(const HloInstruction& consumer,
   }
 }
 
-absl::StatusOr<bool> MultiOutputFusion::RunImpl(
+absl::StatusOr<bool> MultiOutputFusion::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   bool changed = false;

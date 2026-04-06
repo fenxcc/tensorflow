@@ -78,7 +78,7 @@ class OneHotOp : public XlaOpKernel {
   }
 
  private:
-  int32_t axis_;
+  int32 axis_;
 
   OneHotOp(const OneHotOp&) = delete;
   void operator=(const OneHotOp&) = delete;

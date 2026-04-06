@@ -50,11 +50,10 @@ class DeterminismTest : public GpuCodegenTest {
  public:
   DeterminismTest() : debug_options_(HloTestBase::GetDebugOptionsForTest()) {
     debug_options_.set_xla_gpu_exclude_nondeterministic_ops(true);
-  }
-
-  se::CudaComputeCapability get_cuda_cc() const {
-    se::StreamExecutor* executor = backend().default_stream_executor();
-    return executor->GetDeviceDescription().cuda_compute_capability();
+    // TODO(b/393299275): remove when the flag is enabled by default.
+    debug_options_.clear_xla_gpu_unsupported_generic_triton_emitter_features();
+    debug_options_.add_xla_gpu_unsupported_generic_triton_emitter_features(
+        DebugOptions::GENERIC_TRITON_EMITTER_ENABLE_NESTED_GEMM);
   }
 
   // Runs the HLO several times with the same random inputs, and asserts the
@@ -146,14 +145,20 @@ class DeterminismTest : public GpuCodegenTest {
     EXPECT_TRUE(filecheck_result.value());
   }
 
-  bool IsAmpereOrLater() const { return get_cuda_cc().IsAtLeastAmpere(); }
-
-  bool IsRocm() const {
+  bool IsAmpereOrLater() const {
     return backend()
         .default_stream_executor()
         ->GetDeviceDescription()
-        .gpu_compute_capability()
-        .IsRocm();
+        .cuda_compute_capability()
+        .IsAtLeastAmpere();
+  }
+
+  bool IsRocm() const {
+    return std::holds_alternative<stream_executor::RocmComputeCapability>(
+        backend()
+            .default_stream_executor()
+            ->GetDeviceDescription()
+            .gpu_compute_capability());
   }
 
   bool HasHipblasLt() const {
@@ -195,10 +200,6 @@ TEST_F(DeterminismTest, DeterministicTritonGemmUsesDefaultConfig) {
   if (!IsAmpereOrLater()) {
     GTEST_SKIP() << "Triton is not supported on non-NVIDIA and "
                     "pre-Ampere NVIDIA GPUs.";
-  }
-  if (get_cuda_cc().IsAtLeastBlackwell()) {
-    // TODO(b/445172709): Re-enable once fixed.
-    GTEST_SKIP();
   }
 
   constexpr absl::string_view kHloText = R"(

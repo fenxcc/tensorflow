@@ -41,9 +41,7 @@ limitations under the License.
 #include "xla/hlo/ir/hlo_module.h"
 #include "xla/hlo/ir/hlo_opcode.h"
 #include "xla/service/call_graph.h"
-#include "xla/service/computation_layout.h"
 #include "xla/shape.h"
-#include "xla/shape_layout.h"
 #include "xla/shape_util.h"
 #include "xla/tsl/platform/errors.h"
 #include "xla/tsl/platform/statusor.h"
@@ -52,9 +50,6 @@ limitations under the License.
 namespace xla {
 
 namespace {
-
-const absl::string_view kDceSideEffectFrontendAttribute =
-    "xla_allow_dce_side_effecting_op";
 
 // Checks if the instruction is a removable while given
 // remove_cross_partition_collective_ops
@@ -213,12 +208,7 @@ bool CanRemoveInstruction(
                             !maybe_collective_op->constrain_layout();
     bool allow_while =
         IsRemovableWhile(instruction, remove_cross_partition_collective_ops);
-    bool allow_custom_call = instruction->IsCustomCall("tpu_custom_call") &&
-                             instruction->frontend_attributes().map().contains(
-                                 kDceSideEffectFrontendAttribute) &&
-                             instruction->frontend_attributes().map().at(
-                                 kDceSideEffectFrontendAttribute) == "true";
-    if (!allow_collective && !allow_while && !allow_custom_call) {
+    if (!allow_collective && !allow_while) {
       return false;
     }
   }
@@ -251,65 +241,30 @@ absl::StatusOr<bool> RemoveDeadRoots(
   }
   return changed;
 }
-absl::Status RemoveDeadParametersFromEntryComputationLayout(
-    HloModule* module, std::vector<int64_t>& dead_parameter_indexes) {
-  if (dead_parameter_indexes.empty()) {
-    return absl::OkStatus();
-  }
-  const ComputationLayout& old_layout = module->entry_computation_layout();
-  ShapeLayout result_layout = old_layout.result_layout();
-  ComputationLayout new_layout(result_layout);
-  for (int i = 0; i < old_layout.parameter_count(); ++i) {
-    if (absl::c_linear_search(dead_parameter_indexes, i)) {
-      continue;
-    }
-    new_layout.add_parameter_layout(old_layout.parameter_layout(i));
-  }
-  *module->mutable_entry_computation_layout() = std::move(new_layout);
-  return absl::OkStatus();
-}
 
 absl::StatusOr<bool> RemoveDeadParameters(
     HloComputation* computation,
     const std::function<std::vector<HloInstruction*>(const HloComputation*)>&
-        computation_callers,
-    bool remove_dead_parameters_from_entry_computation) {
+        computation_callers) {
   bool changed = false;
-  bool update_entry_computation_layout =
-      computation->IsEntryComputation() &&
-      remove_dead_parameters_from_entry_computation;
   auto parameters = computation->parameter_instructions();
   // Sort into decreasing order by parameter number, otherwise the renumbering
   // of parameters when one parameter is deleted will cause issues.
   absl::c_reverse(parameters);
-  std::vector<int64_t> dead_parameters;
   for (HloInstruction* parameter : parameters) {
     if (parameter->IsDead() &&
         computation->IsSafelyRemovable(
             parameter,
             /*ignore_control_dependency=*/false,
-            /*computation_callers=*/computation_callers,
-            remove_dead_parameters_from_entry_computation)) {
+            /*computation_callers=*/computation_callers)) {
       VLOG(1) << "Removing dead parameter " << parameter->ToString()
               << " and its unused operands";
-      int64_t num_parameters = computation->num_parameters();
-      int64_t parameter_number = parameter->parameter_number();
       TF_RETURN_IF_ERROR(computation->RemoveInstructionAndUnusedOperands(
           parameter, /*cleanup=*/std::nullopt,
           /*ignore_control_dependencies=*/false,
-          /*computation_callers=*/computation_callers,
-          remove_dead_parameters_from_entry_computation));
-      if (computation->num_parameters() < num_parameters) {
-        changed = true;
-        if (update_entry_computation_layout) {
-          dead_parameters.push_back(parameter_number);
-        }
-      }
+          /*computation_callers=*/computation_callers));
+      changed = true;
     }
-  }
-  if (update_entry_computation_layout) {
-    TF_RETURN_IF_ERROR(RemoveDeadParametersFromEntryComputationLayout(
-        computation->parent(), dead_parameters));
   }
   return changed;
 }
@@ -334,8 +289,7 @@ absl::StatusOr<bool> ProcessAgenda(
     HloModule* module, std::stack<HloComputation*>& agenda,
     absl::flat_hash_set<HloComputation*>& to_remove,
     const absl::flat_hash_set<absl::string_view>& execution_threads,
-    bool remove_cross_partition_collective_ops, CallGraph* call_graph,
-    bool remove_dead_parameters_from_entry_computation) {
+    bool remove_cross_partition_collective_ops, CallGraph* call_graph) {
   bool changed = false;
   while (!agenda.empty()) {
     HloComputation* computation = agenda.top();
@@ -346,8 +300,7 @@ absl::StatusOr<bool> ProcessAgenda(
       TF_ASSIGN_OR_RETURN(
           bool computation_changed,
           xla::HloDCE::RunOnComputation(
-              computation, remove_cross_partition_collective_ops, call_graph,
-              remove_dead_parameters_from_entry_computation));
+              computation, remove_cross_partition_collective_ops, call_graph));
       changed |= computation_changed;
     }
 
@@ -380,17 +333,12 @@ absl::StatusOr<bool> RemoveDanglingComputations(
       }
     }
   }
-  for (auto iterator = module->computations().begin();
-       iterator != module->computations().end(); ++iterator) {
+  for (auto computation : to_remove) {
     // Only remove computations from the specified execution threads.
-    auto computation = *iterator;
-    if (to_remove.contains(computation)) {
-      if (execution_threads.empty() ||
-          execution_threads.contains(computation->execution_thread())) {
-        TF_RETURN_IF_ERROR(module->RemoveEmbeddedComputation(
-            iterator.underlying_iterator().underlying_iterator()));
-        changed = true;
-      }
+    if (execution_threads.empty() ||
+        execution_threads.contains(computation->execution_thread())) {
+      TF_RETURN_IF_ERROR(module->RemoveEmbeddedComputation(computation));
+      changed = true;
     }
   }
   return changed;
@@ -400,7 +348,7 @@ absl::StatusOr<bool> RemoveDanglingComputations(
 
 /*static*/ absl::StatusOr<bool> HloDCE::RunOnComputation(
     HloComputation* computation, bool remove_cross_partition_collective_ops,
-    CallGraph* call_graph, bool remove_dead_parameters_from_entry_computation) {
+    CallGraph* call_graph) {
   auto computation_callers =
       [call_graph](
           const HloComputation* computation) -> std::vector<HloInstruction*> {
@@ -421,16 +369,14 @@ absl::StatusOr<bool> RemoveDanglingComputations(
                       computation_callers));
   changed |= dead_roots_changed;
 
-  TF_ASSIGN_OR_RETURN(
-      bool dead_parameters_changed,
-      RemoveDeadParameters(computation, computation_callers,
-                           remove_dead_parameters_from_entry_computation));
+  TF_ASSIGN_OR_RETURN(bool dead_parameters_changed,
+                      RemoveDeadParameters(computation, computation_callers));
   changed |= dead_parameters_changed;
 
   return changed;
 }
 
-absl::StatusOr<bool> HloDCE::RunImpl(
+absl::StatusOr<bool> HloDCE::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   VLOG(2) << "Before dce; threads: " << absl::StrJoin(execution_threads, ",");
@@ -450,8 +396,7 @@ absl::StatusOr<bool> HloDCE::RunImpl(
   TF_ASSIGN_OR_RETURN(
       bool agenda_changed,
       ProcessAgenda(module, agenda, to_remove, execution_threads,
-                    remove_cross_partition_collective_ops_, call_graph.get(),
-                    remove_dead_parameters_from_entry_computation_));
+                    remove_cross_partition_collective_ops_, call_graph.get()));
   changed |= agenda_changed;
 
   TF_ASSIGN_OR_RETURN(
@@ -461,10 +406,6 @@ absl::StatusOr<bool> HloDCE::RunImpl(
   changed |= dangling_computations_removed;
 
   if (changed) {
-    // Update the schedule to reflect the removed instructions.
-    if (module->has_schedule()) {
-      TF_RETURN_IF_ERROR(module->schedule().Update(execution_threads));
-    }
     VLOG(2) << "After dce:";
     XLA_VLOG_LINES(2, module->ToString());
   }

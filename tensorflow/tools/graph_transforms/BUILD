@@ -1,7 +1,6 @@
 # Description:
 #   Utilities that perform useful transformations on graphs
 
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//tensorflow:strict.default.bzl", "py_strict_library")
 load(
     "//tensorflow:tensorflow.bzl",

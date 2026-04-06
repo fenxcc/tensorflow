@@ -1,4 +1,3 @@
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load(
     "//xla/tsl:tsl.bzl",
     "if_with_tpu_support",

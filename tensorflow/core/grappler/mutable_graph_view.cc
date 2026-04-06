@@ -340,7 +340,7 @@ string GeneratedNameForIdentityConsumingSwitch(
 }
 
 string PrintInTextFormat(const protobuf::MessageLite& message) {
-  // Unfortunately google::protobuf::TextFormat::Printer::PrintToString does not have
+  // Unfortunately proto2::TextFormat::Printer::PrintToString does not have
   // a overload for MessageLite so here we have to use
   // MessageLite::ShortDebugString.
   return message.ShortDebugString();

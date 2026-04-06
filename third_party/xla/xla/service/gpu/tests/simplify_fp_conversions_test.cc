@@ -13,7 +13,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include <gtest/gtest.h>
 #include "absl/strings/string_view.h"
 #include "xla/tests/hlo_test_base.h"
 #include "xla/xla.pb.h"
@@ -35,7 +34,8 @@ class SimplifyFPConversionsTest : public HloTestBase {
     const auto& device_description =
         backend().default_stream_executor()->GetDeviceDescription();
     const auto& cc = device_description.gpu_compute_capability();
-    return cc.IsCuda() && cc.cuda_compute_capability()->IsAtLeastHopper();
+    return std::holds_alternative<se::CudaComputeCapability>(cc) &&
+           std::get<se::CudaComputeCapability>(cc).IsAtLeastHopper();
   }
 
   void SetEnableSimplifyFpConversions(bool enable_simplify_all_fp_conversions) {

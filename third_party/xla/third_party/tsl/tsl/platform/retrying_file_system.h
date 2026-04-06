@@ -152,6 +152,12 @@ class RetryingFileSystem : public FileSystem {
     return base_file_system_->HasAtomicMove(path, has_atomic_move);
   }
 
+  absl::Status CanCreateTempFile(const std::string& fname,
+                                 bool* can_create_temp_file) override {
+    // this method does not need to be retried
+    return base_file_system_->CanCreateTempFile(fname, can_create_temp_file);
+  }
+
   absl::Status DeleteRecursively(const string& dirname, TransactionToken* token,
                                  int64_t* undeleted_files,
                                  int64_t* undeleted_dirs) override {
@@ -193,7 +199,7 @@ class RetryingRandomAccessFile : public RandomAccessFile {
                     char* scratch) const override {
     return RetryingUtils::CallWithRetries(
         [this, offset, n, result, scratch]() {
-          return base_file_->Read(offset, *result, absl::MakeSpan(scratch, n));
+          return base_file_->Read(offset, n, result, scratch);
         },
         retry_config_);
   }

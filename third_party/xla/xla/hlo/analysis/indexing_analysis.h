@@ -18,7 +18,6 @@ limitations under the License.
 #define XLA_HLO_ANALYSIS_INDEXING_ANALYSIS_H_
 
 #include <cstdint>
-#include <optional>
 #include <ostream>
 #include <string>
 #include <vector>
@@ -30,8 +29,8 @@ limitations under the License.
 #include "llvm/ADT/SmallVector.h"
 #include "mlir/IR/AffineExpr.h"
 #include "mlir/IR/AffineMap.h"
+#include "mlir/IR/MLIRContext.h"
 #include "xla/hlo/analysis/indexing_map.h"
-#include "xla/hlo/analysis/symbolic_expr.h"
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/utils/hlo_traversal.h"
 #include "xla/shape.h"
@@ -71,14 +70,15 @@ std::ostream& operator<<(std::ostream& out,
 
 // Computes indexing maps for all input operands necessary to compute an element
 // of the `output_id` instruction output.
-HloInstructionIndexing ComputeOutputToInputIndexing(
-    const HloInstruction* instr, int output_id,
-    mlir::MLIRContext* mlir_context);
+HloInstructionIndexing ComputeOutputToInputIndexing(const HloInstruction* instr,
+                                                    int output_id,
+                                                    mlir::MLIRContext* ctx);
 
 // Computes indexing maps for all output operands that the element of the
 // `input_id` instruction input will participate in.
-HloInstructionIndexing ComputeInputToOutputIndexing(
-    const HloInstruction* instr, int input_id, mlir::MLIRContext* mlir_context);
+HloInstructionIndexing ComputeInputToOutputIndexing(const HloInstruction* instr,
+                                                    int input_id,
+                                                    mlir::MLIRContext* ctx);
 
 // Computes the indexing for `epilogue_parent`'s epilogue. For example, if
 // `epilogue_parent` is a transpose, computes the input to output indexing for
@@ -129,21 +129,15 @@ bool operator==(const RuntimeVarIndexing& lhs, const RuntimeVarIndexing& rhs);
 // the number of runtime variables it holds.
 class OperandIndexing {
  public:
-  OperandIndexing(IndexingMap map, std::vector<RuntimeVarIndexing> rt_vars,
-                  std::optional<IndexingMap> replica_id_map = std::nullopt)
-      : map_(map), rt_vars_(rt_vars), replica_id_map_(replica_id_map) {
+  OperandIndexing(IndexingMap map, std::vector<RuntimeVarIndexing> rt_vars)
+      : map_(map), rt_vars_(rt_vars) {
     VerifyOrDie();
   }
-
   explicit OperandIndexing(IndexingMap map) : map_(map) { VerifyOrDie(); }
 
   const IndexingMap& map() const { return map_; }
   const std::vector<RuntimeVarIndexing>& runtime_variables() const {
     return rt_vars_;
-  }
-
-  const std::optional<IndexingMap>& replica_id_map() const {
-    return replica_id_map_;
   }
 
   std::string ToString() const;
@@ -167,11 +161,6 @@ class OperandIndexing {
  private:
   IndexingMap map_;
   std::vector<RuntimeVarIndexing> rt_vars_;
-
-  // Replica id map is only set for indexings that involve collective
-  // operations. Replica id map has the same inputs as the main map and one
-  // result. The result tells from which replica to read the data.
-  std::optional<IndexingMap> replica_id_map_;
 };
 
 // Compose two operand indexings.
@@ -205,28 +194,7 @@ using GroupedByOpIndexing =
 // cluster starting with `target_instr` and going from def to use.
 GroupedByOpIndexing ComputeGroupedOutputToInputIndexing(
     const HloFusionAdaptor& fusion_adaptor, HloInstructionAdaptor target_instr,
-    mlir::MLIRContext* mlir_context);
-
-// Returns the indexing map from logical to linearized physical shape for each
-// operand.
-llvm::SmallVector<IndexingMap, 4> MapLogicalToLinearizedPhysicalShape(
-    absl::Span<const HloInstruction* const> operands,
-    mlir::MLIRContext* mlir_context);
-
-// Computes the indexing map from logical to linearized physical shape for each
-// operand and adds them to `result`. `result` may be non-empty when this
-// function is called and can be used to accumulate results from several calls
-// of this function (e.g. with different `root_index`).
-void GetThreadIdToInputMemoryLayoutsMaps(
-    const HloFusionAdaptor& fusion_adaptor,
-    absl::Span<const IndexingMap> hero_indexing_maps,
-    const HloInstructionAdaptor& hero,
-    absl::Span<const HloInstruction* const> operands,
-    absl::Span<const IndexingMap> operand_logical_to_linearized_physical_maps,
-    mlir::MLIRContext* mlir_context, GroupedByOpIndexingMap& result);
-
-// Replaces RTVars with the midpoints of the feasible intervals.
-void AssignValuesToRTVars(IndexingMap* indexing_map);
+    mlir::MLIRContext* ctx);
 
 // Groups indexing maps by instructions.
 GroupedByOpIndexing GroupIndexingMapsByProducers(

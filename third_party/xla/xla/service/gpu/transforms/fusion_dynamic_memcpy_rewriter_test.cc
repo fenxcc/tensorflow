@@ -16,24 +16,26 @@ limitations under the License.
 #include "xla/service/gpu/transforms/fusion_dynamic_memcpy_rewriter.h"
 
 #include <memory>
-#include <optional>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
 #include "xla/hlo/ir/hlo_instruction.h"
+#include "xla/hlo/ir/hlo_instructions.h"
 #include "xla/hlo/ir/hlo_module.h"
+#include "xla/hlo/ir/hlo_opcode.h"
 #include "xla/hlo/testlib/hlo_hardware_independent_test_base.h"
 #include "xla/service/gpu/backend_configs.pb.h"
 #include "xla/service/gpu/ir_emission_utils.h"
-#include "xla/tsl/platform/statusor.h"
+#include "tsl/platform/status_matchers.h"
+#include "tsl/platform/statusor.h"
 
 namespace xla {
 namespace gpu {
 namespace {
 
 using ::testing::ElementsAre;
+using ::tsl::testing::IsOkAndHolds;
 
 using FusionDynamicMemcpyRewriterTest = HloHardwareIndependentTestBase;
 
@@ -72,7 +74,7 @@ TEST_F(FusionDynamicMemcpyRewriterTest, AnnotatesMemcpyFusion) {
   TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<HloModule> module,
                           ParseAndReturnVerifiedModule(kSliceMemcpyModule));
   EXPECT_THAT(FusionDynamicMemcpyRewriter().Run(module.get()),
-              absl_testing::IsOkAndHolds(true));
+              IsOkAndHolds(true));
 
   auto config =
       GetMemcpyConfig(module->entry_computation()->root_instruction());
@@ -100,7 +102,7 @@ TEST_F(FusionDynamicMemcpyRewriterTest, DoesNotAnnotateCall) {
   TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<HloModule> module,
                           ParseAndReturnVerifiedModule(kSliceCallModule));
   EXPECT_THAT(FusionDynamicMemcpyRewriter().Run(module.get()),
-              absl_testing::IsOkAndHolds(false))
+              IsOkAndHolds(false))
       << module->ToString();
   EXPECT_FALSE(GetMemcpyConfig(module->entry_computation()->root_instruction())
                    .has_value())
@@ -155,7 +157,7 @@ TEST_F(FusionDynamicMemcpyRewriterTest,
       std::unique_ptr<HloModule> module,
       ParseAndReturnVerifiedModule(kLoopUpdateSliceMemcpyModule));
   EXPECT_THAT(FusionDynamicMemcpyRewriter().Run(module.get()),
-              absl_testing::IsOkAndHolds(true));
+              IsOkAndHolds(true));
   auto config = GetMemcpyConfig(
       module->GetComputationWithName("body")->GetInstructionWithName(
           "updated"));

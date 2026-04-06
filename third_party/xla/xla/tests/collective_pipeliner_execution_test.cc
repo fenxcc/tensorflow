@@ -434,15 +434,13 @@ ENTRY entry {
   ROOT gte1 = bf16[3,8,128] get-tuple-element(while), index=1
 }
 )";
-  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<HloModule> module,
-                          ParseAndReturnUnverifiedModule(hlo_string));
-  std::unique_ptr<HloModule> module1 = module->Clone("module1");
-  std::unique_ptr<HloModule> module2 = module->Clone("module2");
-  EXPECT_FALSE(RunOptimizer(module1.get(), /*last_run=*/true, 0).value());
+  auto module = ParseAndReturnUnverifiedModule(hlo_string).value();
+  auto module2 = ParseAndReturnUnverifiedModule(hlo_string).value();
+  EXPECT_FALSE(RunOptimizer(module.get(), /*last_run=*/true, 0).value());
   EXPECT_FALSE(RunOptimizer(module2.get(), /*last_run=*/true, 200).value());
-  XLA_VLOG_LINES(1, module1->ToString());
+  XLA_VLOG_LINES(1, module->ToString());
   XLA_VLOG_LINES(1, module2->ToString());
-  EXPECT_TRUE(RunAndCompareTwoModules(std::move(module1), std::move(module2),
+  EXPECT_TRUE(RunAndCompareTwoModules(std::move(module), std::move(module2),
                                       ErrorSpec{0.1, 0.1}));
 }
 
@@ -565,16 +563,13 @@ TEST_F(CollectivePipelinerExecutionTest, EscapedInputNoTransform) {
    get-tuple-element(while), index=1
  }
 )";
-
-  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<HloModule> module,
-                          ParseAndReturnUnverifiedModule(hlo_string));
-  std::unique_ptr<HloModule> module1 = module->Clone("module1");
-  std::unique_ptr<HloModule> module2 = module->Clone("module2");
-  EXPECT_FALSE(RunOptimizer(module1.get(), /*last_run=*/true, 0).value());
+  auto module = ParseAndReturnUnverifiedModule(hlo_string).value();
+  auto module2 = ParseAndReturnUnverifiedModule(hlo_string).value();
+  EXPECT_FALSE(RunOptimizer(module.get(), /*last_run=*/true, 0).value());
   EXPECT_FALSE(RunOptimizer(module2.get(), /*last_run=*/true, 200).value());
-  XLA_VLOG_LINES(1, module1->ToString());
+  XLA_VLOG_LINES(1, module->ToString());
   XLA_VLOG_LINES(1, module2->ToString());
-  EXPECT_TRUE(RunAndCompareTwoModules(std::move(module1), std::move(module2),
+  EXPECT_TRUE(RunAndCompareTwoModules(std::move(module), std::move(module2),
                                       ErrorSpec{0.1, 0.1}));
 }
 

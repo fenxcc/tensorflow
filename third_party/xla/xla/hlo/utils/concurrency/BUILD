@@ -1,5 +1,3 @@
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
-
 # Infrastructure for parallelization of compilation tasks.
 load("//xla:xla.default.bzl", "xla_cc_test")
 # copybara:uncomment load("//xla/tsl:tsl.default.bzl", "get_compatible_with_portable")

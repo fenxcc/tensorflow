@@ -91,6 +91,5 @@ cc_library(
         "//tensorflow/core/grappler:utils",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/log:check",
-        "@com_google_absl//absl/strings",
     ],
 )

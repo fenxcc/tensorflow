@@ -15,7 +15,6 @@ limitations under the License.
 
 #include "tensorflow/dtensor/cc/tensor_layout.h"
 
-#include <cstdint>
 #include <map>
 #include <ostream>
 #include <string>
@@ -23,7 +22,6 @@ limitations under the License.
 
 #include <gmock/gmock.h>
 #include "absl/container/inlined_vector.h"
-#include "absl/status/status_matchers.h"
 #include "absl/strings/match.h"
 #include "mlir/IR/BuiltinTypeInterfaces.h"  // from @llvm-project
 #include "xla/tsl/platform/errors.h"
@@ -42,6 +40,8 @@ using ::testing::ContainsRegex;
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
 using ::testing::SizeIs;
+using ::tsl::testing::IsOkAndHolds;
+using ::tsl::testing::StatusIs;
 
 // Simple implementation of a proto matcher comparing string representations.
 // Only works as ShapeProto's textual representation is deterministic.
@@ -144,7 +144,7 @@ TEST(MeshTest, ToStringMeshWithXLASPMD) {
 
 TEST(MeshTest, FromStringInvalidSingleDeviceMesh) {
   EXPECT_THAT(Mesh::FromString("/job:localhost/device:CPU:0"),
-              absl_testing::StatusIs(tsl::error::INVALID_ARGUMENT));
+              StatusIs(tsl::error::INVALID_ARGUMENT));
 }
 
 TEST(MeshTest, FromStringSingleDeviceMesh) {
@@ -161,7 +161,7 @@ TEST_F(LayoutTest, FromStringEmptyLayout) {
   TF_ASSERT_OK_AND_ASSIGN(LayoutProto layout_from_str_proto,
                           layout_from_str.ToProto());
   EXPECT_THAT(layout.ToProto(),
-              absl_testing::IsOkAndHolds(EqualsProto(layout_from_str_proto)));
+              IsOkAndHolds(EqualsProto(layout_from_str_proto)));
 }
 
 TEST_F(LayoutTest, LayoutToFromString) {
@@ -172,12 +172,11 @@ TEST_F(LayoutTest, LayoutToFromString) {
   TF_ASSERT_OK_AND_ASSIGN(LayoutProto layout_from_str_proto,
                           layout_from_str.ToProto());
   EXPECT_THAT(layout.ToProto(),
-              absl_testing::IsOkAndHolds(EqualsProto(layout_from_str_proto)));
+              IsOkAndHolds(EqualsProto(layout_from_str_proto)));
 }
 
 TEST_F(LayoutTest, LayoutToFromStringNotSharded) {
-  std::string layout_str = "sharding_specs:x," +
-                           std::string(Layout::kUnshardedDim) +
+  std::string layout_str = "sharding_specs:x," + string(Layout::kUnshardedDim) +
                            ", mesh:|x=1|0|0|/job:localhost/task:0/device:CPU:0";
   EXPECT_EQ(layout_str, Layout::FromString(layout_str)->ToString());
 }
@@ -210,8 +209,7 @@ TEST_F(LayoutTest, MeshToFromString) {
   TF_ASSERT_OK_AND_ASSIGN(Mesh mesh_from_str, Mesh::FromString(mesh_str));
   TF_ASSERT_OK_AND_ASSIGN(MeshProto mesh_from_str_proto,
                           mesh_from_str.ToProto());
-  EXPECT_THAT(mesh.ToProto(),
-              absl_testing::IsOkAndHolds(EqualsProto(mesh_from_str_proto)));
+  EXPECT_THAT(mesh.ToProto(), IsOkAndHolds(EqualsProto(mesh_from_str_proto)));
 }
 
 TEST_F(LayoutTest, GetType) {
@@ -225,7 +223,7 @@ TEST_F(LayoutTest, OnTPUMesh) {
 }
 
 TEST_F(LayoutTest, NumShardsAsVector) {
-  std::vector<int32_t> shards = {4, 8};
+  std::vector<int32> shards = {4, 8};
   EXPECT_EQ(BatchLayout().num_shards(), shards);
 }
 
@@ -235,15 +233,12 @@ TEST_F(LayoutTest, IsReplicated) {
 
 TEST_F(LayoutTest, MeshDeviceLocations) {
   Layout layout = BatchLayout();
-  absl::InlinedVector<int64_t, 4> offset = {1, 2};
-  EXPECT_THAT(layout.mesh().device_location(10),
-              absl_testing::IsOkAndHolds(offset));
+  absl::InlinedVector<int64, 4> offset = {1, 2};
+  EXPECT_THAT(layout.mesh().device_location(10), IsOkAndHolds(offset));
   offset = {2, 2};
-  EXPECT_THAT(layout.mesh().device_location(18),
-              absl_testing::IsOkAndHolds(offset));
+  EXPECT_THAT(layout.mesh().device_location(18), IsOkAndHolds(offset));
   offset = {3, 7};
-  EXPECT_THAT(layout.mesh().device_location(31),
-              absl_testing::IsOkAndHolds(offset));
+  EXPECT_THAT(layout.mesh().device_location(31), IsOkAndHolds(offset));
 
   EXPECT_FALSE(layout.mesh().device_location(32).ok());
   EXPECT_FALSE(layout.mesh().device_location(-1).ok());
@@ -576,8 +571,7 @@ TEST_F(LayoutTest, Transposed2DLayout) {
   TF_ASSERT_OK_AND_ASSIGN(
       auto expected_layout,
       Layout::FromString("sharding_specs:y,x, mesh:|x=2,y=2|*CPU"));
-  EXPECT_THAT(Layout::Transposed2D(layout),
-              absl_testing::IsOkAndHolds(expected_layout));
+  EXPECT_THAT(Layout::Transposed2D(layout), IsOkAndHolds(expected_layout));
 }
 
 TEST_F(LayoutTest, Transposed2DLayoutWithBatch) {
@@ -589,16 +583,15 @@ TEST_F(LayoutTest, Transposed2DLayoutWithBatch) {
       auto expected_layout,
       Layout::FromString(
           "sharding_specs:b1,b2,y,x, mesh:|x=2,y=2,b1=2,b2=2|*CPU"));
-  EXPECT_THAT(Layout::Transposed2D(layout),
-              absl_testing::IsOkAndHolds(expected_layout));
+  EXPECT_THAT(Layout::Transposed2D(layout), IsOkAndHolds(expected_layout));
 }
 
 TEST_F(LayoutTest, MeshDimensionIndex) {
   TF_ASSERT_OK_AND_ASSIGN(
       auto layout,
       Layout::FromString("sharding_specs:x,y, mesh:|x=2,y=2|*CPU"));
-  EXPECT_THAT(layout.mesh().idx_for_dim("x"), absl_testing::IsOkAndHolds(0));
-  EXPECT_THAT(layout.mesh().idx_for_dim("y"), absl_testing::IsOkAndHolds(1));
+  EXPECT_THAT(layout.mesh().idx_for_dim("x"), IsOkAndHolds(0));
+  EXPECT_THAT(layout.mesh().idx_for_dim("y"), IsOkAndHolds(1));
 }
 
 TEST_F(LayoutTest, TruncateBeginning) {
@@ -632,7 +625,7 @@ TEST_F(LayoutTest, Concatenate) {
       auto expected_layout,
       Layout::FromString("sharding_specs:x,y, mesh:CPU|x=2,y=2|*CPU"));
   EXPECT_THAT(ConcatenateLayouts(layout_1, layout_2),
-              absl_testing::IsOkAndHolds(expected_layout));
+              IsOkAndHolds(expected_layout));
 }
 
 TEST_F(LayoutTest, ConcatenateDifferentMesh) {
@@ -693,20 +686,20 @@ TEST_F(LayoutTest, EquivalentLayout) {
 
 TEST_F(LayoutTest, GetSingleDeviceMeshEmptyDeviceString) {
   EXPECT_THAT(Mesh::GetSingleDeviceMesh(""),
-              absl_testing::StatusIs(tsl::error::INVALID_ARGUMENT));
+              StatusIs(tsl::error::INVALID_ARGUMENT));
 }
 
 TEST_F(LayoutTest, GetSingleDeviceMeshSuccess) {
   TF_ASSERT_OK_AND_ASSIGN(
       auto mesh, Mesh::FromString("/job:localhost/task:1/device:CPU:0"));
   EXPECT_THAT(Mesh::GetSingleDeviceMesh("/job:localhost/task:1/device:CPU:0"),
-              absl_testing::IsOkAndHolds(mesh));
+              IsOkAndHolds(mesh));
 }
 
 TEST_F(LayoutTest, GetSingleDeviceLayoutInvalidMesh) {
   auto mesh = Mesh::Empty();
   EXPECT_THAT(Layout::GetLayout(Layout::LayoutType::kSingleDevice, {}, mesh),
-              absl_testing::StatusIs(tsl::error::INVALID_ARGUMENT));
+              StatusIs(tsl::error::INVALID_ARGUMENT));
 }
 
 TEST_F(LayoutTest, GetSingleDeviceLayoutSuccess) {
@@ -717,7 +710,7 @@ TEST_F(LayoutTest, GetSingleDeviceLayoutSuccess) {
       Layout::FromString(
           "maximal:true, mesh:/job:localhost/task:1/device:CPU:0"));
   EXPECT_THAT(Layout::GetLayout(Layout::LayoutType::kSingleDevice, {}, mesh),
-              absl_testing::IsOkAndHolds(layout));
+              IsOkAndHolds(layout));
 }
 
 TEST(DynamicSizeTest, IsDynamicSize) {
@@ -749,7 +742,7 @@ TEST_F(LayoutTest, PartedLayoutToFromString) {
   TF_ASSERT_OK_AND_ASSIGN(LayoutProto layout_from_str_proto,
                           layout_from_str.ToProto());
   EXPECT_THAT(layout.ToProto(),
-              absl_testing::IsOkAndHolds(EqualsProto(layout_from_str_proto)));
+              IsOkAndHolds(EqualsProto(layout_from_str_proto)));
 }
 
 TEST_F(LayoutTest, RaggedLayoutEqual) {

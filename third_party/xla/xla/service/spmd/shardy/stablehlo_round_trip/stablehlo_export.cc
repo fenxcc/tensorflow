@@ -15,9 +15,11 @@ limitations under the License.
 
 #include "xla/service/spmd/shardy/stablehlo_round_trip/stablehlo_export.h"
 
+#include <functional>
+
 #include "mlir/Pass/PassManager.h"
-#include "mlir/Pass/PassOptions.h"
 #include "mlir/Pass/PassRegistry.h"
+#include "mlir/Support/LLVM.h"
 #include "xla/service/spmd/shardy/round_trip_common/export_named_computations.h"
 #include "xla/service/spmd/shardy/stablehlo_round_trip/export_callback_custom_calls.h"
 #include "xla/service/spmd/shardy/stablehlo_round_trip/export_manual_reduction_collectives.h"
@@ -28,42 +30,30 @@ limitations under the License.
 namespace xla {
 namespace sdy {
 
-void addStablehloExportPipeline(mlir::OpPassManager& pm,
-                                const StablehloExportPipelineOptions& options) {
+void addStablehloExportPipeline(mlir::OpPassManager& pm) {
   pm.addPass(createStablehloExportManualReductionCollectivesPass());
   // This pass converts `sdy.constant` (which isn't foldable) into
   // `stablehlo.constant` (which is foldable), therefore greedy pattern
   // rewriters shouldn't be applied before converting to HLO as they apply
   // folding.
-  pm.addPass(createExportOpsPass(options.keepHloShardingConstraints));
-  pm.addPass(createStablehloRoundTripShardMapExportPass(
-      options.keepHloShardingConstraints));
-  pm.addPass(createExportNamedComputationsPass(options.dedupFunctionsFully));
+  pm.addPass(createExportOpsPass());
+  pm.addPass(createStablehloRoundTripShardMapExportPass());
+  pm.addPass(createExportNamedComputationsPass());
   // If we don't add a sharding to a control flow op without one,
   // StableHLO -> HLO conversion won't add a sharding for that op even if a
   // free variable that has a sharding is lifted as an additional result, and in
   // effect the op will have a replicated sharding for all results.
   pm.addPass(createExportStablehloShardingsPass(
-      /*addMissingShardingToControlFlow=*/options
-          .addMissingShardingToControlFlow));
+      /*addMissingShardingToControlFlow=*/true));
   pm.addPass(createStablehloRoundTripExportCallbackCustomCallsPass());
 }
 
-namespace {
-
-void stablehloExportPipeline(mlir::OpPassManager& pm,
-                             const StablehloExportPipelineOptions& options) {
-  addStablehloExportPipeline(pm, options);
-}
-
-}  // namespace
-
 void registerStablehloExportPipeline() {
-  mlir::PassPipelineRegistration<StablehloExportPipelineOptions> exportPipeline(
+  mlir::PassPipelineRegistration<> exportPipeline(
       "xla-sdy-stablehlo-export-pipeline",
       "Run passes to export the SDY (Shardy) dialect into an StableHLO module, "
       "which is ready for StableHLO -> HLO conversion.",
-      stablehloExportPipeline);
+      addStablehloExportPipeline);
 }
 
 }  // namespace sdy

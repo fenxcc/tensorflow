@@ -417,14 +417,8 @@ void PopulateWithRandomIntegralDataWithBounds(Literal* literal,
            primitive_util::NativeToPrimitiveType<IntT>());
   if (no_duplicates &&
       ShapeUtil::ElementsIn(literal->shape()) < static_cast<int64_t>(max)) {
-    int32_t start = 0;
-    if (primitive_util::IsSignedIntegralType(literal->shape().element_type())) {
-      // Generate negative numbers also.
-      auto size = literal->data<IntT>().size();
-      start = size / 2 - size;
-    }
     std::iota(literal->data<IntT>().begin(), literal->data<IntT>().end(),
-              static_cast<IntT>(start));
+              static_cast<IntT>(0));
     std::shuffle(literal->data<IntT>().begin(), literal->data<IntT>().end(),
                  *engine);
   } else {
@@ -442,16 +436,6 @@ void PopulateWithRandomIntegralDataWithBounds(Literal* literal,
     PrimitiveType primitive_type, absl::Span<const int64_t> dimensions) {
   return Literal::CreateFromShape(
       ShapeUtil::MakeShape(primitive_type, dimensions));
-}
-
-/* static */ Literal LiteralUtil::ConvertF8E4M3FNToF32(
-    const LiteralSlice& f8e4m3fn_literal) {
-  return ConvertType<tsl::float8_e4m3fn, float>(f8e4m3fn_literal);
-}
-
-/* static */ Literal LiteralUtil::ConvertF8E5M2ToF32(
-    const LiteralSlice& f8e5m2_literal) {
-  return ConvertType<tsl::float8_e5m2, float>(f8e5m2_literal);
 }
 
 /* static */ Literal LiteralUtil::ConvertS8ToF32(

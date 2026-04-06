@@ -1,6 +1,5 @@
+# Placeholder: load py_proto_library
 load("@llvm-project//mlir:tblgen.bzl", "gentbl_cc_library", "td_library")
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("@rules_python//python:proto.bzl", "py_proto_library")
 load("//tensorflow:tensorflow.bzl", "tf_cc_binary", "tf_cc_test")
 load("//tensorflow:tensorflow.default.bzl", "get_compatible_with_portable")
 load("//tensorflow/compiler/mlir/quantization/stablehlo:internal_visibility_allowlist.bzl", "internal_visibility_allowlist")
@@ -125,7 +124,6 @@ cc_library(
         "@local_tsl//tsl/platform:regexp",
         "@local_xla//xla/mlir_hlo",
         "@local_xla//xla/mlir_hlo:mhlo_passes",
-        "@shardy//shardy/dialect/sdy/ir:register",
         "@stablehlo//:chlo_ops",
         "@stablehlo//:stablehlo_ops",
         "@stablehlo//:stablehlo_passes",
@@ -257,7 +255,10 @@ cc_library(
         "passes/bridge/passes.h",
     ],
     compatible_with = get_compatible_with_portable(),
-    visibility = ["//visibility:public"],
+    visibility = [
+        ":internal_visibility_allowlist_package",
+        "//tensorflow/compiler/mlir:__subpackages__",
+    ],
     deps = [
         ":bridge_passes_inc_gen",
         ":optimize_inc_gen",
@@ -401,7 +402,7 @@ tf_cc_test(
         ":bridge_passes",
         "//tensorflow/compiler/mlir:register_common_dialects",
         "//tensorflow/compiler/mlir/tensorflow",
-        "//tensorflow/compiler/mlir/tensorflow:deserialize_mlir_module_utils",
+        "//tensorflow/compiler/mlir/tensorflow:serialize_mlir_module_utils",
         "//tensorflow/core:test",
         "//tensorflow/core/lib/monitoring:cell_reader",
         "@com_google_absl//absl/strings",
@@ -424,7 +425,7 @@ cc_library(
         "quantize_passes.h",
     ],
     compatible_with = get_compatible_with_portable(),
-    visibility = ["//visibility:public"],
+    visibility = [":internal_visibility_allowlist_package"],
     deps = [
         ":fill_quantization_options",
         ":passes",
@@ -721,7 +722,6 @@ tf_cc_binary(
         "@llvm-project//mlir:FuncExtensions",
         "@llvm-project//mlir:MlirOptLib",
         "@llvm-project//mlir:QuantOps",
-        "@llvm-project//mlir:RegisterAllPasses",
         "@llvm-project//mlir:SCFDialect",
         "@llvm-project//mlir:ShapeDialect",
         "@llvm-project//mlir:TensorDialect",

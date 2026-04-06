@@ -16,7 +16,6 @@ limitations under the License.
 #include <memory>
 #include <utility>
 
-#include <gtest/gtest.h>
 #include "xla/error_spec.h"
 #include "xla/hlo/testlib/verified_hlo_module.h"
 #include "xla/service/gpu/tests/gpu_codegen_test.h"

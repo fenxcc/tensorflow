@@ -15,9 +15,6 @@ limitations under the License.
 #ifndef XLA_TESTS_XLA_TEST_BACKEND_PREDICATES_H_
 #define XLA_TESTS_XLA_TEST_BACKEND_PREDICATES_H_
 
-#include <vector>
-
-#include <gtest/gtest.h>
 #include "absl/base/nullability.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
@@ -54,8 +51,6 @@ inline constexpr const absl::string_view kGpu = "gpu";
 inline constexpr const absl::string_view kA100 = "a100";
 inline constexpr const absl::string_view kH100 = "h100";
 inline constexpr const absl::string_view kB100 = "b100";
-inline constexpr const absl::string_view kP100 = "p100";
-inline constexpr const absl::string_view kV100 = "v100";
 
 inline constexpr const absl::string_view kInterpreter = "interpreter";
 
@@ -90,30 +85,6 @@ bool BackendIsExactly(absl::string_view device,
 
 // Returns true only for base variant hardware + emulation.
 bool BackendIsStrict(absl::string_view device);
-
-bool BackendSupportsFloat64();
-bool BackendSupportsComplex128();
-
-bool UsingStreamExecutorGpuClient();
-
-// Useful to generate an intentionally empty set of inputs for a parameterized
-// test. This is needed when we are manipulating the inputs based on the
-// backend and would like some backends to receive zero inputs. Usage of this
-// function should always be accompanied by
-// `GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST()`.
-//
-// Example:
-//
-// GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(TestFixture);
-// INSTANTIATE_TEST_SUITE_P(
-//    ParameterizedTestName,
-//    TestFixture,
-//    DeviceIs(kA100) ? ::testing::ValuesIn({1, 2, 3}) : Empty<int>());
-template <typename T>
-::testing::internal::ParamGenerator<T> Empty() {
-  std::vector<T> empty_vec;
-  return ::testing::ValuesIn(empty_vec);
-}
 
 }  // namespace xla::test
 #endif  // XLA_TESTS_XLA_TEST_BACKEND_PREDICATES_H_

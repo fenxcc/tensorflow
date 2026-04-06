@@ -18,10 +18,12 @@ limitations under the License.
 #include <cstdint>
 #include <cstdlib>
 #include <memory>
+#include <numeric>
 #include <optional>
 #include <string>
 #include <tuple>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "absl/algorithm/container.h"
@@ -40,14 +42,15 @@ limitations under the License.
 #include "xla/service/gpu/cublas_cudnn.h"
 #include "xla/shape.h"
 #include "xla/shape_util.h"
-#include "xla/stream_executor/cuda/cuda_compute_capability.h"
 #include "xla/stream_executor/device_description.h"
 #include "xla/stream_executor/dnn.h"
-#include "xla/tsl/platform/errors.h"
-#include "xla/tsl/platform/statusor.h"
 #include "xla/util.h"
 #include "xla/window_util.h"
 #include "xla/xla_data.pb.h"
+#include "tsl/platform/errors.h"
+#include "tsl/platform/logging.h"
+#include "tsl/platform/status.h"
+#include "tsl/platform/statusor.h"
 
 namespace xla {
 namespace gpu {
@@ -77,26 +80,28 @@ absl::Status CheckTypes(HloInstruction* conv, const se::GpuComputeCapability cc,
             "but got convolution with FP8 type %s: %s",
             primitive_util::LowercasePrimitiveTypeName(type), conv->ToString());
       }
-      if (!cc.IsCuda()) {
+      if (!std::holds_alternative<se::CudaComputeCapability>(cc)) {
         return Unimplemented(
             "FP8 convolutions are only supported on CUDA GPUs, but got "
             "FP8 convolution on ROCm GPU: %s",
             conv->ToString());
       }
       if (dnn_version >= se::dnn::VersionInfo{9, 8, 0}) {
-        if (!cc.cuda_compute_capability()->IsAtLeastAda()) {
+        if (!std::get<se::CudaComputeCapability>(cc).IsAtLeastAda()) {
           return Unimplemented(
               "FP8 convolutions are only supported on CUDA GPUs with compute "
               "capability at least 8.9, but got "
               "FP8 convolution on GPU with compute capability %s: %s",
-              cc.ToString(), conv->ToString());
+              std::get<se::CudaComputeCapability>(cc).ToString(),
+              conv->ToString());
         }
-      } else if (!cc.cuda_compute_capability()->IsAtLeastHopper()) {
+      } else if (!std::get<se::CudaComputeCapability>(cc).IsAtLeastHopper()) {
         return Unimplemented(
             "FP8 convolutions are only supported on CUDA GPUs with compute "
             "capability at least 9.0, but got "
             "FP8 convolution on GPU with compute capability %s: %s",
-            cc.ToString(), conv->ToString());
+            std::get<se::CudaComputeCapability>(cc).ToString(),
+            conv->ToString());
       }
     }
     return absl::OkStatus();
@@ -133,42 +138,6 @@ bool MaybeConv1dToConv2d(HloInstruction* conv) {
     }
   }
   return false;
-}
-
-bool LooksLikeForwardConvolution(const HloInstruction* conv) {
-  const ConvolutionDimensionNumbers& dnums =
-      conv->convolution_dimension_numbers();
-  const Shape& lhs_shape = conv->operand(0)->shape();
-  const Shape& rhs_shape = conv->operand(1)->shape();
-  const Shape& result_shape = conv->shape();
-
-  // Compare batch and output feature counts. Backward-filter convolutions swap
-  // these, so matching values are a strong signal that this is a forward
-  // convolution, even if it has dilation.
-  int64_t lhs_batches = lhs_shape.dimensions(dnums.input_batch_dimension());
-  int64_t result_batches =
-      result_shape.dimensions(dnums.output_batch_dimension());
-  if (lhs_batches != result_batches) {
-    return false;
-  }
-
-  int64_t rhs_output_features =
-      rhs_shape.dimensions(dnums.kernel_output_feature_dimension());
-  int64_t result_output_features =
-      result_shape.dimensions(dnums.output_feature_dimension());
-  if (rhs_output_features != result_output_features) {
-    return false;
-  }
-
-  for (int i = 0; i < dnums.kernel_spatial_dimensions_size(); ++i) {
-    int64_t kdim = rhs_shape.dimensions(dnums.kernel_spatial_dimensions(i));
-    int64_t odim = result_shape.dimensions(dnums.output_spatial_dimensions(i));
-    if (kdim > odim) {
-      return false;
-    }
-  }
-
-  return true;
 }
 
 bool CanImplementAsGpuForwardConv(HloInstruction* conv) {
@@ -224,12 +193,6 @@ ConvolutionMatch MatchBackwardFilter(HloInstruction* conv) {
   //              Convolution
   //                 conv
   CHECK_EQ(HloOpcode::kConvolution, conv->opcode());
-  if (LooksLikeForwardConvolution(conv)) {
-    VLOG(1) << "Convolution " << conv->ToString()
-            << " looks like a forward convolution; skipping backward filter "
-               "rewrite.";
-    return std::nullopt;
-  }
 
   // Step 2: match paddings and dimension numbers of the forward convolution.
   const ConvolutionDimensionNumbers& conv_dnums =
@@ -626,7 +589,7 @@ ConvolutionMatch MatchBackwardInput(HloInstruction* conv) {
     reverse_filter = c->AddInstruction(
         HloInstruction::CreateReverse(reverse_filter->shape(), reverse_filter,
                                       dnums.kernel_spatial_dimensions()));
-    CHECK_OK(conv->ReplaceOperandWith(/*operand_num=*/1, reverse_filter));
+    TF_CHECK_OK(conv->ReplaceOperandWith(/*operand_num=*/1, reverse_filter));
   }
 
   // Calculate the 'rhs' that goes into the backward input convolution.
@@ -681,7 +644,7 @@ ConvolutionMatch MatchBackwardInput(HloInstruction* conv) {
   // Transpose [H, W, ..., G, in_depth/G, out_depth / G] -> [H, W, ...,
   // in_depth/G, G, out_depth / G]
   std::vector<int64_t> transpose_dims(rhs->shape().dimensions().size());
-  absl::c_iota(transpose_dims, 0);
+  std::iota(transpose_dims.begin(), transpose_dims.end(), 0);
   transpose_dims.erase(transpose_dims.begin() + input_feature_dimension);
   transpose_dims.insert(transpose_dims.begin() + output_feature_dimension,
                         input_feature_dimension);
@@ -780,7 +743,7 @@ HloInstruction* ConvertBatchGroupedToFeatureGroupedConvolution(
   // Transpose G to the axis before C, For eg: [G, N/G, H, W, C ] -> [N/G, H,
   // W, G, C]
   std::vector<int64_t> transpose_dims(lhs->shape().dimensions().size());
-  absl::c_iota(transpose_dims, 0);
+  std::iota(transpose_dims.begin(), transpose_dims.end(), 0);
   transpose_dims.erase(transpose_dims.begin() + input_batch_dimension);
   transpose_dims.insert(transpose_dims.begin() + input_feature_dimension,
                         input_batch_dimension);
@@ -898,10 +861,10 @@ absl::StatusOr<bool> RunOnComputation(HloComputation* computation,
 }
 }  // namespace
 
-absl::StatusOr<bool> ConvRewriter::RunImpl(
+absl::StatusOr<bool> ConvRewriter::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
-  XLA_VLOG_LINES(2, "ConvRewriter::RunImpl(), before:\n" + module->ToString());
+  XLA_VLOG_LINES(2, "ConvRewriter::Run(), before:\n" + module->ToString());
   bool changed = false;
   for (HloComputation* computation :
        module->MakeNonfusionComputations(execution_threads)) {
@@ -910,7 +873,7 @@ absl::StatusOr<bool> ConvRewriter::RunImpl(
         RunOnComputation(computation, compute_capability_, dnn_version_));
     changed |= result;
   }
-  XLA_VLOG_LINES(2, "ConvRewriter::RunImpl(), after:\n" + module->ToString());
+  XLA_VLOG_LINES(2, "ConvRewriter::Run(), after:\n" + module->ToString());
   return changed;
 }
 

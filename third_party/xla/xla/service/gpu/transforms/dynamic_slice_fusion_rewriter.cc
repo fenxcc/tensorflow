@@ -78,9 +78,7 @@ using InstructionSet = absl::flat_hash_set<HloInstruction*>;
 
 bool IsCustomCall(const HloInstruction* hlo, absl::string_view platform_name) {
   auto* custom_call = DynCast<HloCustomCallInstruction>(hlo);
-  if (custom_call == nullptr) {
-    return false;
-  }
+  if (custom_call == nullptr) return false;
 
   // TODO(vuson): properly handle token by following
   // `LhloDialectEmitter::EmitCustomCallOp`'s `CreateOperands` logic for
@@ -88,9 +86,8 @@ bool IsCustomCall(const HloInstruction* hlo, absl::string_view platform_name) {
   if (custom_call->shape().IsTuple() &&
       absl::c_any_of(
           custom_call->shape().tuple_shapes(),
-          [&](const Shape& sub_shape) { return sub_shape.IsToken(); })) {
+          [&](const Shape& sub_shape) { return sub_shape.IsToken(); }))
     return false;
-  }
 
   const std::string call_target_name = custom_call->custom_call_target();
 
@@ -157,9 +154,8 @@ absl::Status CreateRootTuple(
       elements.push_back(gte);
     }
   }
-  if (elements.size() > 1) {
+  if (elements.size() > 1)
     builder.AddInstruction(HloInstruction::CreateTuple(elements));
-  }
 
   return absl::OkStatus();
 }
@@ -235,9 +231,9 @@ absl::StatusOr<HloInstruction*> CreateFusionInstruction(
       *gpu_config.mutable_fusion_backend_config();
   backend_config.set_kind("__custom_fusion");
   CustomFusionConfig config;
-  config.set_name(
+  config.set_name(std::string(
       dynamic ? kDynamicSliceFusionWithDynamicAddressComputationConfigName
-              : kDynamicSliceFusionWithStaticAddressComputationConfigName);
+              : kDynamicSliceFusionWithStaticAddressComputationConfigName));
   *backend_config.mutable_custom_fusion_config() = config;
   TF_RETURN_IF_ERROR(fusion->set_backend_config(std::move(gpu_config)));
 
@@ -246,7 +242,7 @@ absl::StatusOr<HloInstruction*> CreateFusionInstruction(
 
 }  // namespace
 
-absl::StatusOr<bool> DynamicSliceFusionRewriter::RunImpl(
+absl::StatusOr<bool> DynamicSliceFusionRewriter::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   absl::flat_hash_map<HloInstruction*,
@@ -257,9 +253,7 @@ absl::StatusOr<bool> DynamicSliceFusionRewriter::RunImpl(
   std::unique_ptr<CallGraph> call_graph = CallGraph::Build(module);
   // Collect all potential custom call matches in the non-fusion computations.
   for (HloComputation* computation : module->computations()) {
-    if (computation->IsFusionComputation()) {
-      continue;
-    }
+    if (computation->IsFusionComputation()) continue;
     for (HloInstruction* instr : computation->instructions()) {
       if ((HloPredicateIsOp<HloOpcode::kReduceScatter>(instr)) ||
           IsLegacyCublasMatmul(*instr) || IsCustomCall(instr, platform_name_)) {
@@ -289,9 +283,7 @@ absl::StatusOr<bool> DynamicSliceFusionRewriter::RunImpl(
     }
   }
 
-  if (matches.empty()) {
-    return false;
-  }
+  if (matches.empty()) return false;
 
   for (HloInstruction* hero : matches) {
     auto& paths = matches_kv[hero];
@@ -324,8 +316,8 @@ absl::StatusOr<bool> DynamicSliceFusionRewriter::RunImpl(
 
     HloComputation* parent = hero->parent();
     if (fusion->shape().IsTuple()) {
-      TF_RETURN_IF_ERROR(
-          parent->ReplaceInstructionWithDifferentShape(hero, fusion));
+      TF_RETURN_IF_ERROR(parent->ReplaceInstructionWithDifferentShape(
+          const_cast<HloInstruction*>(hero), fusion));
       for (auto& sliced_user_path : sliced_user_paths) {
         auto old_gte =
             Cast<HloGetTupleElementInstruction>(sliced_user_path.front());
@@ -336,7 +328,7 @@ absl::StatusOr<bool> DynamicSliceFusionRewriter::RunImpl(
             parent->ReplaceInstruction(sliced_user_path.back(), gte));
       }
     } else {
-      HloInstruction* instr_to_be_replaced = hero;
+      auto* instr_to_be_replaced = const_cast<HloInstruction*>(hero);
       if (sliced_user_paths.empty()) {
         // The only case where a tuple-shaped original hero op is fused into a
         // non-tuple-shaped fusion is there's only one element of the original

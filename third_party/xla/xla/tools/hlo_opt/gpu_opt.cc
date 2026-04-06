@@ -19,16 +19,15 @@ limitations under the License.
 #include <set>
 #include <string>
 #include <utility>
+#include <variant>
 
 #include "absl/log/log.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "llvm/IR/LLVMContext.h"
 #include "xla/hlo/ir/hlo_module.h"
-#include "xla/hlo/tools/hlo_opt/opt_lib.h"
 #include "xla/hlo/transforms/host_offloader.h"
 #include "xla/hlo/transforms/simplifiers/hlo_memory_scheduler.h"
-#include "xla/layout.h"
 #include "xla/service/buffer_value.h"
 #include "xla/service/compiler.h"
 #include "xla/service/copy_insertion.h"
@@ -36,6 +35,7 @@ limitations under the License.
 #include "xla/service/executable.h"
 #include "xla/service/gpu/alias_info.h"
 #include "xla/service/gpu/compile_module_to_llvm_ir.h"
+#include "xla/service/gpu/executable.pb.h"
 #include "xla/service/gpu/gpu_compiler.h"
 #include "xla/service/gpu/gpu_executable.h"
 #include "xla/service/gpu/gpu_hlo_schedule.h"
@@ -134,7 +134,8 @@ class GpuOptProvider : public CompiledOptProvider {
     se::GpuComputeCapability gpu_compute_capability;
     if (device_description.ok()) {
       gpu_compute_capability = device_description->gpu_compute_capability();
-      if (gpu_compute_capability.IsCuda()) {
+      if (std::holds_alternative<se::CudaComputeCapability>(
+              gpu_compute_capability)) {
         alias_info_ =
             std::make_unique<gpu::NVPTXAliasInfo>(*device_description);
       } else {
@@ -146,18 +147,17 @@ class GpuOptProvider : public CompiledOptProvider {
              "--xla_gpu_target_config_filename= to specify a target config.";
       gpu_compute_capability = stream_executor::CudaComputeCapability::Hopper();
     }
-    static BufferValue::SizeFunction* const kSizeFunction =
-        new BufferValue::SizeFunction([](const BufferValue& buffer) {
-          const Shape& shape = buffer.shape();
-          if (shape.has_layout() &&
-              shape.layout().memory_space() == Layout::kHostMemorySpace) {
-            return static_cast<int64_t>(0);
-          }
-          return ShapeUtil::ByteSizeOf(shape, sizeof(void*));
-        });
+    BufferValue::SizeFunction size_func = [](const BufferValue& buffer) {
+      const Shape& shape = buffer.shape();
+      if (shape.has_layout() &&
+          shape.layout().memory_space() == Layout::kHostMemorySpace) {
+        return static_cast<int64_t>(0);
+      }
+      return ShapeUtil::ByteSizeOf(shape, sizeof(void*));
+    };
     // go/keep-sorted start
     RegisterPass<CopyInsertion>(alias_info_.get());
-    RegisterPass<HloMemoryScheduler>(alias_info_.get(), kSizeFunction);
+    RegisterPass<HloMemoryScheduler>(alias_info_.get(), size_func);
     RegisterPass<HostOffloader>(alias_info_.get());
     RegisterPass<gpu::AllGatherOptimizer>();
     RegisterPass<gpu::CuDnnCustomCallConverter>();
@@ -174,7 +174,7 @@ class GpuOptProvider : public CompiledOptProvider {
     RegisterPass<gpu::ReductionLayoutNormalizer>();
     RegisterPass<gpu::SanitizeConstantNames>();
     RegisterPass<gpu::TopKSplitter>();
-    RegisterPass<gpu::TopkSpecializer>(gpu_compute_capability);
+    RegisterPass<gpu::TopkSpecializer>();
     RegisterPass<gpu::TransposeDimensionGrouper>();
     RegisterPass<gpu::WindowedEinsumHandler>();
     // go/keep-sorted end
@@ -191,7 +191,7 @@ class GpuOptProvider : public CompiledOptProvider {
       const HloModule* module) {
     Compiler::CompileOptions opts;
     TF_ASSIGN_OR_RETURN(
-        Compiler::GpuTargetConfig target_config,
+        Compiler::TargetConfig target_config,
         gpu::GpuCompiler::GetTargetConfig(
             opts, module->config().debug_options(), /*executor=*/nullptr));
     return target_config.device_description;
@@ -213,22 +213,19 @@ class GpuOptProvider : public CompiledOptProvider {
       TF_ASSIGN_OR_RETURN(gpu::ScheduleMetadata schedule_metadata,
                           gpu::ScheduleGpuModule(
                               optimized_module, gpu_compiler->GetPointerSize(),
-                              device_description, gpu_compiler->mlir_context(),
-                              alias_info.get()));
+                              device_description, alias_info.get()));
       TF_RETURN_IF_ERROR(gpu_compiler->RunPostSchedulingPipelines(
           optimized_module, schedule_metadata.scheduler_mem_limit,
           device_description, alias_info.get()));
     }
 
     llvm::LLVMContext llvm_context;
-    BufferValue::SizeFunction buffer_size_bytes_function =
-        gpu_compiler->BufferSizeBytesFunction();
     TF_ASSIGN_OR_RETURN(
         xla::gpu::CompileModuleResults results,
         xla::gpu::CompileModuleToLlvmIr(
             optimized_module, &llvm_context, gpu_compiler->GetTargetTriple(),
             gpu_compiler->GetDataLayout(), platform, device_description,
-            alias_info.get(), std::move(buffer_size_bytes_function)));
+            alias_info.get(), gpu_compiler->BufferSizeBytesFunction()));
     return llvm_ir::DumpToString(results.llvm_module.get());
   }
 };

@@ -33,12 +33,13 @@ limitations under the License.
 #include "xla/python/ifrt/device.h"
 #include "xla/python/ifrt/device_list.h"
 #include "xla/python/ifrt/dtype.h"
-#include "xla/python/ifrt/layout.h"
 #include "xla/python/ifrt/memory.h"
 #include "xla/python/ifrt/remap_plan.h"
 #include "xla/python/ifrt/shape.h"
 #include "xla/python/ifrt/sharding.h"
+#include "xla/python/ifrt/user_context.h"
 #include "xla/python/ifrt/value.h"
+#include "xla/tsl/concurrency/ref_count.h"
 
 namespace xla {
 namespace ifrt {
@@ -59,9 +60,6 @@ using ::testing::_;
 // LINT.IfChange(MockArrayDelegation)
 MockArray::MockArray(xla::ifrt::ArrayRef delegated)
     : delegated_(std::move(delegated)) {
-  ON_CALL(*this, user_context).WillByDefault([this]() {
-    return delegated_->user_context();
-  });
   ON_CALL(*this, GetReadyFuture).WillByDefault([this]() {
     return delegated_->GetReadyFuture();
   });
@@ -86,9 +84,6 @@ MockArray::MockArray(xla::ifrt::ArrayRef delegated)
           [this]() -> absl::StatusOr<std::shared_ptr<const xla::PjRtLayout>> {
             return delegated_->pjrt_layout();
           });
-  ON_CALL(*this, layout).WillByDefault([this]() -> CustomLayoutRef {
-    return delegated_->layout();
-  });
   ON_CALL(*this, DisassembleIntoSingleDeviceArrays(_, _))
       .WillByDefault(
           [this](ArrayCopySemantics array_copy_semantics,
@@ -118,7 +113,9 @@ MockClient::MockClient(std::unique_ptr<xla::ifrt::Client> delegated)
                          const void* data, DType dtype, Shape shape,
                          std::optional<absl::Span<const int64_t>> byte_strides,
                          ShardingRef sharding, HostBufferSemantics semantics,
-                         std::function<void()> on_done_with_host_buffer) {
+                         std::function<void()> on_done_with_host_buffer,
+                         tsl::RCReference<UserContext> user_context) {
+        // Currently the `user_context` parameter is ignored.
         return delegated_->MakeArrayFromHostBuffer(
             data, dtype, std::move(shape), byte_strides, std::move(sharding),
             semantics, std::move(on_done_with_host_buffer));
@@ -126,13 +123,17 @@ MockClient::MockClient(std::unique_ptr<xla::ifrt::Client> delegated)
   ON_CALL(*this, MakeArraysFromHostBufferShards)
       .WillByDefault(
           [this](absl::Span<MakeArraysFromHostBufferShardsSpec> specs,
-                 HostBufferSemantics semantics) {
-            return delegated_->MakeArraysFromHostBufferShards(specs, semantics);
+                 HostBufferSemantics semantics,
+                 tsl::RCReference<UserContext> user_context) {
+            return delegated_->MakeArraysFromHostBufferShards(
+                specs, semantics, std::move(user_context));
           });
   ON_CALL(*this, MakeErrorArrays)
       .WillByDefault([this](const absl::Status& error,
-                            absl::Span<const ArraySpec> array_specs) {
-        return delegated_->MakeErrorArrays(error, array_specs);
+                            absl::Span<const ArraySpec> array_specs,
+                            tsl::RCReference<UserContext> user_context) {
+        return delegated_->MakeErrorArrays(error, array_specs,
+                                           std::move(user_context));
       });
   ON_CALL(*this, AssembleArrayFromSingleDeviceArrays(_, _, _, _, _, _))
       .WillByDefault(
@@ -156,12 +157,6 @@ MockClient::MockClient(std::unique_ptr<xla::ifrt::Client> delegated)
       .WillByDefault([this](const RemapPlan& plan, absl::Span<ArrayRef> arrays,
                             ArrayCopySemantics semantics) {
         return delegated_->RemapArrays(plan, arrays, semantics);
-      });
-  ON_CALL(*this, ReshardArrays)
-      .WillByDefault([this](absl::Span<ArrayRef> arrays,
-                            absl::Span<const ArraySpec> specs,
-                            ArrayCopySemantics semantics) {
-        return delegated_->ReshardArrays(arrays, specs, semantics);
       });
   ON_CALL(*this, GetReadyFuture)
       .WillByDefault([this](absl::Span<const ValueRef> values) {
@@ -234,13 +229,6 @@ MockClient::MockClient(std::unique_ptr<xla::ifrt::Client> delegated)
               -> absl::StatusOr<std::shared_ptr<const xla::PjRtLayout>> {
             return delegated_->GetDefaultPjRtLayout(dtype, dims, device,
                                                     memory_kind);
-          });
-  ON_CALL(*this, GetDefaultLayout)
-      .WillByDefault(
-          [this](
-              DType dtype, const Shape& shape,
-              const ShardingRef& sharding) -> absl::StatusOr<CustomLayoutRef> {
-            return delegated_->GetDefaultLayout(dtype, shape, sharding);
           });
   ON_CALL(*this, Attributes).WillByDefault([this]() -> const AttributeMap& {
     return delegated_->Attributes();

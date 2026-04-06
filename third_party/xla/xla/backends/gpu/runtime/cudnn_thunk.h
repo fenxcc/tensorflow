@@ -16,19 +16,15 @@ limitations under the License.
 #ifndef XLA_BACKENDS_GPU_RUNTIME_CUDNN_THUNK_H_
 #define XLA_BACKENDS_GPU_RUNTIME_CUDNN_THUNK_H_
 
-#include <cstdint>
 #include <memory>
-#include <optional>
 #include <string>
 #include <vector>
 
 #include "absl/base/call_once.h"
 #include "absl/status/status.h"
-#include "absl/status/statusor.h"
 #include "absl/types/span.h"
 #include "xla/backends/gpu/runtime/thunk.h"
-#include "xla/backends/gpu/runtime/thunk.pb.h"
-#include "xla/runtime/buffer_use.h"
+#include "xla/codegen/emitters/kernel_arguments.h"
 #include "xla/service/buffer_assignment.h"
 #include "xla/stream_executor/dnn.h"
 
@@ -39,8 +35,7 @@ namespace gpu {
 class CuDnnThunk : public Thunk {
  public:
   CuDnnThunk(std::string fingerprint, ThunkInfo,
-             std::vector<BufferAllocation::Slice> args,
-             std::vector<bool> output_args,
+             absl::Span<const emitters::KernelArgument>,
              std::optional<int64_t> sdpa_dropout_seed = std::nullopt);
   CuDnnThunk(const CuDnnThunk&) = delete;
   CuDnnThunk& operator=(const CuDnnThunk&) = delete;
@@ -54,32 +49,11 @@ class CuDnnThunk : public Thunk {
     return args_;
   }
 
-  BufferUses buffer_uses() const override {
-    BufferUses res;
-    res.reserve(args_.size());
-
-    for (int i = 0; i < args_.size(); i++) {
-      if (output_args_[i]) {
-        res.push_back(BufferUse::Write(args_[i]));
-        continue;
-      }
-      res.push_back(BufferUse::Read(args_[i]));
-    }
-    return res;
-  }
-
-  absl::StatusOr<ThunkProto> ToProto() const override;
-
-  static absl::StatusOr<std::unique_ptr<CuDnnThunk>> FromProto(
-      ThunkInfo thunk_info, const CudnnThunkProto& proto,
-      absl::Span<const BufferAllocation> buffer_allocations);
-
  private:
   absl::once_flag once_flag_;
   std::string fingerprint_;
   std::shared_ptr<se::dnn::LazyDnnGraph> graph_;
   std::vector<BufferAllocation::Slice> args_;
-  std::vector<bool> output_args_;
   // Sdpa dropout seed
   std::optional<int64_t> sdpa_dropout_seed_;
 };

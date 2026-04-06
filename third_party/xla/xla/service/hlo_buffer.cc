@@ -17,14 +17,19 @@ limitations under the License.
 
 #include <algorithm>
 #include <ostream>
-#include <string>
+#include <utility>
 #include <vector>
 
-#include "absl/algorithm/container.h"
-#include "absl/log/check.h"
+#include "absl/container/flat_hash_set.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
-#include "xla/service/hlo_value.h"
+#include "xla/hlo/ir/hlo_instruction.h"
+#include "xla/map_util.h"
+#include "xla/shape_util.h"
+#include "xla/types.h"
+#include "xla/util.h"
+#include "tsl/platform/errors.h"
+#include "tsl/platform/logging.h"
 
 namespace xla {
 

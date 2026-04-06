@@ -16,7 +16,6 @@ limitations under the License.
 #ifndef XLA_BACKENDS_GPU_RUNTIME_GEMM_THUNK_H_
 #define XLA_BACKENDS_GPU_RUNTIME_GEMM_THUNK_H_
 
-#include <memory>
 #include <optional>
 
 #include "absl/status/status.h"
@@ -24,7 +23,6 @@ limitations under the License.
 #include "absl/types/span.h"
 #include "xla/backends/gpu/runtime/thunk.h"
 #include "xla/backends/gpu/runtime/thunk.pb.h"
-#include "xla/runtime/buffer_use.h"
 #include "xla/service/buffer_assignment.h"
 #include "xla/service/gpu/matmul_utils.h"
 
@@ -57,14 +55,6 @@ class GemmThunk : public Thunk {
     return workspace_;
   }
   bool deterministic() const { return deterministic_; }
-
-  BufferUses buffer_uses() const override {
-    return {
-        BufferUse::Read(lhs_buffer_),
-        BufferUse::Read(rhs_buffer_),
-        BufferUse::Write(output_buffer_),
-    };
-  }
 
   static absl::StatusOr<std::unique_ptr<GemmThunk>> FromProto(
       ThunkInfo thunk_info, const GemmThunkProto& proto,

@@ -247,7 +247,7 @@ absl::StatusOr<bool> UnifyAccumulatorWithInput(
 
 }  // namespace
 
-absl::StatusOr<bool> ScanLoopAccumulatorInputUnification::RunImpl(
+absl::StatusOr<bool> ScanLoopAccumulatorInputUnification::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   VLOG(2) << "HLO module before ScanLoopAccumulatorInputUnification:";

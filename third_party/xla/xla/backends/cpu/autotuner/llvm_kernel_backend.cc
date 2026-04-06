@@ -17,7 +17,6 @@ limitations under the License.
 
 #include <array>
 #include <memory>
-#include <utility>
 #include <vector>
 
 #include "absl/memory/memory.h"
@@ -30,9 +29,11 @@ limitations under the License.
 #include "xla/hlo/ir/hlo_opcode.h"
 #include "xla/service/compiler.h"
 #include "xla/service/cpu/backend_config.pb.h"
+#include "xla/status_macros.h"
 #include "xla/tsl/platform/errors.h"
 #include "xla/tsl/platform/statusor.h"
 #include "xla/util.h"
+#include "tsl/platform/casts.h"
 
 namespace xla::cpu {
 
@@ -70,9 +71,7 @@ LlvmKernelBackend::GetSupportedConfigs(const HloInstruction& instr) {
         config.set_disable_loop_unrolling(disable_loop_unrolling);
         config.set_slp_vectorizer_disabled(slp_vectorizer_disabled);
         config.set_optimize_for_size(optimize_for_size);
-        auto any = std::make_unique<xla::BackendConfig>();
-        any->PackFrom(config);
-        configs.push_back(std::move(any));
+        configs.push_back(std::make_unique<Config>(config));
       }
     }
   }
@@ -85,9 +84,7 @@ LlvmKernelBackend::GetDefaultConfig(const HloInstruction& instr) {
   config->set_disable_loop_unrolling(false);
   config->set_slp_vectorizer_disabled(false);
   config->set_optimize_for_size(false);
-  auto any = std::make_unique<xla::BackendConfig>();
-  any->PackFrom(*config);
-  return any;
+  return config;
 }
 
 absl::Status LlvmKernelBackend::ApplyConfig(HloInstruction& instr,
@@ -95,10 +92,11 @@ absl::Status LlvmKernelBackend::ApplyConfig(HloInstruction& instr,
   TF_ASSIGN_OR_RETURN(auto backend_config,
                       instr.backend_config<xla::cpu::BackendConfig>());
 
-  LlvmKernelBackend::Config llvm_kernel_config;
-  config.UnpackTo(&llvm_kernel_config);
+  const LlvmKernelBackend::Config* llvm_kernel_config =
+      tsl::down_cast<const LlvmKernelBackend::Config*>(&config);
+  TF_RET_CHECK(llvm_kernel_config != nullptr);
 
-  *backend_config.mutable_llvm_kernel_options() = llvm_kernel_config;
+  *backend_config.mutable_llvm_kernel_options() = *llvm_kernel_config;
 
   TF_RETURN_IF_ERROR(instr.set_backend_config(backend_config));
 

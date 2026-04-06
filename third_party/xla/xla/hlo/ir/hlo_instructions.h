@@ -18,6 +18,7 @@ limitations under the License.
 #ifndef XLA_HLO_IR_HLO_INSTRUCTIONS_H_
 #define XLA_HLO_IR_HLO_INSTRUCTIONS_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -34,13 +35,13 @@ limitations under the License.
 #include "absl/synchronization/mutex.h"
 #include "absl/types/span.h"
 #include "xla/comparison_util.h"
+#include "xla/hlo/ir/collective_device_list.h"
+#include "xla/hlo/ir/collective_op_group_mode.h"
 #include "xla/hlo/ir/hlo_clone_context.h"
 #include "xla/hlo/ir/hlo_computation.h"
 #include "xla/hlo/ir/hlo_domain_metadata.h"
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/ir/hlo_opcode.h"
-#include "xla/hlo/ir/hlo_print_options.h"
-#include "xla/hlo/ir/replica_group.h"
 #include "xla/layout.h"
 #include "xla/literal.h"
 #include "xla/literal_pool.h"
@@ -50,6 +51,7 @@ limitations under the License.
 #include "xla/shape_util.h"
 #include "xla/tsl/lib/gtl/iterator_range.h"
 #include "xla/tsl/platform/logging.h"  // IWYU pragma: keep
+#include "xla/tsl/platform/status.h"
 #include "xla/window_util.h"
 #include "xla/xla_data.pb.h"
 
@@ -752,7 +754,8 @@ class HloAllReduceInstructionBase : public HloCollectiveInstruction {
       absl::Span<HloInstruction* const> operands,
       HloComputation* reduce_computation,
       const CollectiveDeviceList& device_list, bool constrain_layout,
-      const std::optional<int64_t>& channel_id, bool use_global_device_ids);
+      const std::optional<int64_t>& channel_id, bool use_global_device_ids,
+      std::optional<CollectiveOpGroupMode> mode = std::nullopt);
 
   // Returns true if the ids in the ReplicaGroup config represent a global id of
   // (replica_id * partition_count + partition_id) instead of a replica id.
@@ -766,6 +769,21 @@ class HloAllReduceInstructionBase : public HloCollectiveInstruction {
   // where each pair is (replica_id, partition_id).
   bool use_global_device_ids() const { return use_global_device_ids_; }
   void set_use_global_device_ids(bool value) { use_global_device_ids_ = value; }
+
+  // The mode that determines how ids in the ReplicaGroup config are
+  // interpreted. The mode is determinable from the values of channel_id and
+  // use_global_device_ids.
+  // TODO(b/425435082): Remove the use_global_device_ids field and make the
+  // channel_id field used only for MPMD, as outside MPMD, these fields are
+  // redundant with the group mode.
+  // TODO(b/425435082): Add this field to all collective instructions.
+  CollectiveOpGroupMode collective_op_group_mode() const {
+    return collective_op_group_mode_;
+  }
+  void set_collective_op_group_mode(
+      CollectiveOpGroupMode collective_op_group_mode) {
+    collective_op_group_mode_ = collective_op_group_mode;
+  }
 
   static bool ClassOf(const HloInstruction* hlo);
 
@@ -781,6 +799,7 @@ class HloAllReduceInstructionBase : public HloCollectiveInstruction {
 
  private:
   bool use_global_device_ids_;
+  CollectiveOpGroupMode collective_op_group_mode_;
 };
 
 class HloAllReduceInstruction : public HloAllReduceInstructionBase {
@@ -810,7 +829,8 @@ class HloReduceScatterInstruction : public HloAllReduceInstructionBase {
       HloComputation* reduce_computation,
       const CollectiveDeviceList& device_list, bool constrain_layout,
       const std::optional<int64_t>& channel_id, bool use_global_device_ids,
-      int64_t scatter_dimension);
+      int64_t scatter_dimension,
+      std::optional<CollectiveOpGroupMode> mode = std::nullopt);
 
   ABSL_DEPRECATED("Use CollectiveDeviceList instead of list of ReplicaGroup.")
   explicit HloReduceScatterInstruction(
@@ -1321,7 +1341,6 @@ class HloConstantInstruction : public HloInstruction {
   }
   // Returns whether there is literal associated with this instruction.
   bool HasLiteral() const { return static_cast<bool>(literal_); }
-  void DropLiteral() { literal_ = nullptr; }
   // Returns a serialized representation of this instruction.
   HloInstructionProto ToProto() const override;
 
@@ -1430,10 +1449,12 @@ class HloCallableInstruction : public HloInstruction {
   HloInstruction* called_computation_root() const;
 
   // Recursively sets all nested called computation to have thread name as
-  // `execution_thread`. Embedded computation (as opposed to ControlFlow)
-  // computations thread name overwriting is skipped since callsite decides the
-  // thread name.
-  void RecursivelySetComputationsThreadName(absl::string_view execution_thread);
+  // `execution_thread`. if `skip_async_execution_thread_overwrite` is true,
+  // skip overwrite async instruction and its comptuations thread name
+  // overwriting.
+  void RecursivelySetComputationsThreadName(
+      absl::string_view execution_thread,
+      bool skip_async_execution_thread_overwrite);
 
   static bool ClassOf(const HloInstruction* hlo) {
     return hlo->opcode() == HloOpcode::kFusion ||
@@ -1825,7 +1846,7 @@ class HloInfeedInstruction : public HloInstruction {
   // as the shape of the infeed instruction which produces a tuple containing
   // the infeed data shape and a TOKEN.
   const Shape& infeed_shape() const {
-    DCHECK_OK(ShapeUtil::ValidateShapeWithOptionalLayout(shape()));
+    TF_DCHECK_OK(ShapeUtil::ValidateShapeWithOptionalLayout(shape()));
     return ShapeUtil::GetSubshape(shape(), {0});
   }
   // Returns a serialized representation of this instruction.
@@ -2237,7 +2258,7 @@ class HloCustomCallInstruction : public HloCallableInstruction {
 
   void SetPerInstructionStorage(
       std::unique_ptr<PerInstructionStorage> per_instruction_storage) {
-    absl::MutexLock lock(per_instruction_storage_mutex_);
+    absl::MutexLock lock(&per_instruction_storage_mutex_);
     if (per_instruction_storage_ != nullptr) {
       LOG(WARNING) << "Not Overwriting existing per-instruction storage.";
       return;
@@ -2582,12 +2603,17 @@ class HloIotaInstruction : public HloInstruction {
 
 class HloDotInstruction : public HloInstruction {
  public:
+  static const int kOperands = 2;
+
   // Creates a dot op with operands 'lhs' and 'rhs' with contracting and batch
-  // dimensions specified in 'dimension_numbers'.
-  explicit HloDotInstruction(const Shape& shape, HloInstruction* lhs,
-                             HloInstruction* rhs,
-                             const DotDimensionNumbers& dimension_numbers,
-                             const PrecisionConfig& precision_config);
+  // dimensions specified in 'dimension_numbers'. If 'sparsity' is set, then
+  // 'sparse_meta' must also be present (and have the same size).
+  explicit HloDotInstruction(
+      const Shape& shape, HloInstruction* lhs, HloInstruction* rhs,
+      const DotDimensionNumbers& dimension_numbers,
+      const PrecisionConfig& precision_config,
+      std::vector<SparsityDescriptor> sparsity = {},
+      absl::Span<HloInstruction* const> sparse_meta = {});
 
   // Returns data on the dimension numbers used for a dot operation.
   const DotDimensionNumbers& dot_dimension_numbers() const {
@@ -2608,6 +2634,13 @@ class HloDotInstruction : public HloInstruction {
   // strictly superior.
   const PrecisionConfig& precision_config() const { return precision_config_; }
   PrecisionConfig* mutable_precision_config() { return &precision_config_; }
+
+  // Sparsity descriptors are optional. If present, additional operands define
+  // how the data is read for the dot inputs.
+  int sparse_operands() const { return sparsity_.size(); }
+  absl::Span<const SparsityDescriptor> sparsity() const {
+    return absl::MakeSpan(sparsity_);
+  }
 
   // Returns a serialized representation of this instruction.
   HloInstructionProto ToProto() const override;
@@ -2634,6 +2667,11 @@ class HloDotInstruction : public HloInstruction {
   // Information used to communicate to the implementation about the algorithm
   // used to produce results. See the documentation on precision_config().
   PrecisionConfig precision_config_;
+
+  // Sparsity descriptors are set if some operands are sparse. In this case, the
+  // additional metadata operands contain the information that defines how
+  // the data is read.
+  std::vector<SparsityDescriptor> sparsity_;
 };
 
 class HloRaggedDotInstruction : public HloInstruction {
@@ -2699,69 +2737,6 @@ class HloRaggedDotInstruction : public HloInstruction {
 
   // Describes the dimension numbers used for a ragged dot.
   RaggedDotDimensionNumbers ragged_dot_dimension_numbers_;
-
-  // Information used to communicate to the implementation about the algorithm
-  // used to produce results. See the documentation on precision_config().
-  PrecisionConfig precision_config_;
-};
-
-class HloScaledDotInstruction : public HloInstruction {
- public:
-  static const int kOperands = 4;
-
-  // Creates a dot op with operands 'lhs' and 'rhs' with contracting and batch
-  // dimensions specified in 'dimension_numbers' and with 'lhs_scale' and
-  // 'rhs_scale' as the scale factors. Dimensions of the scale factors should
-  // have the same order as the dimensions of the dot operation.
-  explicit HloScaledDotInstruction(const Shape& shape, HloInstruction* lhs,
-                                   HloInstruction* rhs,
-                                   HloInstruction* lhs_scale,
-                                   HloInstruction* rhs_scale,
-                                   const DotDimensionNumbers& dimension_numbers,
-                                   const PrecisionConfig& precision_config);
-
-  // Returns data on the dimension numbers used for a dot operation.
-  const DotDimensionNumbers& dot_dimension_numbers() const {
-    return dot_dimension_numbers_;
-  }
-
-  // Sets dimension numbers used for a dot operation.
-  DotDimensionNumbers* mutable_dot_dimension_numbers() {
-    return &dot_dimension_numbers_;
-  }
-
-  // Returns the information used to tell the implementation information about
-  // what sort of precision is requested. The meaning of the field is backend
-  // specific. At the moment, it is only supported for kConvolution, kDot, and
-  // kRaggedDot. Transformations on one k(Ragged)Dot or kConvolution to another
-  // will preserve this information. Transformations to other HLOs will not
-  // preserve this information but it is presumed that the alternate lowering is
-  // strictly superior.
-  const PrecisionConfig& precision_config() const { return precision_config_; }
-  PrecisionConfig* mutable_precision_config() { return &precision_config_; }
-
-  // Returns a serialized representation of this instruction.
-  HloInstructionProto ToProto() const override;
-
-  static bool ClassOf(const HloInstruction* hlo) {
-    return hlo->opcode() == HloOpcode::kScaledDot;
-  }
-
- private:
-  void PrintExtraAttributesImpl(AttributePrinter& printer,
-                                const HloPrintOptions& options) const override;
-
-  bool IdenticalSlowPath(
-      const HloInstruction& other,
-      absl::FunctionRef<bool(const HloComputation*, const HloComputation*)>
-          eq_computations) const override;
-  // Implementation for non-common logic of CloneWithNewOperands.
-  std::unique_ptr<HloInstruction> CloneWithNewOperandsImpl(
-      const Shape& shape, absl::Span<HloInstruction* const> new_operands,
-      HloCloneContext* context) const override;
-
-  // Describes the dimension numbers used for a dot.
-  DotDimensionNumbers dot_dimension_numbers_;
 
   // Information used to communicate to the implementation about the algorithm
   // used to produce results. See the documentation on precision_config().
@@ -2928,8 +2903,6 @@ inline constexpr absl::string_view kPinCustomCallTarget = "Pin";
 inline constexpr absl::string_view kUnpinCustomCallTarget = "Unpin";
 inline constexpr absl::string_view kCreateBufferCustomCallTarget =
     "CreateBuffer";
-inline constexpr absl::string_view kCollectiveMetadataCustomCallTarget =
-    "CollectiveMetadata";
 
 }  // namespace xla
 

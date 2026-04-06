@@ -28,7 +28,6 @@ limitations under the License.
 #include "xla/hlo/testlib/hlo_hardware_independent_test_base.h"
 #include "xla/hlo/testlib/test.h"
 #include "xla/hlo/testlib/test_helpers.h"
-#include "xla/shape_tree.h"
 #include "xla/shape_util.h"
 #include "xla/tsl/lib/core/status_test_util.h"
 #include "xla/tsl/util/proto/proto_matchers.h"
@@ -60,45 +59,31 @@ std::vector<OpMetadata> ListMetadata() {
 
 class HloShardingTest : public HloHardwareIndependentTestBase {};
 
-// TODO(b/456418464): Parameterize `HloShardingTest` itself after supporting
-// NamedSharding in all methods.
-class HloShardingRepresentationTest
-    : public HloShardingTest,
-      public ::testing::WithParamInterface<bool> {};
-
-TEST_P(HloShardingRepresentationTest, Replicate) {
-  bool use_named_sharding = GetParam();
-  HloSharding sharding = HloSharding::Replicate({}, use_named_sharding);
-  EXPECT_EQ(sharding.UseNamedShardingLeaf(), use_named_sharding);
+TEST_F(HloShardingTest, Replicate) {
+  HloSharding sharding = HloSharding::Replicate();
   EXPECT_TRUE(sharding.IsReplicated());
   EXPECT_TRUE(sharding.IsTileMaximal());
   EXPECT_TRUE(sharding.UsesDevice(0));
   EXPECT_TRUE(sharding.UsesDevice(65535));
 
-  HloSharding other = HloSharding::Replicate({}, use_named_sharding);
+  HloSharding other = HloSharding::Replicate();
   EXPECT_EQ(other, sharding);
-  EXPECT_NE(HloSharding::Replicate(),
-            HloSharding::Replicate({}, /*use_named_sharding=*/true));
 
   EXPECT_IS_OK(sharding.Validate(ShapeUtil::MakeShape(U32, {4}),
                                  /*num_devices=*/2));
   EXPECT_FALSE(sharding.HasUniqueDevice());
 }
 
-TEST_P(HloShardingRepresentationTest, DevicePlacement) {
-  bool use_named_sharding = GetParam();
-  HloSharding sharding = HloSharding::AssignDevice(5, {}, use_named_sharding);
-  EXPECT_EQ(sharding.UseNamedShardingLeaf(), use_named_sharding);
+TEST_F(HloShardingTest, DevicePlacement) {
+  HloSharding sharding = HloSharding::AssignDevice(5);
   EXPECT_FALSE(sharding.IsReplicated());
   EXPECT_TRUE(sharding.IsTileMaximal());
   EXPECT_FALSE(sharding.UsesDevice(0));
   EXPECT_TRUE(sharding.UsesDevice(5));
   EXPECT_EQ(5, sharding.GetUniqueDevice());
 
-  HloSharding other = HloSharding::Replicate({}, use_named_sharding);
+  HloSharding other = HloSharding::Replicate();
   EXPECT_NE(other, sharding);
-  EXPECT_NE(HloSharding::AssignDevice(5),
-            HloSharding::AssignDevice(5, {}, /*use_named_sharding=*/true));
 
   EXPECT_IS_OK(sharding.Validate(ShapeUtil::MakeShape(U32, {4}),
                                  /*num_devices=*/6));
@@ -352,30 +337,20 @@ TEST_F(HloShardingTest, V1V2SubgroupEquivalence) {
 }
 
 // Tests that empty tuple is supported.
-TEST_P(HloShardingRepresentationTest, EmptySingleTuple) {
-  bool use_named_sharding = GetParam();
-  HloSharding sharding = HloSharding::SingleTuple(
-      ShapeUtil::MakeTupleShape({}),
-      HloSharding::AssignDevice(0, {}, use_named_sharding));
+TEST_F(HloShardingTest, EmptySingleTuple) {
+  HloSharding sharding = HloSharding::SingleTuple(ShapeUtil::MakeTupleShape({}),
+                                                  HloSharding::AssignDevice(0));
   EXPECT_TRUE(sharding.ExtractSingleSharding());
-  EXPECT_EQ(sharding.ExtractSingleSharding()->UseNamedShardingLeaf(),
-            use_named_sharding);
 }
 
 // Tests that empty tuple is not a shard group.
-TEST_P(HloShardingRepresentationTest, EmptySingleTupleIsNotShardGroup) {
-  bool use_named_sharding = GetParam();
-  HloSharding sharding = HloSharding::SingleTuple(
-      ShapeUtil::MakeTupleShape({}),
-      HloSharding::AssignDevice(0, {}, use_named_sharding));
+TEST_F(HloShardingTest, EmptySingleTupleIsNotShardGroup) {
+  HloSharding sharding = HloSharding::SingleTuple(ShapeUtil::MakeTupleShape({}),
+                                                  HloSharding::AssignDevice(0));
   EXPECT_FALSE(sharding.IsShardGroup());
   EXPECT_FALSE(sharding.IsShardAs());
   EXPECT_FALSE(sharding.IsShardLike());
 }
-
-INSTANTIATE_TEST_SUITE_P(HloShardingRepresentationTest,
-                         HloShardingRepresentationTest,
-                         ::testing::Values(false, true));
 
 TEST_F(HloShardingTest, NestedTuple) {
   // nested_tuple_shape = (f32[], (f32[3]), f32[4, 6])

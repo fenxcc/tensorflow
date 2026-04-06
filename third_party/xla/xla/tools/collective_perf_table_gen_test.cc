@@ -33,17 +33,21 @@ using ::testing::Property;
 
 class CollectivePerfTableGenTest : public HloTestBase {
   void SetUp() override {
-    if (!backend()
-             .default_stream_executor()
-             ->GetDeviceDescription()
-             .gpu_compute_capability()
-             .IsCuda()) {
+    if (!IsCuda()) {
       GTEST_SKIP() << "Not built with --config=cuda";
     }
     cfg_.dry_run = true;
   }
 
  protected:
+  bool IsCuda() {
+    return std::holds_alternative<stream_executor::CudaComputeCapability>(
+        backend()
+            .default_stream_executor()
+            ->GetDeviceDescription()
+            .gpu_compute_capability());
+  }
+
   CollectivePerfTableGen::Config cfg_;
 };
 

@@ -136,9 +136,8 @@ class TensorArray : public ResourceBase {
   // 'N' elements.  While the underlying storage is a std::vector and
   // can hold more than MAX_INT entries, in practice we do not expect
   // users to construct this many Tensors for storage in a TensorArray.
-  TensorArray(const std::string& key, const DataType& dtype,
-              const Tensor& handle, int32_t N,
-              const PartialTensorShape& element_shape,
+  TensorArray(const string& key, const DataType& dtype, const Tensor& handle,
+              int32_t N, const PartialTensorShape& element_shape,
               bool identical_element_shapes, bool dynamic_size,
               bool multiple_writes_aggregate, bool is_grad, int32_t marked_size,
               bool clear_after_read)
@@ -194,7 +193,7 @@ class TensorArray : public ResourceBase {
 
   template <typename Device, typename T>
   absl::Status WriteOrAggregateMany(OpKernelContext* ctx,
-                                    const std::vector<int32_t>& indices,
+                                    const std::vector<int32>& indices,
                                     std::vector<Tensor>* values) {
     mutex_lock l(mu_);
     int32_t i = 0;
@@ -229,8 +228,7 @@ class TensorArray : public ResourceBase {
   }
 
   template <typename Device, typename T>
-  absl::Status ReadMany(OpKernelContext* ctx,
-                        const std::vector<int32_t>& indices,
+  absl::Status ReadMany(OpKernelContext* ctx, const std::vector<int32>& indices,
                         std::vector<Tensor>* values) {
     mutex_lock l(mu_);
     values->clear();
@@ -262,10 +260,10 @@ class TensorArray : public ResourceBase {
     return absl::OkStatus();
   }
 
-  std::string DebugString() const override {
+  string DebugString() const override {
     mutex_lock l(mu_);
     CHECK(!closed_);
-    return absl::StrCat("TensorArray[", tensors_.size(), "]");
+    return strings::StrCat("TensorArray[", tensors_.size(), "]");
   }
 
   bool IsClosed() {
@@ -274,7 +272,7 @@ class TensorArray : public ResourceBase {
   }
 
   // Return the size of the TensorArray.
-  absl::Status Size(int32_t* size) {
+  absl::Status Size(int32* size) {
     mutex_lock l(mu_);
     TF_RETURN_IF_ERROR(LockedReturnIfClosed());
     *size = tensors_.size();
@@ -292,7 +290,7 @@ class TensorArray : public ResourceBase {
   }
 
   // Return the marked size of the TensorArray.
-  absl::Status MarkedSize(int32_t* size) {
+  absl::Status MarkedSize(int32* size) {
     mutex_lock l(mu_);
     TF_RETURN_IF_ERROR(LockedReturnIfClosed());
     *size = marked_size_;
@@ -300,7 +298,7 @@ class TensorArray : public ResourceBase {
   }
 
   // Return the size that should be used by pack or concat op.
-  absl::Status PackOrConcatSize(int32_t* size) {
+  absl::Status PackOrConcatSize(int32* size) {
     mutex_lock l(mu_);
     TF_RETURN_IF_ERROR(LockedReturnIfClosed());
     *size = is_grad_ ? marked_size_ : tensors_.size();
@@ -374,7 +372,7 @@ class TensorArray : public ResourceBase {
     return absl::OkStatus();
   }
 
-  const std::string key_;
+  const string key_;
 
   const DataType dtype_;
   Tensor handle_;
@@ -403,7 +401,7 @@ class TensorArray : public ResourceBase {
 
   // The size of the TensorArray after a (legacy) unpack or split is performed.
   // -1 if there has been no unpack or split performed on the TensorArray.
-  int32_t marked_size_;
+  int32 marked_size_;
 
   // The shape of each element in the TensorArray, may be partially known or not
   // known at all.

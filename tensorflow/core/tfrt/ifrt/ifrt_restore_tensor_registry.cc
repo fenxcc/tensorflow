@@ -25,7 +25,7 @@ limitations under the License.
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 #include "tensorflow/compiler/mlir/tfrt/transforms/ifrt/ifrt_types.h"
-#include "xla/tsl/concurrency/future.h"
+#include "xla/python/ifrt/future.h"
 #include "tensorflow/core/framework/tensor.h"
 
 namespace tensorflow {
@@ -33,34 +33,22 @@ namespace ifrt_serving {
 
 absl::Status IfrtRestoreTensorRegistry::TryRegister(
     absl::string_view name, RestoredTensorInfo restored_tensor_info) {
-  absl::MutexLock lock(mutex_);
+  absl::MutexLock lock(&mutex_);
   auto& info = restored_tensors_[name];
   if (info.tensor_future.IsValid()) {
-    if (info.dtype_and_shape != restored_tensor_info.dtype_and_shape) {
-      return absl::InvalidArgumentError(absl::StrCat(
-          "Variable '", name, "' already registered with dtype ",
-          info.dtype_and_shape.dtype, " and shape ",
-          info.dtype_and_shape.shape.DebugString(),
-          " but trying to register with dtype ",
-          restored_tensor_info.dtype_and_shape.dtype, " and shape ",
-          restored_tensor_info.dtype_and_shape.shape.DebugString()));
-    }
-    LOG(WARNING)
-        << "Variable named '" << name
-        << "' has been already registered. Ignore request of a new tensor with "
-           "same name, dtype and shape.";
-    return absl::OkStatus();
+    return absl::AlreadyExistsError(
+        absl::StrCat("Variable '", name, "' already registered."));
   }
   info = std::move(restored_tensor_info);
   return absl::OkStatus();
 }
 
-tsl::Future<tensorflow::Tensor> IfrtRestoreTensorRegistry::GetRestoredTensor(
-    absl::string_view name) const {
-  absl::MutexLock lock(mutex_);
+xla::ifrt::Future<tensorflow::Tensor>
+IfrtRestoreTensorRegistry::GetRestoredTensor(absl::string_view name) const {
+  absl::MutexLock lock(&mutex_);
   auto it = restored_tensors_.find(name);
   if (it == restored_tensors_.end()) {
-    return tsl::Future<tensorflow::Tensor>(
+    return xla::ifrt::Future<tensorflow::Tensor>(
         absl::NotFoundError(absl::StrCat("Variable '", name, "' not found.")));
   }
 
@@ -68,7 +56,7 @@ tsl::Future<tensorflow::Tensor> IfrtRestoreTensorRegistry::GetRestoredTensor(
 }
 
 absl::Status IfrtRestoreTensorRegistry::SetUsedByHost(absl::string_view name) {
-  absl::MutexLock lock(mutex_);
+  absl::MutexLock lock(&mutex_);
   auto it = restored_tensors_.find(name);
   if (it == restored_tensors_.end()) {
     return absl::NotFoundError(
@@ -80,8 +68,8 @@ absl::Status IfrtRestoreTensorRegistry::SetUsedByHost(absl::string_view name) {
 }
 
 void IfrtRestoreTensorRegistry::Freeze() {
-  absl::MutexLock lock(mutex_);
-  tsl::Future<tensorflow::Tensor> release_tensor_future(
+  absl::MutexLock lock(&mutex_);
+  xla::ifrt::Future<tensorflow::Tensor> release_tensor_future(
       absl::UnavailableError("Tensor is already release."));
   for (auto& [name, info] : restored_tensors_) {
     if (!info.used_by_host) {
@@ -94,7 +82,7 @@ void IfrtRestoreTensorRegistry::Freeze() {
 
 absl::StatusOr<DtypeAndShape> IfrtRestoreTensorRegistry::GetDtypeAndShape(
     absl::string_view name) const {
-  absl::MutexLock lock(mutex_);
+  absl::MutexLock lock(&mutex_);
   auto it = restored_tensors_.find(name);
   if (it == restored_tensors_.end()) {
     return absl::NotFoundError(

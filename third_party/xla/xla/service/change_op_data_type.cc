@@ -18,11 +18,9 @@ limitations under the License.
 #include <optional>
 
 #include "xla/service/hlo_creation_utils.h"
-
-#ifdef XLA_ONEDNN
+#if defined(INTEL_MKL)
 #include "xla/service/cpu/onednn_contraction_rewriter.h"
-#include "xla/xla.pb.h"
-#endif  // XLA_ONEDNN
+#endif  // INTEL_MKL
 
 namespace xla {
 namespace {
@@ -40,7 +38,7 @@ std::optional<PrimitiveType> GetUniformOperandType(
 }
 }  // namespace
 
-absl::StatusOr<bool> ChangeOpDataType::RunImpl(
+absl::StatusOr<bool> ChangeOpDataType::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   bool changed = false;
@@ -64,17 +62,11 @@ absl::StatusOr<bool> ChangeOpDataType::RunImpl(
       if (it == to_type_map_.end()) {
         continue;
       }
-
-#ifdef XLA_ONEDNN
-      // TODO(penporn): Move this logic outside of this pass.
-      const DebugOptions& debug_options = module->config().debug_options();
-      if ((debug_options.xla_cpu_use_onednn() ||
-           debug_options.xla_cpu_experimental_onednn_custom_call()) &&
-          cpu::OneDnnContractionRewriter::ShouldRewriteInstr(instr, true)) {
+#if defined(INTEL_MKL)
+      if (cpu::OneDnnContractionRewriter::ShouldRewriteInstr(instr, true)) {
         continue;
       }
-#endif  // XLA_ONEDNN
-
+#endif  // INTEL_MKL
       const PrimitiveType to_type = it->second;
       absl::InlinedVector<HloInstruction*, 8> new_operands;
       for (HloInstruction* operand : instr->mutable_operands()) {

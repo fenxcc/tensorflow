@@ -52,7 +52,9 @@ class MultiProcessClusterTest(data_service_test_base.TestBase,
         num_workers * list(range(num_elements)),
         assert_items_equal=True)
 
-  @combinations.generate(test_base.default_test_combinations())
+  @combinations.generate(
+      combinations.times(test_base.default_test_combinations())
+  )
   def testDistributeNonblockingWithStuckWorkers(self):
     num_workers = 6
     # Avoids using local workers because it will stall the teardown

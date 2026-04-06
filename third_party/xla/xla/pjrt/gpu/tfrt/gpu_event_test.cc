@@ -18,11 +18,13 @@ limitations under the License.
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include "absl/status/status.h"
-#include "absl/status/status_matchers.h"
 #include "xla/tsl/concurrency/async_value_ref.h"
+#include "xla/tsl/platform/status_matchers.h"
 
 namespace xla {
 namespace {
+
+using ::tsl::testing::StatusIs;
 
 TEST(GpuEventTest, AfterAllEmpty) { EXPECT_TRUE(AfterAll({}).IsAvailable()); }
 
@@ -60,7 +62,7 @@ TEST(GpuEventTest, AfterAllError) {
   event3.SetStateConcrete();
   EXPECT_TRUE(after_all.IsAvailable());
   EXPECT_THAT(after_all.GetError(),
-              absl_testing::StatusIs(absl::StatusCode::kInternal, "error"));
+              StatusIs(absl::StatusCode::kInternal, "error"));
 }
 
 TEST(TfrtEventSetTest, AfterAllEmpty) {

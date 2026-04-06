@@ -49,17 +49,6 @@ std::string OpMetadataToString(const OpMetadata& metadata, bool only_op_name) {
   if (metadata.source_line() != 0) {
     result.push_back(absl::StrCat("source_line=", metadata.source_line()));
   }
-  if (metadata.source_end_line() != 0) {
-    result.push_back(
-        absl::StrCat("source_end_line=", metadata.source_end_line()));
-  }
-  if (metadata.source_column() != 0) {
-    result.push_back(absl::StrCat("source_column=", metadata.source_column()));
-  }
-  if (metadata.source_end_column() != 0) {
-    result.push_back(
-        absl::StrCat("source_end_column=", metadata.source_end_column()));
-  }
   if (!metadata.profile_type().empty()) {
     result.push_back(absl::StrCat(
         "profile_type={", absl::StrJoin(metadata.profile_type(), ","), "}"));
@@ -72,10 +61,6 @@ std::string OpMetadataToString(const OpMetadata& metadata, bool only_op_name) {
   if (!metadata.scheduling_name().empty()) {
     result.push_back(
         absl::StrCat("scheduling_name=\"", metadata.scheduling_name(), "\""));
-  }
-  if (metadata.stack_frame_id() != 0) {
-    result.push_back(
-        absl::StrCat("stack_frame_id=", metadata.stack_frame_id()));
   }
   return absl::StrJoin(result, " ");
 }

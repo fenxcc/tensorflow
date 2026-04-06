@@ -18,10 +18,8 @@ limitations under the License.
 
 #include <cstddef>
 #include <cstdint>
-#include <new>
 
 // TODO(cwhipkey): remove this when callers use annotations directly.
-#include "absl/base/macros.h"
 #include "xla/tsl/platform/dynamic_annotations.h"
 #include "xla/tsl/platform/types.h"
 #include "tsl/platform/platform.h"
@@ -31,23 +29,12 @@ namespace port {
 
 // Aligned allocation/deallocation. `minimum_alignment` must be a power of 2
 // and a multiple of sizeof(void*).
-void* AlignedMalloc(size_t size, std::align_val_t minimum_alignment);
-ABSL_DEPRECATE_AND_INLINE()
-inline void* AlignedMalloc(size_t size, int minimum_alignment) {
-  return AlignedMalloc(size, static_cast<std::align_val_t>(minimum_alignment));
-}
+void* AlignedMalloc(size_t size, int minimum_alignment);
 void AlignedFree(void* aligned_memory);
-void AlignedSizedFree(void* aligned_memory, size_t size,
-                      std::align_val_t minimum_alignment);
-ABSL_DEPRECATE_AND_INLINE()
-inline void AlignedSizedFree(void* aligned_memory, size_t alignment,
-                             size_t size) {
-  AlignedSizedFree(aligned_memory, size,
-                   static_cast<std::align_val_t>(alignment));
-}
+void AlignedSizedFree(void* aligned_memory, size_t alignment, size_t size);
 
 // An allocator that allocates memory with the given minimum alignment.
-template <class T, std::align_val_t minimum_alignment>
+template <class T, size_t minimum_alignment>
 struct AlignedAllocator {
   using value_type = T;
 
@@ -57,7 +44,7 @@ struct AlignedAllocator {
   }
 
   void deallocate(value_type* p, size_t n) {
-    return AlignedSizedFree(p, n, minimum_alignment);
+    return AlignedSizedFree(p, minimum_alignment, n);
   }
 };
 

@@ -22,6 +22,7 @@ limitations under the License.
 #include <optional>
 #include <string>
 #include <tuple>
+#include <type_traits>
 #include <vector>
 
 #include <gmock/gmock.h>
@@ -29,19 +30,18 @@ limitations under the License.
 #include "absl/algorithm/container.h"
 #include "absl/base/log_severity.h"
 #include "absl/log/log.h"
+#include "absl/log/log_sink.h"
 #include "absl/log/scoped_mock_log.h"
 #include "absl/status/status.h"
-#include "absl/status/status_matchers.h"
 #include "absl/strings/string_view.h"
-#include "google/protobuf/text_format.h"
 #include "xla/hlo/analysis/hlo_ordering.h"
+#include "xla/hlo/ir/collective_device_list.h"
 #include "xla/hlo/ir/hlo_computation.h"
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/ir/hlo_instructions.h"
 #include "xla/hlo/ir/hlo_module.h"
 #include "xla/hlo/ir/hlo_opcode.h"
 #include "xla/hlo/ir/hlo_schedule.h"
-#include "xla/hlo/ir/replica_group.h"
 #include "xla/hlo/testlib/filecheck.h"
 #include "xla/hlo/testlib/verified_hlo_module.h"
 #include "xla/hlo/utils/hlo_query.h"
@@ -56,6 +56,7 @@ limitations under the License.
 #include "xla/tests/test_utils.h"
 #include "xla/tsl/lib/core/status_test_util.h"
 #include "xla/tsl/platform/logging.h"
+#include "xla/tsl/platform/status.h"
 #include "xla/tsl/platform/statusor.h"
 #include "tsl/profiler/protobuf/profiled_instructions.pb.h"
 
@@ -65,6 +66,7 @@ namespace gpu {
 using ::testing::_;
 using ::testing::ElementsAre;
 using ::testing::EndsWith;
+using ::tsl::testing::StatusIs;
 
 class GpuHloScheduleTest : public HloTestBase {
  protected:
@@ -81,12 +83,11 @@ class GpuHloScheduleTest : public HloTestBase {
         gpu_compiler->GetAliasInfo(gpu_device_info);
     int64_t pointer_size = gpu_compiler->GetPointerSize();
     return xla::gpu::ScheduleGpuModule(module, pointer_size, gpu_device_info,
-                                       gpu_compiler->mlir_context(),
                                        alias_info.get());
   }
 
   SequentialHloOrdering BuildHloOrdering(HloModule* module) {
-    CHECK_OK(ScheduleGpuModule(module).status());
+    TF_CHECK_OK(ScheduleGpuModule(module).status());
     return SequentialHloOrdering{module->schedule()};
   }
 
@@ -223,7 +224,7 @@ TEST_P(GpuHloScheduleParameterizedTest, AsyncCustomCall) {
   static_cast<HloCustomCallInstruction*>(nonblocking_call)
       ->set_custom_call_schedule(SCHEDULE_EARLIEST);
   // In addition, add control_dependency: add1->nonblocking_call.
-  CHECK_OK(add1->AddControlDependencyTo(nonblocking_call));
+  TF_CHECK_OK(add1->AddControlDependencyTo(nonblocking_call));
   // Blocking call, which only add4 depends on.
   HloInstruction* blocking_call =
       builder.AddInstruction(HloInstruction::CreateCustomCall(
@@ -294,7 +295,7 @@ TEST_P(GpuHloScheduleParameterizedTest, AsyncCollectivePermute) {
           collective_permute_start_shape, add0,
           /*source_target_pairs=*/{{0, 1}}, /*channel_id=*/std::nullopt));
   // In addition, add control_dependency: add1->nonblocking_call.
-  CHECK_OK(add1->AddControlDependencyTo(collective_permute_start));
+  TF_CHECK_OK(add1->AddControlDependencyTo(collective_permute_start));
   // Blocking call, which only add4 depends on.
   HloInstruction* collective_permute_done = builder.AddInstruction(
       HloInstruction::CreateUnary(f32_2x2_, HloOpcode::kCollectivePermuteDone,
@@ -619,7 +620,7 @@ TEST_P(GpuHloScheduleParameterizedTest,
 
   // `dot1` and `ar-start1` are missing from the profile.;
   EXPECT_THAT(ScheduleGpuModule(module.get()),
-              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
+              StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST_P(
@@ -1387,7 +1388,7 @@ ENTRY e {
   ROOT t = (f32[1024,1024]{1,0}, f32[1024,1024]{1,0}) tuple(wrapped_exponential, wrapped_negate)
 })")
                     .value();
-  CHECK_OK(ScheduleGpuModule(module.get()).status());
+  TF_CHECK_OK(ScheduleGpuModule(module.get()).status());
   EXPECT_TRUE(*RunFileCheck(module->ToString(), R"(
 // CHECK: ENTRY
 // CHECK: wrapped_negate = f32[1024,1024]{1,0}
@@ -1511,9 +1512,9 @@ TEST_P(GpuHloScheduleParameterizedTest, AsyncAllReduce) {
           /*device_list=*/
           CollectiveDeviceList(IotaReplicaGroupList(8, 1024)),
           /*constrain_layout=*/false,
-          /*channel_id=*/std::nullopt, /*use_global_device_ids=*/true));
+          /*channel_id=*/1, /*use_global_device_ids=*/true));
   // In addition, add control_dependency: add1->nonblocking_call.
-  CHECK_OK(add1->AddControlDependencyTo(all_reduce_start));
+  TF_CHECK_OK(add1->AddControlDependencyTo(all_reduce_start));
   // Blocking call, which only add4 depends on.
   HloInstruction* all_reduce_done =
       builder.AddInstruction(HloInstruction::CreateUnary(
@@ -1724,7 +1725,7 @@ TEST_P(GpuHloScheduleParameterizedTest, CopyStartDoneScheduled) {
   TF_ASSERT_OK_AND_ASSIGN(
       auto module, ParseAndReturnVerifiedModule(kHloCopyStartDone,
                                                 GetModuleConfig(test_config)));
-  CHECK_OK(ScheduleGpuModule(module.get()).status());
+  TF_CHECK_OK(ScheduleGpuModule(module.get()).status());
   EXPECT_TRUE(*RunFileCheck(module->ToString(), R"(
 // CHECK: ENTRY
 // CHECK: copy-start.3 = (f32[512,1024]{1,0}, f32[512,1024]{1,0:S(5)}, u32[]) copy-start
@@ -1808,10 +1809,15 @@ TEST_F(GpuHloScheduleTest, LogAnErrorWhenArgumentSizeExceedsMemoryLimit) {
       auto module, ParseAndReturnVerifiedModule(kHloText, module_config));
 
   absl::ScopedMockLog mock_log(absl::MockLogDefault::kIgnoreUnexpected);
-  EXPECT_CALL(mock_log,
-              Log(absl::LogSeverity::kError, _,
-                  EndsWith("This indicates an error in the calculation!")))
-      .Times(1);
+  // absl::ScopedMockLog only works if we're actually using ABSL logging, and
+  // TSL supports a homegrown logging implementation, so we should only check
+  // the log is emitted when ABSL logging is used.
+  if constexpr (std::is_same_v<absl::LogSink, tsl::TFLogSink>) {
+    EXPECT_CALL(mock_log,
+                Log(absl::LogSeverity::kError, _,
+                    EndsWith("This indicates an error in the calculation!")))
+        .Times(1);
+  }
   mock_log.StartCapturingLogs();
   TF_ASSERT_OK_AND_ASSIGN(auto metadata, ScheduleGpuModule(module.get()));
   EXPECT_EQ(metadata.scheduler_mem_limit, 0);

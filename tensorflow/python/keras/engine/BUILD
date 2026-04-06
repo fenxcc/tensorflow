@@ -96,7 +96,7 @@ py_library(
         "//tensorflow/python/util:tf_decorator_py",
         "//tensorflow/python/util:tf_export",
         "//tensorflow/tools/docs:doc_controls",
-        "@pypi//h5py",
+        "@pypi_h5py//:pkg",
     ],
 )
 

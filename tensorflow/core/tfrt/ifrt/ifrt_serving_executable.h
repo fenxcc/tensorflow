@@ -37,15 +37,14 @@ limitations under the License.
 #include "tensorflow/compiler/mlir/tfrt/transforms/ifrt/ifrt_types.h"
 #include "tensorflow/compiler/mlir/tfrt/transforms/ifrt/tf2hlo.h"
 #include "tensorflow/compiler/tf2xla/xla_helpers.h"
-#include "xla/pjrt/pjrt_executable.h"
 #include "xla/python/ifrt/array.h"
 #include "xla/python/ifrt/client.h"
 #include "xla/python/ifrt/device.h"
 #include "xla/python/ifrt/device_list.h"
 #include "xla/python/ifrt/executable.h"
+#include "xla/python/ifrt/future.h"
 #include "xla/python/ifrt/shape.h"
 #include "xla/python/ifrt/sharding.h"
-#include "xla/tsl/concurrency/future.h"
 #include "xla/tsl/concurrency/ref_count.h"
 #include "xla/tsl/platform/threadpool.h"
 #include "xla/xla_data.pb.h"
@@ -57,7 +56,6 @@ limitations under the License.
 #include "tensorflow/core/tfrt/ifrt/ifrt_persistent_compilation_cache.h"
 #include "tensorflow/core/tfrt/ifrt/ifrt_restore_tensor_registry.h"
 #include "tensorflow/core/tfrt/ifrt/ifrt_serving_core_selector.h"
-#include "tensorflow/core/tfrt/ifrt/sharding_utils.h"
 #include "tensorflow/core/tfrt/ifrt/tf_host_callback.h"
 #include "tfrt/host_context/concurrent_work_queue.h"  // from @tf_runtime
 
@@ -78,9 +76,7 @@ class IfrtServingExecutable {
       tensorflow::DeviceMgr* device_mgr,
       tensorflow::XlaHelpers::ShapeRepresentationFn shape_representation_fn,
       IfrtServingCoreSelector* ifrt_serving_core_selector,
-      std::variant<tsl::protobuf::Message*,
-                   xla::CompileOptions::EnvironmentOptionOverrides>
-          compilation_env_or_overrides,
+      tsl::protobuf::Message* compilation_environment_proto,
       TfToHloCompiler* tf_to_hlo_compiler,
       IfrtPersistentCompilationCache* persistent_compilation_cache);
 
@@ -104,7 +100,7 @@ class IfrtServingExecutable {
   void Freeze();
 
   int num_executables() const {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
     return executable_bundles_.size();
   }
 
@@ -156,9 +152,7 @@ class IfrtServingExecutable {
       IfrtServingCoreSelector* ifrt_serving_core_selector,
       tensorflow::tpu::TPUCompileMetadataProto original_compile_metadata,
       xla::ifrt::DeviceListRef assigned_device_list,
-      std::variant<tsl::protobuf::Message*,
-                   xla::CompileOptions::EnvironmentOptionOverrides>
-          compilation_env_or_overrides,
+      tsl::protobuf::Message* compilation_environment_proto,
       TfToHloCompiler* tf_to_hlo_compiler,
       IfrtPersistentCompilationCache* persistent_compilation_cache)
       : program_id_(program_id),
@@ -175,7 +169,7 @@ class IfrtServingExecutable {
         device_mgr_(device_mgr),
         shape_representation_fn_(std::move(shape_representation_fn)),
         ifrt_serving_core_selector_(std::move(ifrt_serving_core_selector)),
-        compilation_env_or_overrides_(compilation_env_or_overrides),
+        compilation_environment_proto_(compilation_environment_proto),
         tf_to_hlo_compiler_(tf_to_hlo_compiler),
         persistent_compilation_cache_(persistent_compilation_cache) {}
 
@@ -202,12 +196,11 @@ class IfrtServingExecutable {
   tensorflow::XlaHelpers::ShapeRepresentationFn shape_representation_fn_;
   IfrtServingCoreSelector* ifrt_serving_core_selector_;
 
-  std::variant<tsl::protobuf::Message*,
-               xla::CompileOptions::EnvironmentOptionOverrides>
-      compilation_env_or_overrides_;  // proto is NOT OWNED. can be nullptr.
+  tsl::protobuf::Message*
+      compilation_environment_proto_;  // NOT OWNED. can be nullptr.
 
   mutable absl::Mutex mutex_;
-  absl::flat_hash_map<Key, tsl::Future<SharedCachedExecutableBundle>>
+  absl::flat_hash_map<Key, xla::ifrt::Future<SharedCachedExecutableBundle>>
       executable_bundles_ ABSL_GUARDED_BY(mutex_);
 
   bool is_frozen_ ABSL_GUARDED_BY(mutex_) = false;
@@ -221,8 +214,6 @@ class IfrtServingExecutable {
   // disabled at ifrt serving level.
   IfrtPersistentCompilationCache* persistent_compilation_cache_;
 
-  H2DTransferExecutorFactory* h2d_transfer_executor_factory_ = nullptr;
-
   // Asynchronously load the restored variable tensors to Ifrt array.
   absl::Status AsyncLoadIfrtArray(
       absl::Span<const tensorflow::Tensor> inputs,
@@ -230,7 +221,12 @@ class IfrtServingExecutable {
       const CachedExecutableBundle& executable_bundle,
       const xla::ifrt::DeviceListRef& devices);
 
-  tsl::Future<SharedCachedExecutableBundle> LookUpOrCreateExecutable(
+  absl::StatusOr<xla::ifrt::ArrayRef> ConvertTensorToArray(
+      const tensorflow::Tensor& tensor,
+      const xla::ifrt::DeviceListRef& device_list,
+      const xla::OpSharding& sharding);
+
+  xla::ifrt::Future<SharedCachedExecutableBundle> LookUpOrCreateExecutable(
       const tensorflow::tpu::TPUCompileMetadataProto& compile_metadata,
       absl::Span<const DtypeAndShape> dtypes_and_shapes,
       absl::Span<const int> variable_arg_indices);

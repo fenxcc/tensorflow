@@ -19,7 +19,6 @@ limitations under the License.
 #include <utility>
 #include <vector>
 
-#include "xla/tests/xla_test_backend_predicates.h"
 #include <gtest/gtest.h>
 #include "absl/types/span.h"
 #include "xla/array3d.h"
@@ -59,7 +58,7 @@ class CopyOpTest : public HloPjRtTestBase {
     auto module = CreateNewVerifiedModule();
     module->AddEntryComputation(std::move(computation));
 
-    TF_ASSERT_OK_AND_ASSIGN(Literal result, Execute(std::move(module), {}));
+    Literal result = ExecuteAndTransfer(std::move(module), {});
     EXPECT_TRUE(LiteralTestUtil::Equal(literal, result));
   }
 
@@ -77,7 +76,7 @@ class CopyOpTest : public HloPjRtTestBase {
     module->AddEntryComputation(std::move(computation));
 
     std::vector<Literal*> args = {&dynamic_literal};
-    TF_ASSERT_OK_AND_ASSIGN(Literal result, Execute(std::move(module), args));
+    Literal result = ExecuteAndTransfer(std::move(module), args);
     Literal dynamic_result = result.ToBoundedDynamic(bounded_shape);
     EXPECT_TRUE(LiteralTestUtil::Equal(dynamic_literal, dynamic_result));
   }
@@ -104,10 +103,6 @@ TEST_F(CopyOpTest, CopyDynamicR1S1310720U32Dynamic0) {
   if (test_runner().HasProperty(HloRunnerPropertyTag::kCpu)) {
     GTEST_SKIP();
   }
-  if (test::DeviceTypeIs(test::kGpu) && !test::UsingStreamExecutorGpuClient()) {
-    // TODO: b/443805514 - Enable this test for the TFRT GPU client.
-    GTEST_SKIP() << "Does not work with the TFRT GPU client.";
-  }
   Shape bounded_shape =
       ShapeUtil::MakeShape(PrimitiveType::F32, {1310720}, {true});
   TestDynamicCopyOp(LiteralUtil::CreateRandomLiteral<PrimitiveType::F32>(
@@ -120,10 +115,6 @@ TEST_F(CopyOpTest, CopyDynamicR1S1310720U32Dynamic106632) {
   // TODO(vsytch): CPU emitter doesn't handle dynamic shapes.
   if (test_runner().HasProperty(HloRunnerPropertyTag::kCpu)) {
     GTEST_SKIP();
-  }
-  if (test::DeviceTypeIs(test::kGpu) && !test::UsingStreamExecutorGpuClient()) {
-    // TODO: b/443805514 - Enable this test for the TFRT GPU client.
-    GTEST_SKIP() << "Does not work with the TFRT GPU client.";
   }
   Shape bounded_shape =
       ShapeUtil::MakeShape(PrimitiveType::F32, {1310720}, {true});
@@ -139,10 +130,6 @@ TEST_F(CopyOpTest, CopyDynamicR1S1310720U32Dynamic1310720) {
   if (test_runner().HasProperty(HloRunnerPropertyTag::kCpu)) {
     GTEST_SKIP();
   }
-  if (test::DeviceTypeIs(test::kGpu) && !test::UsingStreamExecutorGpuClient()) {
-    // TODO: b/443805514 - Enable this test for the TFRT GPU client.
-    GTEST_SKIP() << "Does not work with the TFRT GPU client.";
-  }
   Shape bounded_shape =
       ShapeUtil::MakeShape(PrimitiveType::F32, {1310720}, {true});
   TestDynamicCopyOp(
@@ -156,10 +143,6 @@ TEST_F(CopyOpTest, CopyDynamicR1S512U32Dynamic64) {
   // TODO(vsytch): CPU emitter doesn't handle dynamic shapes.
   if (test_runner().HasProperty(HloRunnerPropertyTag::kCpu)) {
     GTEST_SKIP();
-  }
-  if (test::DeviceTypeIs(test::kGpu) && !test::UsingStreamExecutorGpuClient()) {
-    // TODO: b/443805514 - Enable this test for the TFRT GPU client.
-    GTEST_SKIP() << "Does not work with the TFRT GPU client.";
   }
   Shape bounded_shape = ShapeUtil::MakeShape(PrimitiveType::F32, {512}, {true});
   TestDynamicCopyOp(LiteralUtil::CreateRandomLiteral<PrimitiveType::F32>(
@@ -200,8 +183,7 @@ TEST_F(CopyOpTest, CopyParameterScalar) {
   auto module = CreateNewVerifiedModule();
   module->AddEntryComputation(std::move(computation));
 
-  TF_ASSERT_OK_AND_ASSIGN(Literal result,
-                          Execute(std::move(module), {&literal}));
+  Literal result = ExecuteAndTransfer(std::move(module), {&literal});
   LiteralTestUtil::ExpectR0Near<float>(42.0f, result, ErrorSpec{0.0001});
 }
 
@@ -221,7 +203,7 @@ TEST_F(CopyOpTest, CopyConstantR2Twice) {
 
   auto module = CreateNewVerifiedModule();
   module->AddEntryComputation(std::move(computation));
-  TF_ASSERT_OK_AND_ASSIGN(Literal result, Execute(std::move(module), {}));
+  Literal result = ExecuteAndTransfer(std::move(module), {});
   LiteralTestUtil::ExpectR2Near<float>({{1.0, 2.0}, {3.0, 4.0}}, result,
                                        ErrorSpec{0.0001});
 }
@@ -247,7 +229,7 @@ TEST_F(CopyOpTest, CopyConstantR2DifferentLayouts) {
 
   auto module = CreateNewVerifiedModule();
   module->AddEntryComputation(std::move(computation));
-  TF_ASSERT_OK_AND_ASSIGN(Literal result, Execute(std::move(module), {}));
+  Literal result = ExecuteAndTransfer(std::move(module), {});
 
   // The result of the computation has the default layout, which is the inverse
   // of the layout of the source literal.
@@ -280,7 +262,7 @@ void CopyOpTest::TestCopyConstantLayout021(size_t n1, size_t n2, size_t n3) {
   auto module = CreateNewVerifiedModule();
   module->AddEntryComputation(std::move(computation));
   ForceResultLayout(module.get(), LayoutUtil::MakeLayout({1, 2, 0}));
-  TF_ASSERT_OK_AND_ASSIGN(Literal result, Execute(std::move(module), {}));
+  Literal result = ExecuteAndTransfer(std::move(module), {});
 
   LiteralTestUtil::ExpectR3EqualArray3D(a, result);
 }
@@ -314,7 +296,7 @@ void CopyOpTest::TestCopyConstantLayoutR4(
   auto module = CreateNewVerifiedModule();
   module->AddEntryComputation(std::move(computation));
   ForceResultLayout(module.get(), LayoutUtil::MakeLayout(permutation));
-  TF_ASSERT_OK_AND_ASSIGN(Literal result, Execute(std::move(module), {}));
+  Literal result = ExecuteAndTransfer(std::move(module), {});
 
   LiteralTestUtil::ExpectR4EqualArray4D(a, result);
 }

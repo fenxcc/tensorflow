@@ -36,8 +36,8 @@ namespace tensorflow {
 
 namespace {
 
-std::string AttrError(absl::string_view orig, const std::string& op_name) {
-  return absl::StrCat(" from Attr(\"", orig, "\") for Op ", op_name);
+string AttrError(absl::string_view orig, const string& op_name) {
+  return strings::StrCat(" from Attr(\"", orig, "\") for Op ", op_name);
 }
 
 bool ConsumeAttrName(absl::string_view* sp, absl::string_view* out) {
@@ -62,7 +62,7 @@ bool ConsumeListPrefix(absl::string_view* sp) {
 
 bool ConsumeQuotedString(char quote_ch, absl::string_view* sp,
                          absl::string_view* out) {
-  const std::string quote_str(1, quote_ch);
+  const string quote_str(1, quote_ch);
   return Scanner(*sp)
       .OneLiteral(quote_str.c_str())
       .RestartCapture()
@@ -150,7 +150,7 @@ bool ProcessCompoundType(const absl::string_view type_string,
 }
 
 void FinalizeAttr(absl::string_view spec, bool allow_attr_type_any,
-                  OpDef* op_def, std::vector<std::string>* errors) {
+                  OpDef* op_def, std::vector<string>* errors) {
   OpDef::AttrDef* attr = op_def->add_attr();
   absl::string_view orig(spec);
 
@@ -161,7 +161,7 @@ void FinalizeAttr(absl::string_view spec, bool allow_attr_type_any,
 
   // Read "<type>" or "list(<type>)".
   bool is_list = ConsumeListPrefix(&spec);
-  std::string type;
+  string type;
   absl::string_view type_string;  // Used if type == "type"
   if (absl::ConsumePrefix(&spec, "string")) {
     type = "string";
@@ -197,8 +197,8 @@ void FinalizeAttr(absl::string_view spec, bool allow_attr_type_any,
         VERIFY(ConsumeQuotedString('"', &spec, &escaped_string) ||
                    ConsumeQuotedString('\'', &spec, &escaped_string),
                "Trouble parsing allowed string at '", spec, "'");
-        std::string unescaped;
-        std::string error;
+        string unescaped;
+        string error;
         VERIFY(absl::CUnescape(escaped_string, &unescaped, &error),
                "Trouble unescaping \"", escaped_string,
                "\", got error: ", error);
@@ -247,7 +247,7 @@ void FinalizeAttr(absl::string_view spec, bool allow_attr_type_any,
     VERIFY(absl::ConsumePrefix(&spec, ")"),
            "Expected ) to close 'list(', not: '", spec, "'");
     str_util::RemoveLeadingWhitespace(&spec);
-    attr->set_type(absl::StrCat("list(", type, ")"));
+    attr->set_type(strings::StrCat("list(", type, ")"));
   } else {
     attr->set_type(type);
   }
@@ -274,8 +274,8 @@ void FinalizeAttr(absl::string_view spec, bool allow_attr_type_any,
 
 #undef VERIFY
 
-std::string InOutError(bool is_output, absl::string_view orig,
-                       const std::string& op_name) {
+string InOutError(bool is_output, absl::string_view orig,
+                  const string& op_name) {
   return strings::StrCat(" from ", is_output ? "Output" : "Input", "(\"", orig,
                          "\") for Op ", op_name);
 }
@@ -343,7 +343,7 @@ bool ConsumeControlOutName(absl::string_view* sp, absl::string_view* out) {
   } while (false)
 
 void FinalizeInputOrOutput(absl::string_view spec, bool is_output,
-                           OpDef* op_def, std::vector<std::string>* errors) {
+                           OpDef* op_def, std::vector<string>* errors) {
   OpDef::ArgDef* arg =
       is_output ? op_def->add_output_arg() : op_def->add_input_arg();
 
@@ -426,23 +426,23 @@ void FinalizeInputOrOutput(absl::string_view spec, bool is_output,
 
 #undef VERIFY
 
-std::string ControlOutError(absl::string_view orig,
-                            const std::string& op_name) {
-  return absl::StrCat(" from ControlOutput(\"", orig, "\") for Op ", op_name);
+string ControlOutError(absl::string_view orig, const string& op_name) {
+  return strings::StrCat(" from ControlOutput(\"", orig, "\") for Op ",
+                         op_name);
 }
 
 void FinalizeControlOutput(absl::string_view name, OpDef* op_def,
-                           std::vector<std::string>* errors) {
+                           std::vector<string>* errors) {
   absl::string_view orig(name);
 
   // Parse control output name.
   absl::string_view tmp_name;
   if (!ConsumeControlOutName(&orig, &tmp_name)) {
-    errors->push_back(absl::StrCat("Trouble parsing 'name:'",
-                                   ControlOutError(orig, op_def->name())));
+    errors->push_back(strings::StrCat("Trouble parsing 'name:'",
+                                      ControlOutError(orig, op_def->name())));
   }
 
-  *op_def->add_control_output() = std::string(tmp_name.data(), tmp_name.size());
+  *op_def->add_control_output() = string(tmp_name.data(), tmp_name.size());
 }
 
 int num_leading_spaces(absl::string_view s) {
@@ -468,12 +468,12 @@ bool IsDocNameColon(absl::string_view s) {
   return ConsumeDocNameColon(&s, nullptr /* out */);
 }
 
-void FinalizeDoc(const std::string& text, OpDef* op_def,
-                 std::vector<std::string>* errors) {
-  std::vector<std::string> lines = str_util::Split(text, '\n');
+void FinalizeDoc(const string& text, OpDef* op_def,
+                 std::vector<string>* errors) {
+  std::vector<string> lines = str_util::Split(text, '\n');
 
   // Remove trailing spaces.
-  for (std::string& line : lines) {
+  for (string& line : lines) {
     absl::StripTrailingAsciiWhitespace(&line);
   }
 
@@ -494,9 +494,8 @@ void FinalizeDoc(const std::string& text, OpDef* op_def,
   int end_l = l;
   // Trim trailing blank lines from the description.
   while (start_l < end_l && lines[end_l - 1].empty()) --end_l;
-  std::string desc = absl::StrJoin(
-      absl::Span<const std::string>(lines.data() + start_l, end_l - start_l),
-      "\n");
+  string desc = absl::StrJoin(
+      absl::Span<const string>(lines.data() + start_l, end_l - start_l), "\n");
   if (!desc.empty()) op_def->set_description(desc);
 
   // name: description
@@ -530,7 +529,7 @@ void FinalizeDoc(const std::string& text, OpDef* op_def,
       if (!description[i].empty()) description[i].remove_prefix(min_indent);
     }
     // Concatenate lines into a single string.
-    const std::string complete(absl::StrJoin(description, "\n"));
+    const string complete(absl::StrJoin(description, "\n"));
 
     // Find name.
     bool found = false;
@@ -553,9 +552,9 @@ void FinalizeDoc(const std::string& text, OpDef* op_def,
       }
     }
     if (!found) {
-      errors->push_back(absl::StrCat("No matching input/output/attr for name '",
-                                     name, "' from Doc() for Op ",
-                                     op_def->name()));
+      errors->push_back(
+          strings::StrCat("No matching input/output/attr for name '", name,
+                          "' from Doc() for Op ", op_def->name()));
       return;
     }
   }
@@ -563,35 +562,35 @@ void FinalizeDoc(const std::string& text, OpDef* op_def,
 
 }  // namespace
 
-OpDefBuilder::OpDefBuilder(std::string op_name) {
+OpDefBuilder::OpDefBuilder(string op_name) {
   op_def()->set_name(std::move(op_name));
 }
 
-OpDefBuilder& OpDefBuilder::Attr(std::string spec) {
+OpDefBuilder& OpDefBuilder::Attr(string spec) {
   attrs_.push_back(std::move(spec));
   return *this;
 }
 
-OpDefBuilder& OpDefBuilder::Input(std::string spec) {
+OpDefBuilder& OpDefBuilder::Input(string spec) {
   inputs_.push_back(std::move(spec));
   return *this;
 }
 
-OpDefBuilder& OpDefBuilder::Output(std::string spec) {
+OpDefBuilder& OpDefBuilder::Output(string spec) {
   outputs_.push_back(std::move(spec));
   return *this;
 }
 
-OpDefBuilder& OpDefBuilder::ControlOutput(std::string name) {
+OpDefBuilder& OpDefBuilder::ControlOutput(string name) {
   control_outputs_.push_back(std::move(name));
   return *this;
 }
 
-OpDefBuilder& OpDefBuilder::Doc(std::string text) {
+OpDefBuilder& OpDefBuilder::Doc(string text) {
 #ifndef TF_LEAN_BINARY
   if (!doc_.empty()) {
     errors_.push_back(
-        absl::StrCat("Extra call to Doc() for Op ", op_def()->name()));
+        strings::StrCat("Extra call to Doc() for Op ", op_def()->name()));
   } else {
     doc_ = std::move(text);
   }
@@ -624,10 +623,10 @@ OpDefBuilder& OpDefBuilder::SetIsDistributedCommunication() {
   return *this;
 }
 
-OpDefBuilder& OpDefBuilder::Deprecated(int version, std::string explanation) {
+OpDefBuilder& OpDefBuilder::Deprecated(int version, string explanation) {
   if (op_def()->has_deprecation()) {
     errors_.push_back(
-        absl::StrCat("Deprecated called twice for Op ", op_def()->name()));
+        strings::StrCat("Deprecated called twice for Op ", op_def()->name()));
   } else {
     OpDeprecation* deprecation = op_def()->mutable_deprecation();
     deprecation->set_version(version);
@@ -656,7 +655,7 @@ OpDefBuilder& OpDefBuilder::SetReverseTypeFn(int input_number,
 OpDefBuilder& OpDefBuilder::SetShapeFn(OpShapeInferenceFn fn) {
   if (op_reg_data_.shape_inference_fn != nullptr) {
     errors_.push_back(
-        absl::StrCat("SetShapeFn called twice for Op ", op_def()->name()));
+        strings::StrCat("SetShapeFn called twice for Op ", op_def()->name()));
   } else {
     op_reg_data_.shape_inference_fn = OpShapeInferenceFn(fn);
   }
@@ -669,7 +668,7 @@ OpDefBuilder& OpDefBuilder::AllowAttrTypeAny() {
 }
 
 absl::Status OpDefBuilder::Finalize(OpRegistrationData* op_reg_data) const {
-  std::vector<std::string> errors = errors_;
+  std::vector<string> errors = errors_;
   *op_reg_data = op_reg_data_;
 
   OpDef* op_def = &op_reg_data->op_def;

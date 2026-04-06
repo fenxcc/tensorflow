@@ -14,9 +14,6 @@ limitations under the License.
 ==============================================================================*/
 #include "tensorflow/core/kernels/data/experimental/random_dataset_op.h"
 
-#include <cstdint>
-#include <limits>
-#include <memory>
 #include <string>
 #include <utility>
 
@@ -87,15 +84,14 @@ class RandomDatasetOp::Dataset : public DatasetBase {
     // These splits aren't actually used during iteration.
     // TODO(aaudibert): Avoid sending dummy splits over RPC when using tf.data
     // service with RandomDataset.
-    split_providers->push_back(std::make_unique<IndexSplitProvider>(
-        std::numeric_limits<int64_t>::max()));
+    split_providers->push_back(std::make_unique<IndexSplitProvider>(kint64max));
     return absl::OkStatus();
   }
 
   std::unique_ptr<IteratorBase> MakeIteratorInternal(
       const string& prefix) const override {
     return std::make_unique<Iterator>(
-        Iterator::Params{this, absl::StrCat(prefix, "::Random")},
+        Iterator::Params{this, strings::StrCat(prefix, "::Random")},
         manager_->get().get());
   }
 

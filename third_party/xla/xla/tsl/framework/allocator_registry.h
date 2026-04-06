@@ -71,9 +71,8 @@ class AllocatorFactoryRegistry {
   AllocatorFactoryRegistry() {}
   ~AllocatorFactoryRegistry() {}
 
-  void Register(const char* source_file, int source_line,
-                const std::string& name, int priority,
-                AllocatorFactory* factory);
+  void Register(const char* source_file, int source_line, const string& name,
+                int priority, AllocatorFactory* factory);
 
   // Returns 'best fit' Allocator.  Find the factory with the highest priority
   // and return an allocator constructed by it.  If multiple factories have
@@ -91,7 +90,7 @@ class AllocatorFactoryRegistry {
   static AllocatorFactoryRegistry* singleton();
 
   ProcessStateInterface* process_state() const {
-    absl::MutexLock ml(mu_);
+    absl::MutexLock ml(&mu_);
     return process_state_;
   }
 
@@ -99,7 +98,7 @@ class AllocatorFactoryRegistry {
   friend class tensorflow::ProcessState;
 
   void SetProcessState(ProcessStateInterface* interface) {
-    absl::MutexLock ml(mu_);
+    absl::MutexLock ml(&mu_);
     process_state_ = interface;
   }
 
@@ -110,7 +109,7 @@ class AllocatorFactoryRegistry {
   struct FactoryEntry {
     const char* source_file;
     int source_line;
-    std::string name;
+    string name;
     int priority;
     std::unique_ptr<AllocatorFactory> factory;
     std::unique_ptr<Allocator> allocator;
@@ -122,7 +121,7 @@ class AllocatorFactoryRegistry {
 
   // Returns any FactoryEntry registered under 'name' and 'priority',
   // or 'nullptr' if none found.
-  const FactoryEntry* FindEntry(const std::string& name, int priority) const
+  const FactoryEntry* FindEntry(const string& name, int priority) const
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);
 
   AllocatorFactoryRegistry(const AllocatorFactoryRegistry&) = delete;
@@ -131,9 +130,8 @@ class AllocatorFactoryRegistry {
 
 class AllocatorFactoryRegistration {
  public:
-  AllocatorFactoryRegistration(const char* file, int line,
-                               const std::string& name, int priority,
-                               AllocatorFactory* factory) {
+  AllocatorFactoryRegistration(const char* file, int line, const string& name,
+                               int priority, AllocatorFactory* factory) {
     AllocatorFactoryRegistry::singleton()->Register(file, line, name, priority,
                                                     factory);
   }

@@ -52,12 +52,10 @@ do_external_licenses_check(){
 @com_github_googlecloudplatform_google_cloud_cpp//google
 @com_github_grpc_grpc//src/compiler
 @com_google_protobuf//upb_generator
-@llvm-project//third-party/siphash
 @platforms//os
 @ml_dtypes_py//ml_dtypes
 @ruy//
 @rules_java_builtin//toolchains
-@rules_ml_toolchain//
 @rules_python//
 @stablehlo//stablehlo/experimental
 EOF
@@ -82,7 +80,6 @@ EOF
 ^//$
 @ml_dtypes_py//
 @ruy//
-@rules_ml_toolchain//
 EOF
 
   license_query "attr('licenses', 'notice', deps($BUILD_TARGET))" > $BATS_TEST_TMPDIR/expected_licenses

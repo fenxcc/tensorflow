@@ -16,36 +16,29 @@ limitations under the License.
 #include "xla/tsl/util/device_name_utils.h"
 
 #include <algorithm>
-#include <cstdint>
-#include <ostream>
-#include <string>
-#include <vector>
 
-#include "absl/log/check.h"
-#include "absl/status/status.h"
-#include "absl/strings/ascii.h"
-#include "absl/strings/str_cat.h"
-#include "absl/strings/string_view.h"
-#include "absl/strings/strip.h"
 #include "xla/tsl/platform/errors.h"
-#include "xla/tsl/platform/types.h"
 #include "tsl/platform/str_util.h"
 
 namespace tsl {
 
+static bool IsAlpha(char c) {
+  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+}
+
 static bool IsAlphaNumOrUnderscore(char c) {
-  return absl::ascii_isalnum(c) || c == '_';
+  return IsAlpha(c) || (c >= '0' && c <= '9') || c == '_';
 }
 
 // Returns true iff "in" is a valid job name.
 static bool IsJobName(absl::string_view in) {
-  return !in.empty() && absl::ascii_isalpha(in.front()) &&
+  return !in.empty() && IsAlpha(in.front()) &&
          std::all_of(in.begin(), in.end(), IsAlphaNumOrUnderscore);
 }
 
 static bool ConsumePrefix(absl::string_view* in, string* out,
                           absl::string_view prefix_terminators) {
-  if (in->empty() || !absl::ascii_isalpha(in->front())) {
+  if (in->empty() || !IsAlpha(in->front())) {
     return false;
   }
   const auto end_it =
@@ -73,7 +66,7 @@ static bool ConsumeDeviceType(absl::string_view* in, string* device_type) {
 // Returns true and fills in "*val" iff "*in" starts with a decimal
 // number.
 static bool ConsumeNumber(absl::string_view* in, int* val) {
-  uint64_t tmp;
+  uint64 tmp;
   if (str_util::ConsumeLeadingDigits(in, &tmp)) {
     *val = tmp;
     return true;
@@ -82,16 +75,16 @@ static bool ConsumeNumber(absl::string_view* in, int* val) {
 }
 
 // Returns a fully qualified device name given the parameters.
-static std::string DeviceName(absl::string_view job, int replica, int task,
-                              absl::string_view device_prefix,
-                              absl::string_view device_type, int id) {
+static string DeviceName(const string& job, int replica, int task,
+                         const string& device_prefix, const string& device_type,
+                         int id) {
   CHECK(IsJobName(job)) << job;
   CHECK_LE(0, replica);
   CHECK_LE(0, task);
   CHECK(!device_type.empty());
   CHECK_LE(0, id);
-  return absl::StrCat("/job:", job, "/replica:", replica, "/task:", task,
-                      device_prefix, device_type, ":", id);
+  return strings::StrCat("/job:", job, "/replica:", replica, "/task:", task,
+                         device_prefix, device_type, ":", id);
 }
 
 /* static */
@@ -220,15 +213,15 @@ absl::Status DeviceNameUtils::CanonicalizeDeviceName(absl::string_view fullname,
   *canonical_name = "";
   ParsedName parsed_basename;
   if (!ParseFullName(basename, &parsed_basename)) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Could not parse basename: ", basename,
-                     " into a device specification."));
+    return errors::InvalidArgument("Could not parse basename: ", basename,
+                                   " into a device specification.");
   }
   if (!(parsed_basename.has_job && parsed_basename.has_replica &&
         parsed_basename.has_task && parsed_basename.has_type &&
         parsed_basename.has_id)) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Basename: ", basename, " should be fully specified."));
+    return errors::InvalidArgument("Basename: ", basename,
+                                   " should be fully "
+                                   "specified.");
   }
   ParsedName parsed_name;
   if (ParseLocalName(fullname, &parsed_name)) {
@@ -241,29 +234,29 @@ absl::Status DeviceNameUtils::CanonicalizeDeviceName(absl::string_view fullname,
     *canonical_name = ParsedNameToString(parsed_name);
     return absl::OkStatus();
   }
-  return absl::InvalidArgumentError(absl::StrCat("Could not parse ", fullname,
-                                                 " into a device "
-                                                 "specification."));
+  return errors::InvalidArgument("Could not parse ", fullname,
+                                 " into a device "
+                                 "specification.");
 }
 
 /* static */
 string DeviceNameUtils::ParsedNameToString(const ParsedName& pn) {
   string buf;
   if (pn.has_job) {
-    absl::StrAppend(&buf, "/job:", pn.job);
+    strings::StrAppend(&buf, "/job:", pn.job);
   }
   if (pn.has_replica) {
-    absl::StrAppend(&buf, "/replica:", pn.replica);
+    strings::StrAppend(&buf, "/replica:", pn.replica);
   }
   if (pn.has_task) {
-    absl::StrAppend(&buf, "/task:", pn.task);
+    strings::StrAppend(&buf, "/task:", pn.task);
   }
   if (pn.has_type) {
-    absl::StrAppend(&buf, "/device:", pn.type, ":");
+    strings::StrAppend(&buf, "/device:", pn.type, ":");
     if (pn.has_id) {
-      absl::StrAppend(&buf, pn.id);
+      strings::StrAppend(&buf, pn.id);
     } else {
-      absl::StrAppend(&buf, "*");
+      strings::StrAppend(&buf, "*");
     }
   }
   return buf;
@@ -373,10 +366,10 @@ absl::Status MergeDevNamesImpl(DeviceNameUtils::ParsedName* target,
   const auto& ParsedNameToString = DeviceNameUtils::ParsedNameToString;
   if (other.has_job) {
     if (target->has_job && target->job != other.job) {
-      return absl::InvalidArgumentError(
-          absl::StrCat("Cannot merge devices with incompatible jobs: '",
-                       ParsedNameToString(*target), "' and '",
-                       ParsedNameToString(other), "'"));
+      return errors::InvalidArgument(
+          "Cannot merge devices with incompatible jobs: '",
+          ParsedNameToString(*target), "' and '", ParsedNameToString(other),
+          "'");
     }
     target->has_job = other.has_job;
     target->job = other.job;
@@ -384,10 +377,10 @@ absl::Status MergeDevNamesImpl(DeviceNameUtils::ParsedName* target,
 
   if (other.has_replica) {
     if (target->has_replica && target->replica != other.replica) {
-      return absl::InvalidArgumentError(
-          absl::StrCat("Cannot merge devices with incompatible replicas: '",
-                       ParsedNameToString(*target), "' and '",
-                       ParsedNameToString(other), "'"));
+      return errors::InvalidArgument(
+          "Cannot merge devices with incompatible replicas: '",
+          ParsedNameToString(*target), "' and '", ParsedNameToString(other),
+          "'");
     }
     target->has_replica = other.has_replica;
     target->replica = other.replica;
@@ -395,10 +388,10 @@ absl::Status MergeDevNamesImpl(DeviceNameUtils::ParsedName* target,
 
   if (other.has_task) {
     if (target->has_task && target->task != other.task) {
-      return absl::InvalidArgumentError(
-          absl::StrCat("Cannot merge devices with incompatible tasks: '",
-                       ParsedNameToString(*target), "' and '",
-                       ParsedNameToString(other), "'"));
+      return errors::InvalidArgument(
+          "Cannot merge devices with incompatible tasks: '",
+          ParsedNameToString(*target), "' and '", ParsedNameToString(other),
+          "'");
     }
     target->has_task = other.has_task;
     target->task = other.task;
@@ -407,10 +400,10 @@ absl::Status MergeDevNamesImpl(DeviceNameUtils::ParsedName* target,
   if (other.has_type) {
     if (target->has_type && target->type != other.type) {
       if (!allow_soft_placement) {
-        return absl::InvalidArgumentError(
-            absl::StrCat("Cannot merge devices with incompatible types: '",
-                         ParsedNameToString(*target), "' and '",
-                         ParsedNameToString(other), "'"));
+        return errors::InvalidArgument(
+            "Cannot merge devices with incompatible types: '",
+            ParsedNameToString(*target), "' and '", ParsedNameToString(other),
+            "'");
       }
       if (override_conflicts) {
         target->type = other.type;
@@ -428,10 +421,10 @@ absl::Status MergeDevNamesImpl(DeviceNameUtils::ParsedName* target,
   if (other.has_id) {
     if (target->has_id && target->id != other.id) {
       if (!allow_soft_placement) {
-        return absl::InvalidArgumentError(
-            absl::StrCat("Cannot merge devices with incompatible ids: '",
-                         ParsedNameToString(*target), "' and '",
-                         ParsedNameToString(other), "'"));
+        return errors::InvalidArgument(
+            "Cannot merge devices with incompatible ids: '",
+            ParsedNameToString(*target), "' and '", ParsedNameToString(other),
+            "'");
       }
       if (override_conflicts) {
         target->id = other.id;
@@ -534,14 +527,14 @@ const DeviceNameUtils::ParsedName DeviceNameUtils::AddressSpace(
 
 /* static */
 string DeviceNameUtils::LocalName(absl::string_view type, int id) {
-  return absl::StrCat("/device:", type, ":", id);
+  return strings::StrCat("/device:", type, ":", id);
 }
 
 namespace {
 // Returns the legacy local device name given its "type" and "id" (which is
 // '/device:type:id').
 string LegacyLocalName(absl::string_view type, int id) {
-  return absl::StrCat(type, ":", id);
+  return strings::StrCat(type, ":", id);
 }
 }  // anonymous namespace
 
@@ -579,16 +572,16 @@ bool DeviceNameUtils::SplitDeviceName(absl::string_view name, string* task,
         (pn.has_replica ? (9 + 4 /*estimated UB for # replica digits*/) : 0) +
         (pn.has_task ? (6 + 4 /*estimated UB for # task digits*/) : 0));
     if (pn.has_job) {
-      absl::StrAppend(task, "/job:", pn.job);
+      strings::StrAppend(task, "/job:", pn.job);
     }
     if (pn.has_replica) {
-      absl::StrAppend(task, "/replica:", pn.replica);
+      strings::StrAppend(task, "/replica:", pn.replica);
     }
     if (pn.has_task) {
-      absl::StrAppend(task, "/task:", pn.task);
+      strings::StrAppend(task, "/task:", pn.task);
     }
     device->clear();
-    absl::StrAppend(device, pn.type, ":", pn.id);
+    strings::StrAppend(device, pn.type, ":", pn.id);
     return true;
   }
   return false;
@@ -601,9 +594,9 @@ bool DeviceNameUtils::GetTaskName(const ParsedName& pn, string* task) {
     task->reserve((5 + pn.job.size()) +
                   (9 + 4 /*estimated UB for # replica digits*/) +
                   (6 + 4 /*estimated UB for # task digits*/));
-    absl::StrAppend(task, "/job:", pn.job);
-    absl::StrAppend(task, "/replica:", pn.replica);
-    absl::StrAppend(task, "/task:", pn.task);
+    strings::StrAppend(task, "/job:", pn.job);
+    strings::StrAppend(task, "/replica:", pn.replica);
+    strings::StrAppend(task, "/task:", pn.task);
     return true;
   }
   return false;

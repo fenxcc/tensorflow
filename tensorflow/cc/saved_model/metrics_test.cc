@@ -113,9 +113,9 @@ TEST(MetricsTest, TestWritePathAndSingleprint) {
 
 TEST(MetricsTest, TestInvalidMakePathAndSingleprint) {
   EXPECT_THAT(MakeSavedModelPathAndSingleprint("", "singleprint"),
-              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
+              testing::StatusIs(absl::StatusCode::kInvalidArgument));
   EXPECT_THAT(MakeSavedModelPathAndSingleprint("path", ""),
-              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument));
+              testing::StatusIs(absl::StatusCode::kInvalidArgument));
 }
 
 TEST(MetricsTest, TestReadFingerprint) {

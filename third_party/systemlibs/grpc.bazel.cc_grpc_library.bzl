@@ -2,7 +2,6 @@
 
 load("@com_github_grpc_grpc//bazel:generate_cc.bzl", "generate_cc")
 load("@com_github_grpc_grpc//bazel:protobuf.bzl", "well_known_proto_libs")
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 def cc_grpc_library(
         name,
@@ -94,7 +93,8 @@ def cc_grpc_library(
             generate_mocks = generate_mocks,
             **kwargs
         )
-        cc_library(
+
+        native.cc_library(
             name = name,
             srcs = [":" + codegen_grpc_target],
             hdrs = [":" + codegen_grpc_target],

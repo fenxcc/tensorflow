@@ -24,13 +24,13 @@ namespace tensorflow {
 
 namespace {
 
-NodeDef NodeDefFromText(const std::string& text) {
+NodeDef NodeDefFromText(const string& text) {
   NodeDef node_def;
   EXPECT_TRUE(protobuf::TextFormat::MergeFromString(text, &node_def));
   return node_def;
 }
 
-KernelDef KernelDefFromText(const std::string& text) {
+KernelDef KernelDefFromText(const string& text) {
   KernelDef kernel_def;
   EXPECT_TRUE(protobuf::TextFormat::MergeFromString(text, &kernel_def));
   return kernel_def;
@@ -38,8 +38,8 @@ KernelDef KernelDefFromText(const std::string& text) {
 
 class AttrsMatchTest : public ::testing::Test {
  protected:
-  void ExpectStatus(const std::string& node_def_str,
-                    const std::string& kernel_def_str, error::Code code) {
+  void ExpectStatus(const string& node_def_str, const string& kernel_def_str,
+                    error::Code code) {
     bool match;
     auto status = KernelAttrsMatch(KernelDefFromText(kernel_def_str),
                                    NodeDefFromText(node_def_str), &match);
@@ -53,7 +53,7 @@ class AttrsMatchTest : public ::testing::Test {
 };
 
 TEST_F(AttrsMatchTest, ValidConstraint) {
-  std::string node_def_str = R"(
+  string node_def_str = R"(
     name: "ValidConstraint-op"
     op: "ValidConstraint"
     attr {
@@ -63,7 +63,7 @@ TEST_F(AttrsMatchTest, ValidConstraint) {
       }
     }
   )";
-  std::string kernel_def_str = R"(
+  string kernel_def_str = R"(
     op: "ValidConstraint"
     device_type: "CPU"
     constraint {
@@ -79,7 +79,7 @@ TEST_F(AttrsMatchTest, ValidConstraint) {
 }
 
 TEST_F(AttrsMatchTest, BadConstraint) {
-  std::string node_def_str = R"(
+  string node_def_str = R"(
     name: "BadConstraint-op"
     op: "BadConstraint"
     attr {
@@ -89,7 +89,7 @@ TEST_F(AttrsMatchTest, BadConstraint) {
       }
     }
   )";
-  std::string kernel_def_str = R"(
+  string kernel_def_str = R"(
     op: "BadConstraint"
     device_type: "CPU"
     constraint {
@@ -105,7 +105,7 @@ TEST_F(AttrsMatchTest, BadConstraint) {
 }
 
 TEST_F(AttrsMatchTest, Unimplemented) {
-  std::string node_def_str = R"(
+  string node_def_str = R"(
     name: "BadConstraint-op"
     op: "BadConstraint"
     attr {
@@ -115,7 +115,7 @@ TEST_F(AttrsMatchTest, Unimplemented) {
       }
     }
   )";
-  std::string kernel_def_str = R"(
+  string kernel_def_str = R"(
     op: "BadConstraint"
     device_type: "CPU"
     constraint {

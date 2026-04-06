@@ -42,7 +42,6 @@ limitations under the License.
 #include "xla/python/nb_numpy.h"
 #include "xla/python/pjrt_ifrt/pjrt_dtype.h"
 #include "xla/python/safe_static_init.h"
-#include "xla/python/strides.h"
 #include "xla/shape.h"
 #include "xla/shape_util.h"
 #include "xla/status_macros.h"
@@ -469,6 +468,59 @@ absl::StatusOr<nb::str> TypeDescriptorForPrimitiveType(PrimitiveType type) {
       return Unimplemented("Unimplemented primitive type %s",
                            PrimitiveType_Name(type));
   }
+}
+
+PrimitiveType Squash64BitTypes(PrimitiveType type) {
+  switch (type) {
+    case S64:
+      return S32;
+    case U64:
+      return U32;
+    case F64:
+      return F32;
+    case C128:
+      return C64;
+    default:
+      return type;
+  }
+}
+
+// Returns the strides for `shape`.
+std::vector<int64_t> ByteStridesForShape(const Shape& shape) {
+  std::vector<int64_t> strides;
+  CHECK(shape.IsArray());
+  CHECK(shape.has_layout());
+  return ByteStridesForShape(shape.element_type(), shape.dimensions(),
+                             shape.layout());
+}
+
+static std::vector<int64_t> StridesForShapeHelper(
+    PrimitiveType element_type, absl::Span<const int64_t> dimensions,
+    const xla::Layout& layout, int64_t innermost_stride_size) {
+  CHECK_EQ(dimensions.size(), layout.minor_to_major().size());
+  std::vector<int64_t> strides;
+  strides.resize(dimensions.size());
+  int64_t stride = innermost_stride_size;
+  for (int i : layout.minor_to_major()) {
+    strides[i] = stride;
+    stride *= dimensions[i];
+  }
+  return strides;
+}
+
+std::vector<int64_t> ByteStridesForShape(PrimitiveType element_type,
+                                         absl::Span<const int64_t> dimensions,
+                                         const xla::Layout& layout) {
+  return StridesForShapeHelper(
+      element_type, dimensions, layout,
+      ShapeUtil::ByteSizeOfPrimitiveType(element_type));
+}
+
+std::vector<int64_t> StridesForShape(PrimitiveType element_type,
+                                     absl::Span<const int64_t> dimensions,
+                                     const xla::Layout& layout) {
+  return StridesForShapeHelper(element_type, dimensions, layout,
+                               /*innermost_stride_size=*/1);
 }
 
 absl::StatusOr<nb::object> LiteralToPython(

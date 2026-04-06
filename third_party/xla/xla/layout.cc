@@ -36,61 +36,12 @@ limitations under the License.
 
 namespace xla {
 
-namespace {
-
-// Populates `tile` to `tile_proto`. `tile_proto` must be an empty message.
-void SaveTileToEmptyProto(const Tile& tile, TileProto& tile_proto) {
-  for (int64_t i : tile.dimensions()) {
+TileProto Tile::ToProto() const {
+  TileProto tile_proto;
+  for (int64_t i : dimensions()) {
     tile_proto.add_dimensions(i);
   }
-}
-
-// Populates `split_config` to `split_config_proto`. `split_config_proto` must
-// be an empty message.
-void SaveSplitConfigToEmptyProto(const SplitConfig& split_config,
-                                 SplitConfigProto& split_config_proto) {
-  split_config_proto.set_dimension(split_config.dimension());
-  for (int64_t i : split_config.split_indices()) {
-    split_config_proto.add_split_indices(i);
-  }
-}
-
-// Populates `layout` to `proto`. `proto` must be an empty message.
-void SaveLayoutToEmptyProto(const Layout& layout, LayoutProto& proto) {
-  proto.mutable_minor_to_major()->Reserve(layout.minor_to_major().size());
-  for (const int64_t dimension : layout.minor_to_major()) {
-    proto.add_minor_to_major(dimension);
-  }
-  for (const Tile& tile : layout.tiles()) {
-    SaveTileToEmptyProto(tile, *proto.add_tiles());
-  }
-  proto.set_tail_padding_alignment_in_elements(
-      layout.tail_padding_alignment_in_elements());
-  proto.set_index_primitive_type(layout.index_primitive_type());
-  proto.set_pointer_primitive_type(layout.pointer_primitive_type());
-  proto.set_element_size_in_bits(layout.element_size_in_bits());
-  proto.set_memory_space(layout.memory_space());
-  for (const SplitConfig& split_config : layout.split_configs()) {
-    SaveSplitConfigToEmptyProto(split_config, *proto.add_split_configs());
-  }
-  if (layout.has_physical_shape()) {
-    layout.physical_shape().ToProto(*proto.mutable_physical_shape());
-  }
-  proto.set_dynamic_shape_metadata_prefix_bytes(
-      layout.dynamic_shape_metadata_prefix_bytes());
-}
-
-}  // namespace
-
-void Tile::ToProto(TileProto& tile_proto) const {
-  tile_proto.Clear();
-  SaveTileToEmptyProto(*this, tile_proto);
-}
-
-TileProto Tile::ToProto() const {
-  TileProto proto;
-  SaveTileToEmptyProto(*this, proto);
-  return proto;
+  return tile_proto;
 }
 
 void Tile::Print(Printer* printer) const {
@@ -120,15 +71,13 @@ Layout::Layout()
     : index_primitive_type_(PRIMITIVE_TYPE_INVALID),
       pointer_primitive_type_(PRIMITIVE_TYPE_INVALID) {}
 
-void SplitConfig::ToProto(SplitConfigProto& split_config_proto) const {
-  split_config_proto.Clear();
-  SaveSplitConfigToEmptyProto(*this, split_config_proto);
-}
-
 SplitConfigProto SplitConfig::ToProto() const {
-  SplitConfigProto proto;
-  SaveSplitConfigToEmptyProto(*this, proto);
-  return proto;
+  SplitConfigProto split_config_proto;
+  split_config_proto.set_dimension(dimension_);
+  for (int64_t i : split_indices_) {
+    split_config_proto.add_split_indices(i);
+  }
+  return split_config_proto;
 }
 
 std::string SplitConfig::ToString() const {
@@ -243,14 +192,30 @@ Layout& Layout::operator=(Layout&& other) = default;
   return layout;
 }
 
-void Layout::ToProto(LayoutProto& proto) const {
-  proto.Clear();
-  SaveLayoutToEmptyProto(*this, proto);
-}
-
 LayoutProto Layout::ToProto() const {
   LayoutProto proto;
-  SaveLayoutToEmptyProto(*this, proto);
+  proto.Clear();
+  proto.mutable_minor_to_major()->Reserve(minor_to_major().size());
+  for (const int64_t dimension : minor_to_major()) {
+    proto.add_minor_to_major(dimension);
+  }
+  for (const Tile& tile : tiles()) {
+    *proto.add_tiles() = tile.ToProto();
+  }
+  proto.set_tail_padding_alignment_in_elements(
+      tail_padding_alignment_in_elements());
+  proto.set_index_primitive_type(index_primitive_type());
+  proto.set_pointer_primitive_type(pointer_primitive_type());
+  proto.set_element_size_in_bits(element_size_in_bits_);
+  proto.set_memory_space(memory_space_);
+  for (const SplitConfig& split_config : split_configs()) {
+    *proto.add_split_configs() = split_config.ToProto();
+  }
+  if (has_physical_shape()) {
+    *proto.mutable_physical_shape() = physical_shape_->ToProto();
+  }
+  proto.set_dynamic_shape_metadata_prefix_bytes(
+      dynamic_shape_metadata_prefix_bytes_);
   return proto;
 }
 

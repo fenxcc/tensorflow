@@ -35,9 +35,9 @@ limitations under the License.
 #include "xla/stream_executor/tpu/tpu_executable_interface.h"
 #include "xla/stream_executor/tpu/tpu_executor_c_api.h"
 
-namespace xla::legacy {
+namespace xla {
 
-class TpuExecutable : public TpuExecutableInterface {
+class TpuExecutable : public xla::TpuExecutableInterface {
  public:
   TpuExecutable(SE_Executable* se_executable,
                 std::shared_ptr<HloModule> hlo_module)
@@ -73,6 +73,6 @@ class TpuExecutable : public TpuExecutableInterface {
   SE_Executable* se_executable_;
 };
 
-}  // namespace xla::legacy
+}  // namespace xla
 
 #endif  // XLA_STREAM_EXECUTOR_TPU_TPU_EXECUTABLE_H_

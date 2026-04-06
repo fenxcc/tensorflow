@@ -91,11 +91,10 @@ class GrpcCoordinationServiceImpl : public AsyncServiceInterface {
   HANDLER(ReportErrorToTask);
   HANDLER(ReportErrorToService);
   HANDLER(GetTaskState);
-  HANDLER(WatchJobState);
+  HANDLER(GetJobState);
   HANDLER(InsertKeyValue);
   HANDLER(GetKeyValue);
   HANDLER(TryGetKeyValue);
-  HANDLER(IncrementKeyValue);
   HANDLER(GetKeyValueDir);
   HANDLER(DeleteKeyValue);
   HANDLER(Barrier);

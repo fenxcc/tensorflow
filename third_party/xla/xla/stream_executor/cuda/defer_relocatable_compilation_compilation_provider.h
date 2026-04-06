@@ -69,8 +69,6 @@ class DeferRelocatableCompilationCompilationProvider
       const CudaComputeCapability& cc, absl::string_view ptx,
       const CompilationOptions& options) const override;
 
-  absl::StatusOr<int> GetLatestPtxIsaVersion() const override;
-
  private:
   explicit DeferRelocatableCompilationCompilationProvider(
       std::unique_ptr<CompilationProvider> delegate);

@@ -281,10 +281,9 @@ TEST_F(ShapeRefinerTest, ExtractConstantSubgraphMultiOutput) {
   // input_tensor from the shape function.
   {
     Scope root = Scope::NewRootScope();
-    auto small =
-        ops::Const(root, {static_cast<int32_t>(1), TensorShape({1, 1})});
+    auto small = ops::Const(root, {static_cast<int32>(1), TensorShape({1, 1})});
     auto large = ops::Const(
-        root, {static_cast<int32_t>(2), TensorShape({4, kMaxTensorSize / 2})});
+        root, {static_cast<int32>(2), TensorShape({4, kMaxTensorSize / 2})});
     Node* multi;
     TF_ASSERT_OK(NodeBuilder("MI", "MultiIdentity")
                      .Input(std::vector<NodeBuilder::NodeOut>{small.node(),
@@ -314,7 +313,7 @@ TEST_F(ShapeRefinerTest, ExtractConstantSubgraphMultiOutput) {
     // The add adds 1 and 2 together, and its output has kMaxTensorSize*2
     // elements.
     shape_inference::InferenceContext* ctx = m.GetContext(shape_v2);
-    EXPECT_EQ(absl::StrCat("[", kMaxTensorSize * 2 * 3, "]"),
+    EXPECT_EQ(strings::StrCat("[", kMaxTensorSize * 2 * 3, "]"),
               ctx->DebugString(ctx->output(0)));
   }
 }
@@ -381,7 +380,7 @@ REGISTER_OP("ShapeData")
       std::vector<shape_inference::DimensionHandle> dims;
       dims.reserve(shape_data->NumElements());
       for (int i = 0; i < shape_data->NumElements(); ++i) {
-        dims.emplace_back(c->MakeDim(shape_data->flat<int32_t>()(i)));
+        dims.emplace_back(c->MakeDim(shape_data->flat<int32>()(i)));
       }
 
       c->set_output(0, c->MakeShape(dims));
@@ -419,7 +418,7 @@ REGISTER_OP("ShapeVectorForAllElements")
       }
       int64_t total = 0;
       for (int i = 0; i < shape_data->NumElements(); ++i) {
-        total += shape_data->flat<int32_t>()(i);
+        total += shape_data->flat<int32>()(i);
       }
 
       c->set_output(0, c->Vector(total));
@@ -488,8 +487,7 @@ TEST_F(ShapeRefinerTest, PropagateShapeAcrossTensorContentInt64) {
 
   // Create variable 2x4 tensor.
   auto input = ops::Variable(
-      root,
-      {2, 4, static_cast<int64_t>(std::numeric_limits<int32_t>::max()) * 2},
+      root, {2, 4, static_cast<int64_t>(std::numeric_limits<int32>::max()) * 2},
       DT_INT64);
 
   // Shape is a vector of 2 elements (2,4)
@@ -523,8 +521,7 @@ TEST_F(ShapeRefinerTest, PropagateShapeAcrossTensorContentInt32Overflow) {
 
   // Create variable 2x4 tensor.
   auto input = ops::Variable(
-      root,
-      {2, 4, static_cast<int64_t>(std::numeric_limits<int32_t>::max()) * 2},
+      root, {2, 4, static_cast<int64_t>(std::numeric_limits<int32>::max()) * 2},
       DT_INT32);
 
   // Shape is a vector of 2 elements (2,4)
@@ -610,7 +607,7 @@ TEST_F(ShapeRefinerTest, PropagateSizeAcrossTensorContentInt64) {
   auto input = ops::Variable(
       root,
       {1, 2, 3, 4, 5,
-       static_cast<int64_t>(std::numeric_limits<int32_t>::max()) * 2},
+       static_cast<int64_t>(std::numeric_limits<int32>::max()) * 2},
       DT_INT64);
 
   // 5! * int32_max_value * 2.
@@ -641,7 +638,7 @@ TEST_F(ShapeRefinerTest, PropagateSizeAcrossTensorContentInt32Overflow) {
   auto input = ops::Variable(
       root,
       {1, 2, 3, 4, 5,
-       static_cast<int64_t>(std::numeric_limits<int32_t>::max()) * 2},
+       static_cast<int64_t>(std::numeric_limits<int32>::max()) * 2},
       DT_INT32);
 
   // 5!.
@@ -848,7 +845,7 @@ absl::Status PartialTensorAsShapeShapeFn(shape_inference::InferenceContext* c) {
     return absl::OkStatus();
   }
   TF_RETURN_IF_ERROR(
-      c->MakeShapeFromTensorShape(TensorShape({t->flat<int32_t>()(0)}), &out));
+      c->MakeShapeFromTensorShape(TensorShape({t->flat<int32>()(0)}), &out));
   c->set_output(0, out);
   return absl::OkStatus();
 }
@@ -970,10 +967,10 @@ TEST_F(ShapeRefinerTest, ConstantValueAsShape_PackInt32) {
 
   InputList inputs{
       // clang-format off
-      Input(ops::Const<int32_t>(root, 10)),
-      Input(ops::Const<int32_t>(root, 20)),
+      Input(ops::Const<int32>(root, 10)),
+      Input(ops::Const<int32>(root, 20)),
       Input(Output(scalar_non_const)),
-      Input(ops::Const<int32_t>(root, 40)),
+      Input(ops::Const<int32>(root, 40)),
   };  // clang-format on
   auto pack = ops::Stack(root, inputs);
   TF_ASSERT_OK(root.status());

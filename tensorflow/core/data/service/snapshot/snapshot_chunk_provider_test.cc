@@ -22,7 +22,6 @@ limitations under the License.
 #include "absl/algorithm/container.h"
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
-#include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
@@ -141,10 +140,8 @@ TEST(SnapshotChunkProviderTest, EmptySnapshot) {
 
   SnapshotChunkProvider snapshot_chunk_provider(snapshot_path,
                                                 tsl::Env::Default());
-  EXPECT_THAT(GetAllChunks(snapshot_chunk_provider),
-              absl_testing::IsOkAndHolds(IsEmpty()));
-  EXPECT_THAT(GetAllChunks(snapshot_chunk_provider),
-              absl_testing::IsOkAndHolds(IsEmpty()));
+  EXPECT_THAT(GetAllChunks(snapshot_chunk_provider), IsOkAndHolds(IsEmpty()));
+  EXPECT_THAT(GetAllChunks(snapshot_chunk_provider), IsOkAndHolds(IsEmpty()));
 }
 
 TEST(SnapshotChunkProviderTest, SingleReader) {
@@ -162,8 +159,7 @@ TEST(SnapshotChunkProviderTest, SingleReader) {
   // Chunks are ordered by chunk indices.
   absl::c_reverse(chunks);
   EXPECT_THAT(GetAllChunks(snapshot_chunk_provider),
-              absl_testing::IsOkAndHolds(
-                  ElementsAreArray(JoinPaths(snapshot_path, chunks))));
+              IsOkAndHolds(ElementsAreArray(JoinPaths(snapshot_path, chunks))));
 }
 
 TEST(SnapshotChunkProviderTest, Cardinality) {
@@ -201,12 +197,12 @@ TEST(SnapshotChunkProviderTest, WaitForSnapshot) {
                                                           tsl::Env::Default());
             TF_ASSERT_OK_AND_ASSIGN(std::vector<std::string> chunks,
                                     GetAllChunks(snapshot_chunk_provider));
-            absl::MutexLock l(mu);
+            absl::MutexLock l(&mu);
             result = std::move(chunks);
           }));
 
   {  // The reader should wait when there are no chunks.
-    absl::MutexLock l(mu);
+    absl::MutexLock l(&mu);
     EXPECT_TRUE(result.empty());
   }
 
@@ -217,7 +213,7 @@ TEST(SnapshotChunkProviderTest, WaitForSnapshot) {
 
   // The reader should be able to get chunks now.
   reader_thread.reset();
-  absl::MutexLock l(mu);
+  absl::MutexLock l(&mu);
   EXPECT_THAT(result,
               ElementsAreArray(JoinPaths(snapshot_path, {"chunk_0_0_0"})));
 }
@@ -244,7 +240,7 @@ TEST(SnapshotChunkProviderTest, ConcurrentReadWrite) {
             if (end_of_splits) {
               break;
             }
-            absl::MutexLock l(mu);
+            absl::MutexLock l(&mu);
             result.push_back(split.unaligned_flat<tsl::tstring>().data()[0]);
           }
         })));
@@ -291,12 +287,12 @@ TEST(SnapshotChunkProviderTest, SaveRestore) {
   SnapshotChunkProvider snapshot_chunk_provider(snapshot_path,
                                                 tsl::Env::Default());
   EXPECT_THAT(GetChunk(snapshot_chunk_provider),
-              absl_testing::IsOkAndHolds(tsl::io::JoinPath(
+              IsOkAndHolds(tsl::io::JoinPath(
                   CommittedChunksDirectory(snapshot_path), "chunk_0_0_0")));
   TF_ASSERT_OK(SaveAndRestore(snapshot_chunk_provider));
 
   EXPECT_THAT(GetAllChunks(snapshot_chunk_provider),
-              absl_testing::IsOkAndHolds(ElementsAreArray(
+              IsOkAndHolds(ElementsAreArray(
                   JoinPaths(snapshot_path, {"chunk_1_1_1", "chunk_2_2_2",
                                             "chunk_3_3_3", "chunk_4_4_4"}))));
 }
@@ -310,8 +306,7 @@ TEST(SnapshotChunkProviderTest, SnapshotError) {
                                                           tsl::Env::Default());
             EXPECT_THAT(
                 GetAllChunks(snapshot_chunk_provider),
-                absl_testing::StatusIs(absl::StatusCode::kFailedPrecondition,
-                                       "Test error."));
+                StatusIs(absl::StatusCode::kFailedPrecondition, "Test error."));
           }));
 
   TF_ASSERT_OK(WriteChunk(snapshot_path, "chunk_0_0_0"));
@@ -333,9 +328,8 @@ TEST(SnapshotChunkProviderTest, Cancel) {
           [&snapshot_chunk_provider]() {
             EXPECT_THAT(
                 GetAllChunks(snapshot_chunk_provider),
-                absl_testing::StatusIs(
-                    absl::StatusCode::kCancelled,
-                    HasSubstr("Cancelled loading tf.data snapshot at")));
+                StatusIs(absl::StatusCode::kCancelled,
+                         HasSubstr("Cancelled loading tf.data snapshot at")));
           }));
 
   TF_ASSERT_OK(WriteChunk(snapshot_path, "chunk_0_0_0"));

@@ -24,7 +24,6 @@ limitations under the License.
 #include <gtest/gtest.h>
 #include "absl/container/flat_hash_map.h"
 #include "xla/comparison_util.h"
-#include "xla/hlo/analysis/alias_info.h"
 #include "xla/hlo/analysis/hlo_alias_analysis.h"
 #include "xla/hlo/ir/hlo_computation.h"
 #include "xla/hlo/ir/hlo_instruction.h"
@@ -37,8 +36,8 @@ limitations under the License.
 #include "xla/shape.h"
 #include "xla/shape_util.h"
 #include "xla/tsl/lib/core/status_test_util.h"
-#include "xla/tsl/platform/statusor.h"
 #include "xla/xla_data.pb.h"
+#include "tsl/platform/statusor.h"
 
 namespace xla {
 namespace {
@@ -50,8 +49,7 @@ class HloLiveRangeTest : public HloHardwareIndependentTestBase {
   ~HloLiveRangeTest() override {}
 
   void Analyze(const HloSchedule& schedule) {
-    alias_analysis_ =
-        HloAliasAnalysis::Run(module_.get(), &alias_info_).value();
+    alias_analysis_ = HloAliasAnalysis::Run(module_.get()).value();
     hlo_live_range_ = HloLiveRange::Run(schedule, *alias_analysis_,
                                         module_->entry_computation())
                           .value();
@@ -93,7 +91,6 @@ class HloLiveRangeTest : public HloHardwareIndependentTestBase {
           << "] = " << inst_and_time.first->name() << ")";
     }
   }
-  AliasInfo alias_info_;
 };
 
 TEST_F(HloLiveRangeTest, Multiply) {
@@ -393,7 +390,7 @@ ENTRY %While {
   const int32_t num_runs = 20;
   std::vector<std::unique_ptr<HloLiveRange>> hlo_live_ranges;
   std::unique_ptr<HloAliasAnalysis> alias_analysis =
-      HloAliasAnalysis::Run(module_.get(), &alias_info_).value();
+      HloAliasAnalysis::Run(module_.get()).value();
 
   for (int i = 0; i < num_runs; ++i) {
     hlo_live_ranges.push_back(HloLiveRange::Run(schedule, *alias_analysis,
@@ -459,7 +456,7 @@ ENTRY %main (a: f32[4096], b: f32[4096]) -> f32[4096] {
   CheckSchedule();
 
   TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<HloAliasAnalysis> aa,
-                          HloAliasAnalysis::Run(module_.get(), &alias_info_));
+                          HloAliasAnalysis::Run(module_.get()));
 
   TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<HloLiveRange> hlo_live_range,
                           HloLiveRange::Run(module_->schedule(), *aa,
@@ -505,7 +502,7 @@ TEST_F(HloLiveRangeTest, Call) {
   TF_ASSERT_OK_AND_ASSIGN(module_, ParseAndReturnVerifiedModule(hlo_string));
 
   TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<HloAliasAnalysis> aa,
-                          HloAliasAnalysis::Run(module_.get(), &alias_info_));
+                          HloAliasAnalysis::Run(module_.get()));
 
   TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<HloLiveRange> hlo_live_range,
                           HloLiveRange::Run(module_->schedule(), *aa,
@@ -524,19 +521,20 @@ TEST_F(HloLiveRangeTest, Call) {
   EXPECT_EQ(inst_ranges["e"], std::make_pair(6, 7));
 }
 
-TEST_F(HloLiveRangeTest, ToStringSimpleComputation) {
-  std::string hlo_string = R"(
-HloModule Module, is_scheduled=true
+TEST_F(HloLiveRangeTest, ToString) {
+  auto builder = HloComputation::Builder(TestName());
+  auto paramA = builder.AddInstruction(
+      HloInstruction::CreateParameter(0, f32vec4_, "paramA"));
+  auto paramX = builder.AddInstruction(
+      HloInstruction::CreateParameter(1, f32vec4_, "paramX"));
+  auto mul = builder.AddInstruction(HloInstruction::CreateBinary(
+      f32vec4_, HloOpcode::kMultiply, paramA, paramX));
+  module_->AddEntryComputation(builder.Build());
 
-ENTRY %main {
-  %paramA = f32[4]{0} parameter(0)
-  %paramX = f32[4]{0} parameter(1)
-  ROOT %multiply = f32[4]{0} multiply(%paramA, %paramX)
-}
-)";
+  HloSchedule schedule(module_.get());
 
-  TF_ASSERT_OK_AND_ASSIGN(module_, ParseAndReturnVerifiedModule(hlo_string));
-  const HloSchedule& schedule = module_->schedule();
+  schedule.set_sequence(module_->entry_computation(), {paramA, paramX, mul});
+
   Analyze(schedule);
 
   // The peak is at LogicalTime=2, where all three buffers are live. Each array
@@ -554,29 +552,28 @@ ENTRY %main {
     multiply{}: 16 bytes (cumulative: 16 bytes)
     paramA{}: 16 bytes (cumulative: 32 bytes)
     paramX{}: 16 bytes (cumulative: 48 bytes)
-  Stack trace breakdown for peak usage: 48 bytes
-    main (100.0%, total: 48 bytes, current: 0 bytes, remaining: 48 bytes)
-      ├── multiply (33.3%, total: 16 bytes, current: 16 bytes, remaining: 32 bytes)
-      ├── paramA (33.3%, total: 16 bytes, current: 16 bytes, remaining: 16 bytes)
-      └── paramX (33.3%, total: 16 bytes, current: 16 bytes, remaining: 0 bytes)
 )";
   EXPECT_EQ(hlo_live_range_->ToString(), expected_string);
 }
 
-TEST_F(HloLiveRangeTest, ToStringComputationWithTuple) {
-  std::string hlo_string = R"(
-HloModule Module, is_scheduled=true
+TEST_F(HloLiveRangeTest, ToStringTuple) {
+  auto builder = HloComputation::Builder(TestName());
+  auto paramA = builder.AddInstruction(
+      HloInstruction::CreateParameter(0, f32vec4_, "paramA"));
+  auto tuple_const = builder.AddInstruction(
+      HloInstruction::CreateConstant(LiteralUtil::MakeTupleOwned(
+          LiteralUtil::CreateR0<float>(1.0f),
+          LiteralUtil::CreateR1<float>({2.0f, 3.0f, 4.0f, 5.0f}))));
+  auto get_tuple_element = builder.AddInstruction(
+      HloInstruction::CreateGetTupleElement(f32vec4_, tuple_const, 1));
+  auto add = builder.AddInstruction(HloInstruction::CreateBinary(
+      f32vec4_, HloOpcode::kAdd, paramA, get_tuple_element));
+  module_->AddEntryComputation(builder.Build());
+  HloSchedule schedule(module_.get());
 
-ENTRY %main {
-  %paramA = f32[4]{0} parameter(0)
-  %constant = (f32[], f32[4]{0}) constant((1.0, {2.0, 3.0, 4.0, 5.0}))
-  %get-tuple-element = f32[4]{0} get-tuple-element(%constant), index=1
-  ROOT %add = f32[4]{0} add(%paramA, %get-tuple-element)
-}
-)";
+  schedule.set_sequence(module_->entry_computation(),
+                        {paramA, tuple_const, get_tuple_element, add});
 
-  TF_ASSERT_OK_AND_ASSIGN(module_, ParseAndReturnVerifiedModule(hlo_string));
-  const HloSchedule& schedule = module_->schedule();
   Analyze(schedule);
 
   // The peak time is at LogicalTime=1, when both constants in the tuple are
@@ -599,12 +596,6 @@ ENTRY %main {
     constant{1}: 16 bytes (cumulative: 32 bytes)
     paramA{}: 16 bytes (cumulative: 48 bytes)
     constant{0}: 4 bytes (cumulative: 52 bytes)
-  Stack trace breakdown for peak usage: 52 bytes
-    main (100.0%, total: 52 bytes, current: 0 bytes, remaining: 52 bytes)
-      ├── constant (30.8%, total: 16 bytes, current: 16 bytes, remaining: 36 bytes)
-      ├── constant{1} (30.8%, total: 16 bytes, current: 16 bytes, remaining: 20 bytes)
-      ├── paramA (30.8%, total: 16 bytes, current: 16 bytes, remaining: 4 bytes)
-      └── constant{0} (7.7%, total: 4 bytes, current: 4 bytes, remaining: 0 bytes)
 )";
   EXPECT_EQ(hlo_live_range_->ToString(), expected_string);
 }

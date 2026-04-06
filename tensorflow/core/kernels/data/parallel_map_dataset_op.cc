@@ -28,7 +28,6 @@ limitations under the License.
 #include "absl/base/call_once.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
-#include "absl/synchronization/notification.h"
 #include "xla/tsl/platform/logging.h"
 #include "tensorflow/core/common_runtime/function.h"
 #include "tensorflow/core/common_runtime/input_colocation_exemption_registry.h"
@@ -505,7 +504,7 @@ class ParallelMapDatasetOp::Dataset : public DatasetBase {
           : uid(tensorflow::EnvTime::NowNanos()),
             checkpoint(MemoryCheckpoint{ctx->id_registry()}) {}
 
-      absl::Notification notification;
+      Notification notification;
       absl::Status status;
       std::vector<Tensor> return_values;
       bool end_of_input = false;

@@ -97,21 +97,8 @@ struct RepeatedFlagModifier {
 //
 // parseRepeatedEnumModifiers("+a,-b,+c", "")
 //   -> [(add, "A"), (remove, "B"), (add, "C")]
-absl::StatusOr<std::vector<RepeatedFlagModifier>> ParseRepeatedEnumModifiers(
+absl::StatusOr<std::vector<RepeatedFlagModifier>> parseRepeatedEnumModifiers(
     absl::string_view flag_value, absl::string_view add_prefix = "");
-
-// Parses a string representation of an inclusive range into `range`.
-//
-// The string representation can be either:
-// - a single integer x,
-// - a range min:max,
-// - a half-open range min: or :max.
-// The range is inclusive on both ends.
-//
-// Returns true if the string is a valid range representation.
-bool ParseIntRangeInclusive(absl::string_view string_value,
-                            IntRangeInclusive& range);
-
 }  // namespace details
 
 }  // namespace xla

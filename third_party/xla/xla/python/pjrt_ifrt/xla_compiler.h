@@ -29,7 +29,6 @@ limitations under the License.
 #include "xla/pjrt/pjrt_executable.h"
 #include "xla/python/ifrt/compiler.h"
 #include "xla/python/ifrt/device_list.h"
-#include "xla/python/ifrt/executable_serdes.h"
 #include "xla/python/ifrt/host_callback.h"
 
 namespace xla {
@@ -80,14 +79,14 @@ struct XlaDeserializeExecutableOptions
       std::optional<DeviceListRef> devices,
       std::vector<tsl::RCReference<LoadedHostCallback>> loaded_host_callbacks =
           {})
-      : llvm::RTTIExtends<XlaDeserializeExecutableOptions,
-                          DeserializeExecutableOptions>(std::move(devices)),
-        compile_options(std::move(compile_options)),
+      : compile_options(std::move(compile_options)),
+        devices(std::move(devices)),
         loaded_host_callbacks(std::move(loaded_host_callbacks)) {}
 
   // `compile_options` may be unspecified if deserialization does not override
   // it.
   std::optional<xla::CompileOptions> compile_options;
+  std::optional<DeviceListRef> devices;
   std::vector<tsl::RCReference<LoadedHostCallback>> loaded_host_callbacks;
 
   // DeserializeExecutableOptions implementation.

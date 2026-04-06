@@ -15,9 +15,7 @@ limitations under the License.
 #ifndef TENSORFLOW_LITE_DELEGATES_XNNPACK_FILE_UTIL_H_
 #define TENSORFLOW_LITE_DELEGATES_XNNPACK_FILE_UTIL_H_
 
-#if !defined(_WIN32)
 #include <sys/types.h>
-#endif
 
 #include <cstddef>
 #include <utility>
@@ -25,18 +23,12 @@ limitations under the License.
 namespace tflite {
 namespace xnnpack {
 
-#if defined(_WIN32)
+#if defined(_MSC_VER)
 using mode_t = int;
 #endif
 
 class FileDescriptorView {
  public:
-#if defined(_WIN32)
-  using Offset = __int64;
-#else
-  using Offset = off_t;
-#endif
-
   explicit FileDescriptorView(int fd) : fd_(fd) {}
   FileDescriptorView() = default;
 
@@ -53,28 +45,28 @@ class FileDescriptorView {
   // Equivalent to MovePos(0).
   //
   // WARNING: the file descriptor must be valid and the file must be opened.
-  Offset GetPos() const;
+  off_t GetPos() const;
 
   // Sets the absolute cursor position in the current file.
   //
   // Returns the cursor position in the file or -1 on error.
   //
   // WARNING: the file descriptor must be valid and the file must be opened.
-  Offset SetPos(Offset position) const;
+  off_t SetPos(off_t position) const;
 
   // Sets the cursor position relative to the file end.
   //
   // Returns the cursor position in the file or -1 on error.
   //
   // WARNING: the file descriptor must be valid and the file must be opened.
-  Offset SetPosFromEnd(Offset offset) const;
+  off_t SetPosFromEnd(off_t offset) const;
 
   // Moves the cursor position by the given offset in the current file.
   //
   // Returns the cursor position in the file or -1 on error.
   //
   // WARNING: the file descriptor must be valid and the file must be opened.
-  Offset MovePos(Offset offset) const;
+  off_t MovePos(off_t offset) const;
 
   // Reads `count` bytes from the file at the current position to `dst`.
   //
@@ -92,12 +84,6 @@ class FileDescriptorView {
   // you need finer grain control use that directly.
   [[nodiscard /*Reading from a file may fail.*/]]
   bool Write(const void* src, size_t count) const;
-
-  // Truncates the file to the given size.
-  //
-  // Returns true if the file was truncated successfully.
-  [[nodiscard /*Reading from a file may fail.*/]]
-  bool Truncate(size_t size) const;
 
  protected:
   int fd_ = -1;

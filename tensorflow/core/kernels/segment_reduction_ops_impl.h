@@ -22,7 +22,6 @@ limitations under the License.
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <type_traits>
 #include <vector>
 
@@ -577,9 +576,7 @@ class SparseSegmentReductionOpBase : public OpKernel {
     // sorted.
     const SegmentId last_segment_id =
         num_indices > 0 ? segment_vec(num_indices - 1) : 0;
-    int64_t limit = dtidx_ == DataType::DT_INT32
-                        ? std::numeric_limits<int32_t>::max()
-                        : std::numeric_limits<int64_t>::max();
+    int64_t limit = dtidx_ == DataType::DT_INT32 ? kint32max : kint64max;
 
     OP_REQUIRES(
         context, last_segment_id < limit,

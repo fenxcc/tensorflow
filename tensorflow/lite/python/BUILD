@@ -321,7 +321,7 @@ py_strict_test(
         "//tensorflow/python/saved_model:save_options",
         "//tensorflow/python/trackable:autotrackable",
         "@absl_py//absl/testing:parameterized",
-        "@pypi//jax",
+        "@pypi_jax//:pkg",
     ],
 )
 
@@ -673,10 +673,10 @@ py_strict_library(
 pywrap_library(
     name = "pywrap_tflite",
     common_lib_def_files_or_filters = {
-        "tensorflow/lite/python/pywrap_tflite_common": "pywrap_tflite_common.json",
+        "third_party/tensorflow/lite/python/pywrap_tflite_common": "pywrap_tflite_common.json",
     },
     common_lib_version_scripts = {
-        "tensorflow/lite/python/pywrap_tflite_common": select({
+        "third_party/tensorflow/lite/python/pywrap_tflite_common": select({
             "@bazel_tools//src/conditions:windows": None,
             "@bazel_tools//src/conditions:darwin": "pywrap_tflite_common_darwin.lds",
             "//conditions:default": "pywrap_tflite_common.lds",

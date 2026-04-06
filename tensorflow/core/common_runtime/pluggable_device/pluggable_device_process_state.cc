@@ -18,7 +18,6 @@ limitations under the License.
 #include <cstdint>
 #include <cstring>
 #include <memory>
-#include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -27,7 +26,6 @@ limitations under the License.
 #include "absl/log/log.h"
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
-#include "absl/strings/str_cat.h"
 #include "tensorflow/c/experimental/stream_executor/stream_executor_internal.h"
 #include "xla/stream_executor/integrations/stream_executor_allocator.h"
 #include "xla/stream_executor/stream_executor.h"
@@ -58,9 +56,9 @@ limitations under the License.
 namespace tensorflow {
 
 /*static*/ PluggableDeviceProcessState* PluggableDeviceProcessState::singleton(
-    const std::string& device_type, const std::string& platform_name) {
+    const string& device_type, const string& platform_name) {
   using ProcessStateMap =
-      std::unordered_map<std::string, PluggableDeviceProcessState*>;
+      std::unordered_map<string, PluggableDeviceProcessState*>;
   static ProcessStateMap* process_state_map = new ProcessStateMap;
   auto iter = process_state_map->find(platform_name);
   if (iter != process_state_map->end()) {
@@ -72,7 +70,7 @@ namespace tensorflow {
 }
 
 PluggableDeviceProcessState::PluggableDeviceProcessState(
-    const std::string& device_type, const std::string& platform_name)
+    const string& device_type, const string& platform_name)
     : pluggable_device_enabled_(false),
       device_type_(device_type),
       platform_name_(platform_name) {
@@ -94,7 +92,7 @@ int PluggableDeviceProcessState::BusIdForPluggableDevice(
 Allocator* PluggableDeviceProcessState::GetPluggableDeviceAllocator(
     const GPUOptions& options, TfDeviceId tf_device_id, size_t total_bytes) {
   DCHECK(process_state_);
-  const std::string& allocator_type = options.allocator_type();
+  const string& allocator_type = options.allocator_type();
   se::Platform* platform = PluggableDeviceMachineManager(platform_name_);
   mutex_lock lock(mu_);
   tsl::CheckValidTfDeviceId(DeviceType(device_type_),
@@ -146,7 +144,7 @@ Allocator* PluggableDeviceProcessState::GetPluggableDeviceAllocator(
     if (cplatform->UseBfcAllocator()) {
       device_allocator = new PluggableDeviceBFCAllocator(
           sub_allocator, total_bytes, options,
-          absl::StrCat("PluggableDevice_", tf_device_id.value(), "_bfc"),
+          strings::StrCat("PluggableDevice_", tf_device_id.value(), "_bfc"),
           cplatform->ForceMemoryGrowth());
     } else {
       device_allocator = new PluggableDeviceSimpleAllocator(sub_allocator);

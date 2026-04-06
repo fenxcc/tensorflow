@@ -23,7 +23,7 @@ limitations under the License.
 #include <gtest/gtest.h>
 #include "absl/log/check.h"
 #include "absl/status/status.h"
-#include "absl/status/status_matchers.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/IR/MLIRContext.h"
@@ -38,6 +38,7 @@ limitations under the License.
 #include "xla/pjrt/plugin/xla_cpu/cpu_topology.h"
 #include "xla/pjrt/plugin/xla_cpu/cpu_topology_description.h"
 #include "xla/tsl/lib/core/status_test_util.h"
+#include "xla/tsl/platform/status_matchers.h"
 #include "xla/tsl/util/proto/proto_matchers.h"
 
 namespace pjrt {
@@ -46,6 +47,8 @@ namespace {
 using ::testing::ElementsAre;
 using ::testing::HasSubstr;
 using ::tsl::proto_testing::EqualsProto;
+using ::tsl::testing::IsOkAndHolds;
+using ::tsl::testing::StatusIs;
 
 constexpr absl::string_view kStablehloModuleStr = R"(
   module {
@@ -57,10 +60,8 @@ constexpr absl::string_view kStablehloModuleStr = R"(
   }
   )";
 
-constexpr absl::string_view kStablehloBytecodeFormat = "bytecode";
-
 std::vector<xla::PjRtPartialProgramProto> PrepareInputPartialPrograms(
-    const std::string& next_phase, absl::string_view program_format) {
+    const std::string& next_phase, size_t program_format) {
   std::string program_code{kStablehloModuleStr};
 
   mlir::MLIRContext context;
@@ -76,8 +77,8 @@ std::vector<xla::PjRtPartialProgramProto> PrepareInputPartialPrograms(
   xla::PjRtPartialProgramProto partial_program;
   partial_program.set_program(*bytecode_status);
   partial_program.set_program_format(program_format);
-  partial_program.set_producer_phase("n/a");
-  partial_program.add_consumer_phases({next_phase});
+  partial_program.set_generating_phase("n/a");
+  partial_program.add_next_phases({next_phase});
   partial_program.set_version("1.0");
 
   return {partial_program};
@@ -104,7 +105,7 @@ class SamplePhaseCompilerTest : public ::testing::Test {
 // attempting to register the same phase twice.
 TEST_F(SamplePhaseCompilerTest, TestSamplePhaseCompilerRegisterAllPhases) {
   EXPECT_THAT(phase_compiler_->RegisterAllPhases(),
-              absl_testing::StatusIs(absl::StatusCode::kAlreadyExists));
+              StatusIs(absl::StatusCode::kAlreadyExists));
 }
 
 // Test that the sample phase compiler's Compile method is not implemented for
@@ -116,7 +117,7 @@ TEST_F(SamplePhaseCompilerTest,
   xla::PjRtClient* client = nullptr;
   auto status = phase_compiler_->Compile(options, computation,
                                          *topology_description_, client);
-  EXPECT_THAT(status, absl_testing::StatusIs(absl::StatusCode::kUnimplemented));
+  EXPECT_THAT(status, StatusIs(absl::StatusCode::kUnimplemented));
 }
 
 // Test that the sample phase compiler's Compile method is not implemented for
@@ -127,7 +128,7 @@ TEST_F(SamplePhaseCompilerTest, TestSamplePhaseCompilerCompileWithMlirModule) {
   xla::PjRtClient* client = nullptr;
   auto status =
       phase_compiler_->Compile(options, module, *topology_description_, client);
-  EXPECT_THAT(status, absl_testing::StatusIs(absl::StatusCode::kUnimplemented));
+  EXPECT_THAT(status, StatusIs(absl::StatusCode::kUnimplemented));
 }
 
 // Test the correct usage of the RunPhases method of the sample phase compiler.
@@ -135,7 +136,7 @@ TEST_F(SamplePhaseCompilerTest, TestSamplePhaseCompilerRunPhases) {
   // Prepare the input programs.
   auto partial_programs_in = PrepareInputPartialPrograms(
       /*next_phase=*/std::string(phase_compile_sample_plugin::kPhaseName),
-      /*program_format=*/kStablehloBytecodeFormat);
+      /*program_format=*/0);
 
   // Run the partial compile phase.
   std::vector<std::string> phases_to_run = {
@@ -164,7 +165,7 @@ TEST_F(SamplePhaseCompilerTest,
   std::vector<xla::PjRtPartialProgramProto> partial_programs_in =
       PrepareInputPartialPrograms(
           /*next_phase=*/std::string(phase_compile_sample_plugin::kPhaseName),
-          /*program_format=*/kStablehloBytecodeFormat);
+          /*program_format=*/0);
 
   // Run the partial compile phase.
   std::vector<std::string> phases_to_run = {};
@@ -188,15 +189,14 @@ TEST_F(SamplePhaseCompilerTest,
   std::vector<xla::PjRtPartialProgramProto> partial_programs_in =
       PrepareInputPartialPrograms(
           /*next_phase=*/std::string(phase_compile_sample_plugin::kPhaseName),
-          /*program_format=*/kStablehloBytecodeFormat);
+          /*program_format=*/0);
 
   // Run the partial compile phase.
   std::vector<std::string> phases_to_run = {"unregistered_phase_name"};
   auto partial_programs_out =
       phase_compiler_->RunPhases(xla::CompileOptions(), partial_programs_in,
                                  *topology_description_, phases_to_run);
-  EXPECT_THAT(partial_programs_out,
-              absl_testing::StatusIs(absl::StatusCode::kNotFound));
+  EXPECT_THAT(partial_programs_out, StatusIs(absl::StatusCode::kNotFound));
 }
 
 // Plugin-specific validation: Test the RunPhases method of the sample phase
@@ -213,9 +213,8 @@ TEST_F(SamplePhaseCompilerTest,
       phase_compiler_->RunPhases(xla::CompileOptions(), partial_programs_in,
                                  *topology_description_, phases_to_run);
   EXPECT_THAT(partial_programs_out,
-              absl_testing::StatusIs(
-                  absl::StatusCode::kInvalidArgument,
-                  HasSubstr("Input partial programs cannot be empty")));
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Input partial programs cannot be empty")));
 }
 
 // Plugin-specific validation: Test the RunPhases method of the sample phase
@@ -225,7 +224,10 @@ TEST_F(SamplePhaseCompilerTest, PluginSpecificValidationWithUnexpectedFormat) {
   std::vector<xla::PjRtPartialProgramProto> partial_programs_in =
       PrepareInputPartialPrograms(
           /*next_phase=*/std::string(phase_compile_sample_plugin::kPhaseName),
-          /*program_format=*/"unexpected_format");
+          /*program_format=*/1  // 1 expresses some format which is not expected
+                                // by the sample plugin for the kPhaseName
+                                // phase.
+      );
 
   // Run the partial compile phase.
   std::vector<std::string> phases_to_run = {
@@ -234,18 +236,17 @@ TEST_F(SamplePhaseCompilerTest, PluginSpecificValidationWithUnexpectedFormat) {
       phase_compiler_->RunPhases(xla::CompileOptions(), partial_programs_in,
                                  *topology_description_, phases_to_run);
   EXPECT_THAT(partial_programs_out,
-              absl_testing::StatusIs(
-                  absl::StatusCode::kInvalidArgument,
-                  HasSubstr("Input programs are not in expected format")));
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Input programs are not in expected format")));
 }
 
 // Test the correct usage of the GetPhaseNames method of the sample phase
 // compiler.
 TEST_F(SamplePhaseCompilerTest, TestSamplePhaseCompilerGetPhaseNames) {
   auto phase_names_status = phase_compiler_->GetPhaseNames();
-  EXPECT_THAT(phase_names_status,
-              absl_testing::IsOkAndHolds(
-                  ElementsAre(phase_compile_sample_plugin::kPhaseName)));
+  EXPECT_THAT(
+      phase_names_status,
+      IsOkAndHolds(ElementsAre(phase_compile_sample_plugin::kPhaseName)));
 }
 
 }  // namespace

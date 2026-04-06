@@ -17,14 +17,13 @@ limitations under the License.
 
 #include <cstdint>
 #include <memory>
+#include <numeric>
 #include <tuple>
 #include <vector>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include "absl/algorithm/container.h"
 #include "absl/status/status.h"
-#include "absl/status/status_matchers.h"
 #include "absl/types/span.h"
 #include "llvm/Support/Casting.h"
 #include "xla/layout_util.h"
@@ -41,6 +40,7 @@ limitations under the License.
 #include "xla/python/ifrt/shape.h"
 #include "xla/python/ifrt/sharding.h"
 #include "xla/tsl/lib/core/status_test_util.h"
+#include "xla/tsl/platform/status_matchers.h"
 #include "xla/tsl/platform/statusor.h"
 #include "xla/tsl/platform/test.h"
 
@@ -51,6 +51,7 @@ namespace {
 using ::testing::ElementsAreArray;
 using ::testing::HasSubstr;
 using ::testing::SizeIs;
+using ::tsl::testing::StatusIs;
 
 class RemapPlanTest
     : public testing::TestWithParam<test_util::DeviceTestParam> {
@@ -92,10 +93,9 @@ TEST_P(RemapPlanTest, EmptyMappings) {
                 ConcreteEvenSharding::Create(GetDevices({0}), MemoryKind(),
                                              /*shape=*/Shape({2, 3}),
                                              /*shard_shape=*/Shape({2, 3}))});
-  EXPECT_THAT(
-      plan.Validate(),
-      absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
-                             HasSubstr("Must have at least one mapping")));
+  EXPECT_THAT(plan.Validate(),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Must have at least one mapping")));
 }
 
 TEST_P(RemapPlanTest, MixedDtype) {
@@ -133,7 +133,6 @@ TEST_P(RemapPlanTest, MixedDtype) {
                          /*from=*/{RemapPlan::Interval{0, 1, 1}},
                          /*to=*/{RemapPlan::Interval{0, 1, 1}}});
 
-  TF_EXPECT_OK(plan.ComputeInputDevicesForOutputMap(client()));
   TF_EXPECT_OK(plan.Validate());
 }
 
@@ -160,9 +159,8 @@ TEST_P(RemapPlanTest, InvalidOutputDtype) {
                          /*from=*/{RemapPlan::Interval{0, 1, 1}},
                          /*to=*/{RemapPlan::Interval{0, 1, 1}}});
   EXPECT_THAT(plan.Validate(),
-              absl_testing::StatusIs(
-                  absl::StatusCode::kInvalidArgument,
-                  HasSubstr("Input and output must have the same dtype")));
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Input and output must have the same dtype")));
 }
 
 TEST_P(RemapPlanTest, InvalidOutputDtypeFromMixedInputDtypes) {
@@ -199,9 +197,8 @@ TEST_P(RemapPlanTest, InvalidOutputDtypeFromMixedInputDtypes) {
                          /*to=*/{RemapPlan::Interval{1, 2, 1}}});
 
   EXPECT_THAT(plan.Validate(),
-              absl_testing::StatusIs(
-                  absl::StatusCode::kInvalidArgument,
-                  HasSubstr("Input and output must have the same dtype")));
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Input and output must have the same dtype")));
 }
 
 TEST_P(RemapPlanTest, InvalidLayout) {
@@ -234,10 +231,10 @@ TEST_P(RemapPlanTest, InvalidLayout) {
                          /*out_array=*/0,
                          /*from=*/{RemapPlan::Interval{0, 1, 1}},
                          /*to=*/{RemapPlan::Interval{0, 1, 1}}});
-  EXPECT_THAT(plan.Validate(),
-              absl_testing::StatusIs(
-                  absl::StatusCode::kInvalidArgument,
-                  HasSubstr("Input and output must have the same layout")));
+  EXPECT_THAT(
+      plan.Validate(),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("Input and output must have the same layout")));
 }
 
 TEST_P(RemapPlanTest, InvalidInputArrayIndex) {
@@ -264,9 +261,8 @@ TEST_P(RemapPlanTest, InvalidInputArrayIndex) {
                          /*to=*/{RemapPlan::Interval{0, 1, 1}}});
   EXPECT_THAT(
       plan.Validate(),
-      absl_testing::StatusIs(
-          absl::StatusCode::kInvalidArgument,
-          HasSubstr("mappings[0].in_array must be in [0, 0], but is 1")));
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("mappings[0].in_array must be in [0, 0], but is 1")));
 }
 
 TEST_P(RemapPlanTest, InvalidOutputArrayIndex) {
@@ -293,9 +289,8 @@ TEST_P(RemapPlanTest, InvalidOutputArrayIndex) {
                          /*to=*/{RemapPlan::Interval{0, 1, 1}}});
   EXPECT_THAT(
       plan.Validate(),
-      absl_testing::StatusIs(
-          absl::StatusCode::kInvalidArgument,
-          HasSubstr("mappings[0].out_array must be in [0, 0], but is 1")));
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("mappings[0].out_array must be in [0, 0], but is 1")));
 }
 
 TEST_P(RemapPlanTest, InvalidIntervalCount) {
@@ -322,7 +317,7 @@ TEST_P(RemapPlanTest, InvalidIntervalCount) {
       /*to=*/{RemapPlan::Interval{0, 1, 1}}});
   EXPECT_THAT(
       plan.Validate(),
-      absl_testing::StatusIs(
+      StatusIs(
           absl::StatusCode::kInvalidArgument,
           HasSubstr("mappings[0].from and mappings[0].to must have the same "
                     "number of intervals, but has 2 and 1 intervals")));
@@ -337,7 +332,7 @@ TEST_P(RemapPlanTest, InvalidShardIndex) {
       num_shards *= shape[i] / shard_shape[i];
     }
     std::vector<int> devices(num_shards);
-    absl::c_iota(devices, 0);
+    std::iota(devices.begin(), devices.end(), 0);
     RemapPlan plan;
     plan.input_specs.push_back(ArraySpec{
         /*dtype=*/DType(DType::kS32),
@@ -360,53 +355,47 @@ TEST_P(RemapPlanTest, InvalidShardIndex) {
     return plan.Validate();
   };
 
-  EXPECT_THAT(
-      run(RemapPlan::Interval{-1, 1, 1}, RemapPlan::Interval{0, 1, 1}),
-      absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
-                             HasSubstr("start must be in [0, 0], but is -1")));
-  EXPECT_THAT(
-      run(RemapPlan::Interval{1, 1, 1}, RemapPlan::Interval{0, 1, 1}),
-      absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
-                             HasSubstr("start must be in [0, 0], but is 1")));
-  EXPECT_THAT(
-      run(RemapPlan::Interval{0, 1, 1}, RemapPlan::Interval{-1, 1, 1}),
-      absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
-                             HasSubstr("start must be in [0, 0], but is -1")));
-  EXPECT_THAT(
-      run(RemapPlan::Interval{0, 1, 1}, RemapPlan::Interval{1, 1, 1}),
-      absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
-                             HasSubstr("start must be in [0, 0], but is 1")));
-
-  EXPECT_THAT(run(RemapPlan::Interval{0, -1, 1}, RemapPlan::Interval{0, 1, 1}),
-              absl_testing::StatusIs(
-                  absl::StatusCode::kInvalidArgument,
-                  HasSubstr("end must be in [0, 1] if step is 1, but is -1")));
-  EXPECT_THAT(run(RemapPlan::Interval{0, 2, 1}, RemapPlan::Interval{0, 1, 1}),
-              absl_testing::StatusIs(
-                  absl::StatusCode::kInvalidArgument,
-                  HasSubstr("end must be in [0, 1] if step is 1, but is 2")));
-  EXPECT_THAT(run(RemapPlan::Interval{0, 1, 1}, RemapPlan::Interval{0, -1, 1}),
-              absl_testing::StatusIs(
-                  absl::StatusCode::kInvalidArgument,
-                  HasSubstr("end must be in [0, 1] if step is 1, but is -1")));
-  EXPECT_THAT(run(RemapPlan::Interval{0, 1, 1}, RemapPlan::Interval{0, 2, 1}),
-              absl_testing::StatusIs(
-                  absl::StatusCode::kInvalidArgument,
-                  HasSubstr("end must be in [0, 1] if step is 1, but is 2")));
-  EXPECT_THAT(run(RemapPlan::Interval{0, 6, 2}, RemapPlan::Interval{0, 2, 1},
-                  /*shape=*/{4, 6}, /*shard_shape=*/{2, 3}),
-              absl_testing::StatusIs(
-                  absl::StatusCode::kInvalidArgument,
-                  HasSubstr("end must be in [0, 5] if step is 2, but is 6")));
+  EXPECT_THAT(run(RemapPlan::Interval{-1, 1, 1}, RemapPlan::Interval{0, 1, 1}),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("start must be in [0, 0], but is -1")));
+  EXPECT_THAT(run(RemapPlan::Interval{1, 1, 1}, RemapPlan::Interval{0, 1, 1}),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("start must be in [0, 0], but is 1")));
+  EXPECT_THAT(run(RemapPlan::Interval{0, 1, 1}, RemapPlan::Interval{-1, 1, 1}),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("start must be in [0, 0], but is -1")));
+  EXPECT_THAT(run(RemapPlan::Interval{0, 1, 1}, RemapPlan::Interval{1, 1, 1}),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("start must be in [0, 0], but is 1")));
 
   EXPECT_THAT(
-      run(RemapPlan::Interval{0, 1, 0}, RemapPlan::Interval{0, 1, 1}),
-      absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
-                             HasSubstr("step must be positive, but is 0")));
+      run(RemapPlan::Interval{0, -1, 1}, RemapPlan::Interval{0, 1, 1}),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("end must be in [0, 1] if step is 1, but is -1")));
   EXPECT_THAT(
-      run(RemapPlan::Interval{0, 1, 1}, RemapPlan::Interval{0, 1, -1}),
-      absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
-                             HasSubstr("step must be positive, but is -1")));
+      run(RemapPlan::Interval{0, 2, 1}, RemapPlan::Interval{0, 1, 1}),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("end must be in [0, 1] if step is 1, but is 2")));
+  EXPECT_THAT(
+      run(RemapPlan::Interval{0, 1, 1}, RemapPlan::Interval{0, -1, 1}),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("end must be in [0, 1] if step is 1, but is -1")));
+  EXPECT_THAT(
+      run(RemapPlan::Interval{0, 1, 1}, RemapPlan::Interval{0, 2, 1}),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("end must be in [0, 1] if step is 1, but is 2")));
+  EXPECT_THAT(
+      run(RemapPlan::Interval{0, 6, 2}, RemapPlan::Interval{0, 2, 1},
+          /*shape=*/{4, 6}, /*shard_shape=*/{2, 3}),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("end must be in [0, 5] if step is 2, but is 6")));
+
+  EXPECT_THAT(run(RemapPlan::Interval{0, 1, 0}, RemapPlan::Interval{0, 1, 1}),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("step must be positive, but is 0")));
+  EXPECT_THAT(run(RemapPlan::Interval{0, 1, 1}, RemapPlan::Interval{0, 1, -1}),
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("step must be positive, but is -1")));
 }
 
 TEST_P(RemapPlanTest, AlreadyUsedInputShard) {
@@ -432,9 +421,8 @@ TEST_P(RemapPlanTest, AlreadyUsedInputShard) {
       /*from=*/{RemapPlan::Interval{0, 1, 1}, RemapPlan::Interval{0, 1, 1}},
       /*to=*/{RemapPlan::Interval{0, 1, 1}, RemapPlan::Interval{1, 2, 1}}});
   EXPECT_THAT(plan.Validate(),
-              absl_testing::StatusIs(
-                  absl::StatusCode::kInvalidArgument,
-                  HasSubstr("Input array 0 shard 0 is already used")));
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Input array 0 shard 0 is already used")));
 }
 
 TEST_P(RemapPlanTest, UnassignedOutputShard) {
@@ -460,9 +448,8 @@ TEST_P(RemapPlanTest, UnassignedOutputShard) {
                          /*from=*/{RemapPlan::Interval{0, 1, 1}},
                          /*to=*/{RemapPlan::Interval{0, 1, 1}}});
   EXPECT_THAT(plan.Validate(),
-              absl_testing::StatusIs(
-                  absl::StatusCode::kInvalidArgument,
-                  HasSubstr("Output array 0 shard 1 is unassigned")));
+              StatusIs(absl::StatusCode::kInvalidArgument,
+                       HasSubstr("Output array 0 shard 1 is unassigned")));
 }
 
 TEST_P(RemapPlanTest, AlreadyAssignedOutputShard) {
@@ -487,10 +474,10 @@ TEST_P(RemapPlanTest, AlreadyAssignedOutputShard) {
       /*out_array=*/0,
       /*from=*/{RemapPlan::Interval{0, 1, 1}, RemapPlan::Interval{1, 2, 1}},
       /*to=*/{RemapPlan::Interval{0, 1, 1}, RemapPlan::Interval{0, 1, 1}}});
-  EXPECT_THAT(plan.Validate(),
-              absl_testing::StatusIs(
-                  absl::StatusCode::kInvalidArgument,
-                  HasSubstr("Output array 0 shard 0 is already assigned")));
+  EXPECT_THAT(
+      plan.Validate(),
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("Output array 0 shard 0 is already assigned")));
 }
 
 TEST_P(RemapPlanTest, InvalidOutputDevices) {
@@ -517,7 +504,7 @@ TEST_P(RemapPlanTest, InvalidOutputDevices) {
                          /*to=*/{RemapPlan::Interval{0, 2, 1}}});
   EXPECT_THAT(
       plan.Validate(),
-      absl_testing::StatusIs(
+      StatusIs(
           absl::StatusCode::kInvalidArgument,
           HasSubstr(
               "Output array 0 devices and sharding devices do not match")));
@@ -583,63 +570,11 @@ TEST_P(RemapPlanTest, CheckMultipleInputsToOneOutput) {
 
   EXPECT_THAT(
       plan.CheckArrayCopySemantics(xla::ifrt::ArrayCopySemantics::kReuseInput),
-      absl_testing::StatusIs(
-          absl::StatusCode::kInvalidArgument,
-          HasSubstr("kDonateInput is required if multiple inputs are "
-                    "mapped to one output")));
+      StatusIs(absl::StatusCode::kInvalidArgument,
+               HasSubstr("kDonateInput is required if multiple inputs are "
+                         "mapped to one output")));
   TF_EXPECT_OK(plan.CheckArrayCopySemantics(
       xla::ifrt::ArrayCopySemantics::kDonateInput));
-}
-
-TEST_P(RemapPlanTest, InvalidInputDevicesForOutputMap) {
-  ArraySpec dummy_spec = GetDummySpec();
-
-  RemapPlan plan;
-  plan.input_specs = {dummy_spec, dummy_spec};
-  plan.output_specs = {dummy_spec};
-
-  plan.mappings = std::make_shared<std::vector<RemapPlan::Mapping>>();
-  *plan.mappings = {RemapPlan::Mapping{/*in_array=*/0,
-                                       /*out_array=*/0,
-                                       /*from=*/{RemapPlan::Interval{0, 1, 1}},
-                                       /*to=*/{RemapPlan::Interval{0, 1, 1}}},
-                    RemapPlan::Mapping{/*in_array=*/1,
-                                       /*out_array=*/0,
-                                       /*from=*/{RemapPlan::Interval{1, 2, 1}},
-                                       /*to=*/{RemapPlan::Interval{1, 2, 1}}}};
-
-  plan.input_devices_for_output_map.insert({1, {}});
-  EXPECT_THAT(plan.Validate(),
-              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
-                                     HasSubstr("not in `mappings`")));
-
-  plan.input_devices_for_output_map.clear();
-  plan.input_devices_for_output_map.insert(
-      {0, {{1, dummy_spec.sharding->devices()}}});
-  EXPECT_THAT(plan.Validate(),
-              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
-                                     HasSubstr("has 1 inputs")));
-
-  plan.input_devices_for_output_map.clear();
-  plan.input_devices_for_output_map.insert(
-      {0,
-       {{3, dummy_spec.sharding->devices()},
-        {4, dummy_spec.sharding->devices()}}});
-  EXPECT_THAT(plan.Validate(),
-              absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
-                                     HasSubstr("references input array 3")));
-
-  plan.input_devices_for_output_map.clear();
-  plan.input_devices_for_output_map.insert(
-      {0, {{0, GetDevices({1})}, {4, dummy_spec.sharding->devices()}}});
-  EXPECT_THAT(
-      plan.Validate(),
-      absl_testing::StatusIs(absl::StatusCode::kInvalidArgument,
-                             HasSubstr("does not reference that device")));
-
-  plan.input_devices_for_output_map.clear();
-  TF_EXPECT_OK(plan.ComputeInputDevicesForOutputMap(client()));
-  TF_EXPECT_OK(plan.Validate());
 }
 
 INSTANTIATE_TEST_SUITE_P(NumDevices, RemapPlanTest,
@@ -674,7 +609,6 @@ TEST_P(RemapPlanSerDesTest, ToFromProto) {
   Shape shape({20, 20});
   Shape shard_shape({5, 20});
   DeviceListRef devices = GetDevices({0, 1, 2, 3});
-  DeviceListRef devices_2 = GetDevices({1, 2});
   ShardingRef sharding =
       ConcreteEvenSharding::Create(devices, MemoryKind(), /*shape=*/shape,
                                    /*shard_shape=*/shard_shape);
@@ -702,28 +636,11 @@ TEST_P(RemapPlanSerDesTest, ToFromProto) {
       /*from=*/{RemapPlan::Interval{0, 4, 2}, RemapPlan::Interval{1, 4, 2}},
       /*to=*/{RemapPlan::Interval{0, 2, 1}, RemapPlan::Interval{2, 4, 1}}});
 
-  plan.input_devices_for_output_map.insert({0, {{1, devices}}});
-  plan.input_devices_for_output_map.insert({1, {{2, devices}, {3, devices_2}}});
-
   TF_ASSERT_OK_AND_ASSIGN(RemapPlanProto plan_proto, plan.ToProto(version()));
   TF_ASSERT_OK_AND_ASSIGN(RemapPlan plan_copy,
                           RemapPlan::FromProto(client(), plan_proto));
 
   EXPECT_THAT(*plan_copy.mappings, ElementsAreArray(*plan.mappings));
-  ASSERT_EQ(plan.input_devices_for_output_map.size(),
-            plan_copy.input_devices_for_output_map.size());
-  for (const auto& [out_array, input_devices] :
-       plan.input_devices_for_output_map) {
-    ASSERT_TRUE(plan_copy.input_devices_for_output_map.contains(out_array));
-    const auto& copy_input_devices =
-        plan_copy.input_devices_for_output_map[out_array];
-    ASSERT_EQ(copy_input_devices.size(), input_devices.size());
-    for (int i = 0; i < input_devices.size(); ++i) {
-      EXPECT_EQ(copy_input_devices[i].in_array, input_devices[i].in_array);
-      EXPECT_EQ(copy_input_devices[i].input_devices,
-                input_devices[i].input_devices);
-    }
-  }
 
   EXPECT_THAT(plan_copy.output_specs, SizeIs(2));
   for (const auto& spec : plan_copy.input_specs) {

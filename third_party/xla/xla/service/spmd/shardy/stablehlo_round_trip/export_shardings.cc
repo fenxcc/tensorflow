@@ -113,8 +113,9 @@ bool allShardingsUnreduced(ArrayRef<TensorShardingAttr> shardings) {
 }
 
 // Convert the shardings from kShardingAttr into kXlaShardingAttr.
-void exportFunc(FuncOp funcOp, const SymbolTable& symbolTable,
-                OpBuilder& builder, bool addMissingShardingToControlFlow) {
+LogicalResult exportFunc(FuncOp funcOp, const SymbolTable& symbolTable,
+                         OpBuilder& builder,
+                         bool addMissingShardingToControlFlow) {
   std::function<StringAttr(const HloSharding&)> getStringAttr =
       [&](const HloSharding& hloSharding) {
         return builder.getStringAttr(hloSharding.ToString());
@@ -167,6 +168,10 @@ void exportFunc(FuncOp funcOp, const SymbolTable& symbolTable,
 
     if (ArrayRef<TensorShardingAttr> shardings = mlir::sdy::getShardings(op);
         !shardings.empty()) {
+      if (allShardingsUnreduced(shardings)) {
+        setFrontendAttribute(op, kHasUnreducedAxes,
+                             builder.getStringAttr("true"));
+      }
       setHloShardingAttr(op, shardings, getMeshAttr, manualAxes);
       op->removeAttr(kShardingAttr);
     } else if (addMissingShardingToControlFlow &&
@@ -180,6 +185,8 @@ void exportFunc(FuncOp funcOp, const SymbolTable& symbolTable,
       op->setAttr(kXlaShardingAttr, getStringAttr(HloSharding::Replicate()));
     }
   });
+
+  return success();
 }
 
 class ExportStablehloShardingsPass
@@ -200,7 +207,10 @@ class ExportStablehloShardingsPass
     auto builder = OpBuilder::atBlockBegin(&moduleOp.getBodyRegion().front());
 
     for (auto funcOp : moduleOp.getOps<FuncOp>()) {
-      exportFunc(funcOp, symbolTable, builder, addMissingShardingToControlFlow);
+      if (mlir::failed(exportFunc(funcOp, symbolTable, builder,
+                                  addMissingShardingToControlFlow))) {
+        signalPassFailure();
+      }
     }
 
     moduleOp.walk([&](stablehlo::CustomCallOp customCall) {
@@ -254,15 +264,16 @@ HloSharding getHloShardingForOp(
     Operation* op, ArrayRef<TensorShardingAttr> shardings,
     std::function<MeshAttr(TensorShardingAttr)> getMeshAttr,
     ArrayRef<StringAttr> manualAxes) {
+  // TODO(bartchr): pass through a symbol table to `getMesh(...)` below.
   bool isNoResultMaximal = op->getNumResults() == 0 && shardings.size() == 1 &&
-                           (getMeshAttr(shardings.front()).isMaximal() ||
+                           (shardings.front().getMesh(op).isMaximal() ||
                             shardings.front().isFullyReplicated());
   CHECK(shardings.size() == op->getNumResults() || isNoResultMaximal);
   if (op->getNumResults() == 1 || isNoResultMaximal) {
     return convertToHloSharding(shardings.front(), getMeshAttr, manualAxes);
   }
 
-  std::vector<HloSharding> newShardings;
+  SmallVector<HloSharding> newShardings;
   llvm::transform(shardings, std::back_inserter(newShardings),
                   [&](TensorShardingAttr sdySharding) {
                     return convertToHloSharding(sdySharding, getMeshAttr,
@@ -302,11 +313,6 @@ HloSharding convertToHloSharding(
   if (mesh.getAxes().size() == manualAxes.size()) {
     return HloSharding::Manual();
   }
-  // TODO(b/438306205): Remove this check once we support both unreduced and
-  // manual axes in subgroup sharding.
-  CHECK(sdySharding.getUnreducedAxes().empty() || manualAxes.empty())
-      << "Only one of unreduced and manual axes can be present: "
-      << mlir::sdy::attributeToString(sdySharding);
 
   // Iterate the dim shardings.
   for (auto [index, dimSharding] :
@@ -328,16 +334,6 @@ HloSharding convertToHloSharding(
     }
   }
 
-  // Iterate the unreduced axes.
-  if (!sdySharding.getUnreducedAxes().empty()) {
-    types.push_back(OpSharding::UNREDUCED);
-    int64_t& unreducedDim = tileAssignmentDims.emplace_back(1);
-    for (AxisRefAttr unreducedAxis : sdySharding.getUnreducedAxes()) {
-      unreducedDim *= unreducedAxis.getSize(mesh);
-      axisRefToShardedPos[unreducedAxis] = shardedPos++;
-    }
-  }
-
   // We will add all axes and let canonicalization merge adjacent axes.
   SmallVector<AxisRefAttr> meshAxisRefs = getOrderedAxisRefs(sdySharding, mesh);
   SmallVector<int64_t> reshapeDims(meshAxisRefs.size());
@@ -350,11 +346,11 @@ HloSharding convertToHloSharding(
 
     auto shardedPosIt = axisRefToShardedPos.find(axisRef);
     if (shardedPosIt == axisRefToShardedPos.end()) {
-      // Axis is replicated.
+      // Axis is replicated
       transposePerm[replicatedPos++] = axisIndex;
       totalReplicatedSize *= axisRef.getSize(mesh);
     } else {
-      // Axis is sharded, manual, or unreduced.
+      // Axis is sharded or manual
       transposePerm[shardedPosIt->second] = axisIndex;
     }
   }

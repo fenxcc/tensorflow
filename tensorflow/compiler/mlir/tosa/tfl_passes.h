@@ -42,8 +42,8 @@ struct TOSATFLLegalizationPipelineOptions
       llvm::cl::desc("Dequantize the TFLite softmax"), llvm::cl::init(false)};
 
   TOSATFLLegalizationPipelineOptions() {
-    disabled_patterns = {};
-    enabled_patterns = {};
+    disabled_patterns = std::nullopt;
+    enabled_patterns = std::nullopt;
   }
 };
 

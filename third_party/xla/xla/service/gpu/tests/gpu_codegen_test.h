@@ -31,9 +31,8 @@ namespace gpu {
 class GpuCodegenTest : public LlvmIrGenTestBase {
  public:
   GpuCodegenTest()
-      : is_built_with_rocm_(se::PlatformManager::PlatformWithName("ROCM").ok()),
-        is_built_with_sycl_(
-            se::PlatformManager::PlatformWithName("SYCL").ok()) {}
+      : is_built_with_rocm_(
+            se::PlatformManager::PlatformWithName("ROCM").ok()) {}
 
  protected:
   // Converts LLVM match to be platform-specific.
@@ -53,7 +52,6 @@ class GpuCodegenTest : public LlvmIrGenTestBase {
       bool run_optimization_passes = true);
 
   bool is_built_with_rocm_;
-  bool is_built_with_sycl_;
 };
 
 }  // namespace gpu

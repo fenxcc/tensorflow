@@ -34,7 +34,6 @@ limitations under the License.
 #include "xla/python/ifrt/shape.h"
 #include "xla/python/ifrt/sharding.h"
 #include "xla/python/ifrt/sharding_serdes.pb.h"
-#include "xla/tsl/platform/errors.h"
 #include "xla/tsl/platform/statusor.h"
 
 namespace xla {
@@ -123,7 +122,7 @@ class OpaqueShardingSerDes
     const OpaqueSharding& sharding = llvm::cast<OpaqueSharding>(serializable);
     OpaqueShardingProto proto;
     proto.set_version_number(SerDesVersionNumber(0).value());
-    sharding.devices()->ToProto(*proto.mutable_devices(), version);
+    *proto.mutable_devices() = sharding.devices()->ToProto(version);
     if (sharding.memory_kind().memory_kind().has_value()) {
       proto.set_memory_kind(std::string(*sharding.memory_kind().memory_kind()));
     }
@@ -181,20 +180,21 @@ class ConcreteShardingSerDes
         llvm::cast<ConcreteSharding>(serializable);
     ConcreteShardingProto proto;
     proto.set_version_number(SerDesVersionNumber(0).value());
-    sharding.devices()->ToProto(*proto.mutable_devices(), version);
+    *proto.mutable_devices() = sharding.devices()->ToProto(version);
     if (sharding.memory_kind().memory_kind().has_value()) {
       proto.set_memory_kind(std::string(*sharding.memory_kind().memory_kind()));
     }
     if (sharding.has_static_shape()) {
-      sharding.shape().ToProto(*proto.mutable_shape(), version);
+      *proto.mutable_shape() = sharding.shape().ToProto(version);
       for (const Shape& shape : sharding.shard_shapes()) {
         *proto.add_shard_shapes() = shape.ToProto(version);
       }
     } else {
-      sharding.dynamic_shape().ToProto(*proto.mutable_dynamic_shape(), version);
+      *proto.mutable_dynamic_shape() =
+          sharding.dynamic_shape().ToProto(version);
       for (const DynamicShape& dynamic_shape :
            sharding.shard_dynamic_shapes()) {
-        dynamic_shape.ToProto(*proto.add_shard_dynamic_shapes(), version);
+        *proto.add_shard_dynamic_shapes() = dynamic_shape.ToProto(version);
       }
     }
     return proto.SerializeAsString();
@@ -279,12 +279,12 @@ class ConcreteEvenShardingSerDes
         llvm::cast<ConcreteEvenSharding>(serializable);
     ConcreteEvenShardingProto proto;
     proto.set_version_number(SerDesVersionNumber(0).value());
-    sharding.devices()->ToProto(*proto.mutable_devices(), version);
+    *proto.mutable_devices() = sharding.devices()->ToProto(version);
     if (sharding.memory_kind().memory_kind().has_value()) {
       proto.set_memory_kind(std::string(*sharding.memory_kind().memory_kind()));
     }
-    sharding.shape().ToProto(*proto.mutable_shape(), version);
-    sharding.shard_shape().ToProto(*proto.mutable_shard_shape(), version);
+    *proto.mutable_shape() = sharding.shape().ToProto(version);
+    *proto.mutable_shard_shape() = sharding.shard_shape().ToProto(version);
     proto.set_is_fully_replicated(sharding.IsFullyReplicated());
     return proto.SerializeAsString();
   }
@@ -344,12 +344,12 @@ class ShardingParamShardingSerDes
         llvm::cast<ShardingParamSharding>(serializable);
     ShardingParamShardingProto proto;
     proto.set_version_number(SerDesVersionNumber(0).value());
-    sharding.devices()->ToProto(*proto.mutable_devices(), version);
+    *proto.mutable_devices() = sharding.devices()->ToProto(version);
     if (sharding.memory_kind().memory_kind().has_value()) {
       proto.set_memory_kind(std::string(*sharding.memory_kind().memory_kind()));
     }
-    TF_RETURN_IF_ERROR(sharding.sharding_param().ToProto(
-        *proto.mutable_sharding_param(), version));
+    TF_ASSIGN_OR_RETURN(*proto.mutable_sharding_param(),
+                        sharding.sharding_param().ToProto(version));
     return proto.SerializeAsString();
   }
 

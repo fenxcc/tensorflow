@@ -13,7 +13,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
-#include "absl/status/status.h"
 #include "xla/tsl/lib/core/status_test_util.h"
 #include "xla/tsl/lib/hash/crc32c.h"
 #include "xla/tsl/lib/io/record_reader.h"
@@ -31,8 +30,8 @@ namespace {
 
 // Construct a string of the specified length made out of the supplied
 // partial string.
-std::string BigString(const std::string& partial_string, size_t n) {
-  std::string result;
+string BigString(const string& partial_string, size_t n) {
+  string result;
   while (result.size() < n) {
     result.append(partial_string);
   }
@@ -41,20 +40,20 @@ std::string BigString(const std::string& partial_string, size_t n) {
 }
 
 // Construct a string from a number
-std::string NumberString(int n) {
+string NumberString(int n) {
   char buf[50];
   snprintf(buf, sizeof(buf), "%d.", n);
-  return std::string(buf);
+  return string(buf);
 }
 
 // Return a skewed potentially long string
-std::string RandomSkewedString(int i, random::SimplePhilox* rnd) {
+string RandomSkewedString(int i, random::SimplePhilox* rnd) {
   return BigString(NumberString(i), rnd->Skewed(17));
 }
 
 class StringDest : public WritableFile {
  public:
-  explicit StringDest(std::string* contents) : contents_(contents) {}
+  explicit StringDest(string* contents) : contents_(contents) {}
 
   absl::Status Close() override { return absl::OkStatus(); }
   absl::Status Flush() override { return absl::OkStatus(); }
@@ -75,23 +74,23 @@ class StringDest : public WritableFile {
   }
 
  private:
-  std::string* contents_;
+  string* contents_;
 };
 
 class StringSource : public RandomAccessFile {
  public:
-  explicit StringSource(std::string* contents)
+  explicit StringSource(string* contents)
       : contents_(contents), force_error_(false) {}
 
-  absl::Status Read(uint64_t offset, size_t n, absl::string_view* result,
+  absl::Status Read(uint64 offset, size_t n, absl::string_view* result,
                     char* scratch) const override {
     if (force_error_) {
       force_error_ = false;
-      return absl::DataLossError("read error");
+      return errors::DataLoss("read error");
     }
 
     if (offset >= contents_->size()) {
-      return absl::OutOfRangeError("end of file");
+      return errors::OutOfRange("end of file");
     }
 
     if (contents_->size() < offset + n) {
@@ -104,17 +103,17 @@ class StringSource : public RandomAccessFile {
   void force_error() { force_error_ = true; }
 
  private:
-  std::string* contents_;
+  string* contents_;
   mutable bool force_error_;
 };
 
 class RecordioTest : public ::testing::Test {
  private:
-  std::string contents_;
+  string contents_;
   StringDest dest_;
   StringSource source_;
   bool reading_;
-  uint64_t readpos_;
+  uint64 readpos_;
   RecordWriter* writer_;
   RecordReader* reader_;
 
@@ -132,7 +131,7 @@ class RecordioTest : public ::testing::Test {
     delete reader_;
   }
 
-  void Write(const std::string& msg) {
+  void Write(const string& msg) {
     ASSERT_TRUE(!reading_) << "Write() after starting to read";
     TF_ASSERT_OK(writer_->WriteRecord(absl::string_view(msg)));
   }
@@ -146,7 +145,7 @@ class RecordioTest : public ::testing::Test {
 
   size_t WrittenBytes() const { return contents_.size(); }
 
-  std::string Read() {
+  string Read() {
     if (!reading_) {
       reading_ = true;
     }
@@ -183,7 +182,7 @@ class RecordioTest : public ::testing::Test {
     Write("bar");
     Write(BigString("x", 10000));
     reading_ = true;
-    uint64_t offset = WrittenBytes() + offset_past_end;
+    uint64 offset = WrittenBytes() + offset_past_end;
     tstring record;
     absl::Status s = reader_->ReadRecord(&offset, &record);
     ASSERT_TRUE(absl::IsOutOfRange(s)) << s;
@@ -251,7 +250,7 @@ TEST_F(RecordioTest, RandomRead) {
 
 void TestNonSequentialReads(const RecordWriterOptions& writer_options,
                             const RecordReaderOptions& reader_options) {
-  std::string contents;
+  string contents;
   StringDest dst(&contents);
   RecordWriter writer(&dst, writer_options);
   for (int i = 0; i < 10; ++i) {
@@ -264,8 +263,8 @@ void TestNonSequentialReads(const RecordWriterOptions& writer_options,
 
   tstring record;
   // First read sequentially to fill in the offsets table.
-  uint64_t offsets[10] = {0};
-  uint64_t offset = 0;
+  uint64 offsets[10] = {0};
+  uint64 offset = 0;
   for (int i = 0; i < 10; ++i) {
     offsets[i] = offset;
     TF_ASSERT_OK(reader.ReadRecord(&offset, &record)) << i;
@@ -307,15 +306,15 @@ void AssertHasSubstr(absl::string_view s, absl::string_view expected) {
 
 void TestReadError(const RecordWriterOptions& writer_options,
                    const RecordReaderOptions& reader_options) {
-  const std::string wrote = BigString("well hello there!", 100);
-  std::string contents;
+  const string wrote = BigString("well hello there!", 100);
+  string contents;
   StringDest dst(&contents);
   TF_ASSERT_OK(RecordWriter(&dst, writer_options).WriteRecord(wrote));
 
   StringSource file(&contents);
   RecordReader reader(&file, reader_options);
 
-  uint64_t offset = 0;
+  uint64 offset = 0;
   tstring read;
   file.force_error();
   absl::Status status = reader.ReadRecord(&offset, &read);

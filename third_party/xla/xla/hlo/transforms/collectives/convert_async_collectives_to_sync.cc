@@ -15,8 +15,6 @@ limitations under the License.
 
 #include "xla/hlo/transforms/collectives/convert_async_collectives_to_sync.h"
 
-#include <cstdint>
-#include <optional>
 #include <utility>
 #include <vector>
 
@@ -34,9 +32,7 @@ limitations under the License.
 #include "xla/hlo/ir/hlo_opcode.h"
 #include "xla/hlo/ir/hlo_schedule.h"
 #include "xla/hlo/utils/hlo_query.h"
-#include "xla/service/scheduling_annotations_util.h"
 #include "xla/status_macros.h"
-#include "xla/tsl/platform/statusor.h"
 #include "xla/util.h"
 #include "xla/xla_data.pb.h"
 #include "tsl/platform/errors.h"
@@ -93,8 +89,6 @@ absl::StatusOr<HloInstruction*> CreateSyncVariant(HloInstruction* async_start,
 
   sync_instruction->set_metadata(async_start->metadata());
   sync_instruction->CopyBackendConfigFrom(async_start);
-  FrontendAttributes fas = async_done->frontend_attributes();
-  sync_instruction->set_frontend_attributes(fas);
 
   TF_RETURN_IF_ERROR(async_done->ReplaceAllUsesWith(sync_instruction));
 
@@ -129,16 +123,6 @@ ConvertAsyncCollectivesToSync::ReplaceAsyncInstructionsWithSync(
   for (auto& [async_start, async_done] : async_pairs) {
     TF_ASSIGN_OR_RETURN(HloInstruction * sync,
                         CreateSyncVariant(async_start, async_done));
-    TF_ASSIGN_OR_RETURN(std::optional<int64_t> group_id,
-                        GetSchedulingAnnotationGroupId(async_done));
-    if (group_id) {
-      LOG(WARNING) << "Async collective pair (" << async_start->name() << ", "
-                   << async_done->name() << ") with scheduling group id "
-                   << *group_id
-                   << " is not overlapped after scheduling and is converted "
-                      "to a synchronous collective "
-                   << sync->name() << ".";
-    }
     // Remember name of async instruction for profile usability.
     FrontendAttributes attributes;
     auto& map = *attributes.mutable_map();
@@ -218,7 +202,7 @@ absl::StatusOr<bool> ConvertAsyncCollectivesToSync::RunOnComputation(
   return true;
 }
 
-absl::StatusOr<bool> ConvertAsyncCollectivesToSync::RunImpl(
+absl::StatusOr<bool> ConvertAsyncCollectivesToSync::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   if (!module->has_schedule()) {

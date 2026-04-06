@@ -16,21 +16,20 @@ limitations under the License.
 #include "xla/backends/gpu/runtime/gemm_thunk.h"
 
 #include <memory>
+#include <string>
 #include <vector>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include "absl/strings/string_view.h"
 #include "xla/backends/gpu/runtime/thunk.h"
-#include "xla/backends/gpu/runtime/thunk.pb.h"
 #include "xla/service/buffer_assignment.h"
 #include "xla/tsl/platform/statusor.h"
 #include "xla/tsl/platform/test.h"
-#include "xla/tsl/util/proto/parse_text_proto.h"
 #include "xla/tsl/util/proto/proto_matchers.h"
+#include "tsl/platform/protobuf.h"
 
 using ::tsl::proto_testing::EqualsProto;
-using ::tsl::proto_testing::ParseTextProtoOrDie;
 
 namespace xla::gpu {
 namespace {
@@ -93,7 +92,11 @@ TEST(GemmThunkTest, ProtoRoundTrip) {
     }
   )pb";
 
-  ThunkProto original_thunk_proto = ParseTextProtoOrDie<ThunkProto>(kProtoText);
+  ThunkProto original_thunk_proto;
+  ASSERT_TRUE(tsl::protobuf::TextFormat::ParseFromString(
+      std::string(kProtoText),  // NOLINT -- openxla protobuf version requires
+                                // it to be a string
+      &original_thunk_proto));
 
   std::vector<BufferAllocation> buffer_allocations;
   buffer_allocations.emplace_back(/*index=*/0, /*size=*/100, /*color=*/10);

@@ -29,8 +29,8 @@ limitations under the License.
 #include "absl/status/statusor.h"
 #include "absl/synchronization/mutex.h"
 #include "absl/types/span.h"
-#include "xla/future.h"
 #include "xla/pjrt/pjrt_client.h"
+#include "xla/pjrt/pjrt_future.h"
 #include "xla/pjrt/raw_buffer.h"
 #include "xla/python/ifrt/array.h"
 #include "xla/python/transfer/streaming.h"
@@ -52,8 +52,8 @@ absl::StatusOr<std::shared_ptr<absl::Span<uint8_t>>> AllocateAndMapPjrtMemory(
 // An structure which represents a single copy of a chunk out of a buffer
 // with an assigned 'buffer_id'.
 struct DmaCopyChunk {
-  absl::AnyInvocable<xla::Future<>(void* dst, int64_t offset,
-                                   int64_t transfer_size) &&>
+  absl::AnyInvocable<xla::PjRtFuture<>(void* dst, int64_t offset,
+                                       int64_t transfer_size)>
       copy_fn;
   size_t buffer_id;
   size_t offset;
@@ -61,12 +61,12 @@ struct DmaCopyChunk {
 
   static DmaCopyChunk Make(xla::ifrt::ArrayRef arr, xla::PjRtBuffer* buffer,
                            size_t buffer_id, size_t offset, size_t size) {
-    return DmaCopyChunk{[arr, buffer](void* dst, int64_t offset,
-                                      int64_t transfer_size) -> xla::Future<> {
-                          return buffer->CopyRawToHost(dst, offset,
-                                                       transfer_size);
-                        },
-                        buffer_id, offset, size};
+    return DmaCopyChunk{
+        [arr, buffer](void* dst, int64_t offset,
+                      int64_t transfer_size) -> xla::PjRtFuture<> {
+          return buffer->CopyRawToHost(dst, offset, transfer_size);
+        },
+        buffer_id, offset, size};
   }
 
   // Divides an IFRT array up evenly for copying.
@@ -117,7 +117,6 @@ class PremappedCopierState
   size_t num_parallel_copies_ = 0;
   std::deque<WorkQueueItem> work_queue_ ABSL_GUARDED_BY(mu_);
   std::shared_ptr<absl::Span<uint8_t>> scratch_;
-  bool currently_flushing_ ABSL_GUARDED_BY(mu_) = false;
   size_t max_num_parallel_copies_;
   size_t xfer_size_;
   size_t max_copies_;
@@ -130,7 +129,7 @@ class RawBufferEntry : public PullTable::Entry {
   struct BufferRef {
     // TODO(parkers): Technically this should be a use-ref instead of a
     // ready_future + buffer, but there is no PJRT api for this.
-    xla::Future<> ready_future;
+    xla::PjRtFuture<> ready_future;
     tsl::RCReference<xla::PjRtRawBuffer> buffer;
     size_t buf_size;
   };
@@ -156,7 +155,7 @@ class PjRtBufferEntry : public PullTable::Entry {
   struct BufferRef {
     std::shared_ptr<xla::PjRtBuffer> buffer;
     size_t buf_size;
-    xla::Future<> ready_future;
+    xla::PjRtFuture<> ready_future;
   };
   explicit PjRtBufferEntry(std::vector<BufferRef> arrs,
                            std::shared_ptr<PremappedCopierState> state,
@@ -179,12 +178,6 @@ tsl::RCReference<ChunkDestination> MakeDmaDestination(
     std::shared_ptr<xla::PjRtClient::AsyncHostToDeviceTransferManager> atm,
     int buffer_index, size_t transfer_size);
 
-// Creates a ChunkDestination for a sliced offset into
-// a PjRtRawBuffer.
-absl::StatusOr<std::pair<tsl::RCReference<ChunkDestination>, xla::Future<>>>
-CreateSlicedRawBufferDest(tsl::RCReference<xla::PjRtRawBuffer> raw_buffer,
-                          size_t offset, size_t size);
-
 namespace internal {
 
 // A semaphore which calls a callback with [false]*N + [true]
@@ -199,42 +192,35 @@ class IsLastSemaphore {
   auto DoWork(size_t value, T&& cb) -> absl::Status {
     bool is_last;
     {
-      absl::MutexLock l(mu_);
-      if (is_done_) {
+      absl::MutexLock l(&mu_);
+      if (is_poisoned_) {
         return absl::OkStatus();
       }
       guard_counter_ -= value;
       is_last = guard_counter_ == 0;
       if (is_last) {
         // Wait if we happen to slip in between guard_counter and counter.
-        is_done_ = true;
         auto cond = [this, value]() { return counter_ == value; };
         mu_.Await(absl::Condition(&cond));
-        // Prevent racing calls to poison.
       }
     }
     auto cleanup = absl::MakeCleanup([&]() {
-      absl::MutexLock l(mu_);
+      absl::MutexLock l(&mu_);
       counter_ -= value;
     });
     return cb(is_last);
   }
 
-  // Return true if this is the first call to poison.
-  bool Poison() {
-    absl::MutexLock l(mu_);
-    if (is_done_) {
-      return false;
-    }
-    is_done_ = true;
+  void Poison() {
+    absl::MutexLock l(&mu_);
+    is_poisoned_ = true;
     auto cond = [this]() { return counter_ == guard_counter_; };
     mu_.Await(absl::Condition(&cond));
-    return true;
   }
 
  private:
   absl::Mutex mu_;
-  bool is_done_ = false;
+  bool is_poisoned_ = false;
   ssize_t guard_counter_;
   ssize_t counter_;
 };

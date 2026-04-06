@@ -22,6 +22,7 @@ limitations under the License.
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "xla/backends/gpu/autotuner/gpu_codegen_backend.h"
+#include "xla/backends/autotuner/codegen_backend.h"
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/service/compiler.h"
 #include "xla/stream_executor/stream_executor.h"
@@ -35,10 +36,8 @@ class CustomKernelBackend : public GpuCodegenBackend {
  public:
   explicit CustomKernelBackend(stream_executor::StreamExecutor* stream_executor,
                                const DebugOptions* debug_options,
-                               Compiler* compiler,
-                               const Compiler::GpuTargetConfig* target_config)
-      : GpuCodegenBackend("CustomKernel", debug_options, compiler,
-                          target_config, stream_executor) {}
+                               Compiler* compiler)
+      : GpuCodegenBackend("Cublas", stream_executor, debug_options, compiler) {}
 
   absl::StatusOr<std::vector<std::unique_ptr<BackendConfig>>>
   GetSupportedConfigs(const HloInstruction& instr) override;
@@ -48,9 +47,6 @@ class CustomKernelBackend : public GpuCodegenBackend {
 
   absl::Status ApplyConfig(HloInstruction& instr,
                            const BackendConfig& config) override;
-
- private:
-  bool IsSupported(const HloInstruction& instr) override;
 };
 
 }  // namespace gpu

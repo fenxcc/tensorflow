@@ -37,7 +37,7 @@ class MockResource : public ResourceBase {
       *alive_ = false;
     }
   }
-  std::string DebugString() const override { return ""; }
+  string DebugString() const override { return ""; }
   bool* alive_;
   int payload_;
 };

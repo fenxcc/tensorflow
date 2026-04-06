@@ -36,13 +36,13 @@ bool RegisterListener(void (*listener)(const char*)) {
   return true;
 }
 
-bool LogToListeners(std::string msg, std::string end) {
+bool LogToListeners(string msg, string end) {
   auto listeners = logging::GetListeners();
   if (listeners->empty()) {
     return false;
   }
 
-  std::string ended_msg = absl::StrCat(msg, end);
+  string ended_msg = strings::StrCat(msg, end);
 
   for (auto& listener : *listeners) {
     listener(ended_msg.c_str());

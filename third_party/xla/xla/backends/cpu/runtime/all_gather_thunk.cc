@@ -18,22 +18,23 @@ limitations under the License.
 #include <cstdint>
 #include <memory>
 #include <utility>
-#include <vector>
 
+#include "absl/base/optimization.h"
 #include "absl/container/inlined_vector.h"
 #include "absl/log/log.h"
 #include "absl/memory/memory.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "xla/backends/cpu/collectives/cpu_collectives.h"
 #include "xla/backends/cpu/runtime/collective_thunk.h"
 #include "xla/backends/cpu/runtime/thunk.h"
 #include "xla/core/collectives/communicator.h"
-#include "xla/future.h"
 #include "xla/service/collective_ops_utils.h"
 #include "xla/shape.h"
 #include "xla/shape_util.h"
 #include "xla/tsl/concurrency/async_value_ref.h"
+#include "xla/tsl/platform/errors.h"
 #include "xla/tsl/platform/statusor.h"
 
 namespace xla::cpu {
@@ -72,23 +73,32 @@ tsl::AsyncValueRef<AllGatherThunk::ExecuteEvent> AllGatherThunk::Execute(
         destination_buffer(i).ToString(), data.destination[i].opaque());
   }
 
-  Future<> future = ExecuteWithCommunicator(
+  return ExecuteWithCommunicator(
       params.collective_params,
-      [&](const RendezvousKey& key, Communicator& comm) {
+      [&](const RendezvousKey& key,
+          Communicator& comm) -> tsl::AsyncValueRef<Communicator::Event> {
         CpuCollectives::Executor executor(key, DefaultCollectiveTimeout());
 
-        std::vector<Future<>> futures(data.source.size());
+        tsl::CountDownAsyncValueRef<Communicator::Event> state(
+            data.source.size());
+
         for (int32_t i = 0; i < data.source.size(); ++i) {
           const Shape& shape = source_shape(i);
-          futures[i] = comm.AllGather(data.source[i], data.destination[i],
-                                      shape.element_type(),
-                                      ShapeUtil::ElementsIn(shape), executor);
+          auto communicator_event = comm.AllGather(
+              data.source[i], data.destination[i], shape.element_type(),
+              ShapeUtil::ElementsIn(shape), executor);
+
+          communicator_event.AndThen([state, communicator_event]() mutable {
+            if (ABSL_PREDICT_FALSE(communicator_event.IsError())) {
+              state.CountDown(communicator_event.GetError());
+            } else {
+              state.CountDown();
+            }
+          });
         }
 
-        return JoinFutures(futures);
+        return state.AsRef();
       });
-
-  return ToExecuteEvent(future);
 }
 
 }  // namespace xla::cpu

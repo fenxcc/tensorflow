@@ -19,13 +19,14 @@ limitations under the License.
 #include "mlir/Tools/mlir-opt/MlirOptMain.h"
 #include "shardy/dialect/sdy/ir/register.h"
 #include "shardy/dialect/sdy/transforms/passes.h"
+#include "shardy/round_trip_import/pipelines.h"
 #include "xla/mlir_hlo/mhlo/IR/register.h"
 #include "xla/mlir_hlo/stablehlo_ext/transforms/passes.h"
 #include "xla/service/spmd/shardy/extensions/mhlo_extensions.h"
 #include "xla/service/spmd/shardy/round_trip_common/export_named_computations.h"
 #include "xla/service/spmd/shardy/round_trip_common/import_constants.h"
-#include "xla/service/spmd/shardy/round_trip_common/import_func_calls.h"
 #include "xla/service/spmd/shardy/round_trip_common/import_sdy_custom_calls.h"
+#include "xla/service/spmd/shardy/round_trip_common/import_uninlineable_func_calls.h"
 #include "xla/service/spmd/shardy/round_trip_common/open_while_free_vars_sharding.h"
 #include "xla/service/spmd/shardy/sdy_round_trip/dedup_meshes.h"
 #include "xla/service/spmd/shardy/sdy_round_trip/export_ops.h"
@@ -62,7 +63,7 @@ int main(int argc, char** argv) {
   xla::sdy::registerStablehloRoundTripShardMapImportPass();
   xla::sdy::registerImportSdyCustomCallsPass();
   xla::sdy::registerOpenWhileFreeVarsShardingPass();
-  xla::sdy::registerImportFuncCallsPass();
+  xla::sdy::registerImportUninlineableFuncCallsPass();
   xla::sdy::registerImportConstantsPass();
 
   xla::sdy::registerStablehloExportPipeline();
@@ -83,6 +84,9 @@ int main(int argc, char** argv) {
   xla::sdy::registerSdyRoundTripShardMapImportPass();
   xla::sdy::registerSdyRoundTripImportPipeline();
   xla::sdy::registerSdyRoundTripTestingPipeline();
+
+  // Test SdyRoundTripImportPipeline cloned on Shardy Github.
+  mlir::sdy::registerSdyRoundTripImportPipeline();
 
   return mlir::asMainReturnCode(
       mlir::MlirOptMain(argc, argv, "XLA SDY pass driver\n", dialects));

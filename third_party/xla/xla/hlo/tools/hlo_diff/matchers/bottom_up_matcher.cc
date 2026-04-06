@@ -270,7 +270,6 @@ void GreedyLimitedCandidatesBottomUpMatcher::Match(
                                        debug_string);
     }
   }
-  PrintProgress(100);
   LOG(INFO) << "Finished GreedyLimitedCandidatesBottomUpMatcher. Total left to "
                "right mappings: "
             << mappings.left_to_right_instruction_map.size() -

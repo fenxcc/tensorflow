@@ -516,7 +516,7 @@ struct LaunchFusedMatMulOp<GPUDevice, T> {
 
     const auto& cc =
         stream->parent()->GetDeviceDescription().gpu_compute_capability();
-    if (auto* procm = cc.rocm_compute_capability()) {
+    if (auto* procm = std::get_if<se::RocmComputeCapability>(&cc)) {
       use_cudnn = !procm->gfx9_mi200_or_later();
     }
     BlasScratchAllocator scratch_allocator(context);

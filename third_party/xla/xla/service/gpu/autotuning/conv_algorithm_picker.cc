@@ -44,7 +44,6 @@ limitations under the License.
 #include "xla/hlo/ir/hlo_instructions.h"
 #include "xla/hlo/ir/hlo_print_options.h"
 #include "xla/literal_util.h"
-#include "xla/service/gpu/autotuning/autotune_cache_key.h"
 #include "xla/service/gpu/autotuning/autotuner_util.h"
 #include "xla/service/gpu/autotuning/gpu_autotuning.pb.h"
 #include "xla/service/gpu/autotuning/redzone_buffers.h"
@@ -63,9 +62,9 @@ limitations under the License.
 #include "xla/stream_executor/device_memory.h"
 #include "xla/stream_executor/device_memory_allocator.h"
 #include "xla/stream_executor/dnn.h"
-#include "xla/stream_executor/engine_options.h"
 #include "xla/stream_executor/gpu/redzone_allocator.h"
 #include "xla/stream_executor/lazy_op_runner.h"
+#include "xla/stream_executor/numeric_options.h"
 #include "xla/stream_executor/platform.h"
 #include "xla/stream_executor/rocm/rocm_platform_id.h"
 #include "xla/stream_executor/scratch_allocator.h"
@@ -73,6 +72,7 @@ limitations under the License.
 #include "xla/stream_executor/stream_executor.h"
 #include "xla/tsl/platform/errors.h"
 #include "xla/tsl/platform/logging.h"
+#include "xla/tsl/platform/status.h"
 #include "xla/tsl/platform/statusor.h"
 #include "xla/tsl/protobuf/dnn.pb.h"
 #include "xla/tsl/util/env_var.h"
@@ -112,8 +112,8 @@ class ScratchAllocator : public se::ScratchAllocator {
 
   static int64_t GetDefaultMemoryLimitInBytes() {
     int64_t value;
-    CHECK_OK(tsl::ReadInt64FromEnvVar("TF_CUDNN_WORKSPACE_LIMIT_IN_MB",
-                                      1LL << 12, &value));
+    TF_CHECK_OK(tsl::ReadInt64FromEnvVar("TF_CUDNN_WORKSPACE_LIMIT_IN_MB",
+                                         1LL << 12, &value));
     return value * (1LL << 20);
   }
 
@@ -155,7 +155,10 @@ absl::StatusOr<se::DeviceMemory<uint8_t>> ScratchAllocator::AllocateBytes(
 
 absl::StatusOr<std::vector<GenericConvRunner>> GetAlgorithms(
     const GpuConvConfig& config, se::Stream* stream, bool use_fallback,
-    const se::EngineOptions& engine_options) {
+    const se::NumericOptions& numeric_options) {
+  TF_ASSIGN_OR_RETURN(se::dnn::ConvolutionKind kind,
+                      GetDNNConvKindFromCudnnConvKind(config.kind));
+
   TF_ASSIGN_OR_RETURN(se::dnn::DataType input_type,
                       GetDNNDataTypeFromPrimitiveType(config.input_type));
 
@@ -169,7 +172,6 @@ absl::StatusOr<std::vector<GenericConvRunner>> GetAlgorithms(
   if (dnn == nullptr) {
     return absl::InvalidArgumentError("No DNN in stream executor.");
   }
-  se::dnn::ConvolutionKind kind = CudnnConvKindToProto(config.kind);
   switch (kind) {
     default:
       return Internal("Unknown ConvolutionKind %d", kind);
@@ -189,7 +191,7 @@ absl::StatusOr<std::vector<GenericConvRunner>> GetAlgorithms(
           /* leakyrelu_alpha = */ config.fusion->leakyrelu_alpha, stream,
           config.input_descriptor, config.filter_descriptor,
           config.bias_descriptor, config.output_descriptor, config.conv_desc,
-          use_fallback, config.fusion->mode, engine_options, &runners));
+          use_fallback, config.fusion->mode, numeric_options, &runners));
       for (auto& runner : runners) {
         TF_ASSIGN_OR_RETURN(
             auto runner_cache,
@@ -207,7 +209,7 @@ absl::StatusOr<std::vector<GenericConvRunner>> GetAlgorithms(
       TF_RETURN_IF_ERROR(dnn->GetGraphConvolveRunners(
           kind, input_type, output_type, stream, config.input_descriptor,
           config.filter_descriptor, config.output_descriptor, config.conv_desc,
-          use_fallback, engine_options, &runners, config.serialized_graph));
+          use_fallback, numeric_options, &runners, config.serialized_graph));
       for (auto& runner : runners) {
         TF_ASSIGN_OR_RETURN(
             auto runner_cache,
@@ -231,7 +233,7 @@ absl::StatusOr<std::vector<GenericConvRunner>> GetAlgorithms(
           /* filter_data = */ DeviceMemoryBase(nullptr),
           config.output_descriptor,
           /* output_data = */ DeviceMemoryBase(nullptr), config.conv_desc,
-          use_fallback, nullptr, engine_options, &runners));
+          use_fallback, nullptr, numeric_options, &runners));
 
       for (auto& runner : runners) {
         TF_ASSIGN_OR_RETURN(
@@ -253,8 +255,11 @@ GetMIOpenAlgorithms(const HloCustomCallInstruction* instr,
                     absl::Span<se::DeviceMemoryBase> result_buffers,
                     se::StreamExecutor* stream_exec,
                     ScratchAllocator* scratch_allocator, se::Stream* stream,
-                    const se::EngineOptions& engine_options) {
+                    const se::NumericOptions& numeric_options) {
   TF_ASSIGN_OR_RETURN(GpuConvConfig config, GetGpuConvConfig(instr));
+
+  TF_ASSIGN_OR_RETURN(se::dnn::ConvolutionKind kind,
+                      GetDNNConvKindFromCudnnConvKind(config.kind));
 
   TF_ASSIGN_OR_RETURN(se::dnn::DataType dtype,
                       GetDNNDataTypeFromPrimitiveType(config.output_type));
@@ -269,12 +274,12 @@ GetMIOpenAlgorithms(const HloCustomCallInstruction* instr,
     return absl::InvalidArgumentError("No DNN in stream executor.");
   }
   TF_RETURN_IF_ERROR(dnn->GetConvolveRunners(
-      CudnnConvKindToProto(config.kind), dtype, dtype, stream,
-      params.config->input_descriptor, params.input_buf,
-      params.config->filter_descriptor, params.filter_buf,
+      kind, dtype, dtype, stream, params.config->input_descriptor,
+      params.input_buf, params.config->filter_descriptor, params.filter_buf,
       params.config->output_descriptor, params.output_buf,
       params.config->conv_desc,
-      /* use_fallback = */ false, scratch_allocator, engine_options, &runners));
+      /* use_fallback = */ false, scratch_allocator, numeric_options,
+      &runners));
 
   return runners;
 }
@@ -403,7 +408,7 @@ absl::StatusOr<AutotuneResult> GpuConvAlgorithmPicker::PickBestAlgorithmNoCache(
   // Putting the lock in here rather than in PickBestAlgorithmNoCache lets us
   // avoid ever doing duplicate work.  If we have a cache miss, only one thread
   // will run PickBestAlgorithmImpl for a particular device.
-  absl::MutexLock lock(GetGpuMutex(stream_exec));
+  absl::MutexLock lock(&GetGpuMutex(stream_exec));
 
   // Make sure any previous activity on this executor is done. We don't want
   // other work still running on the GPU to interfere with autotuning.
@@ -782,7 +787,7 @@ absl::StatusOr<AutotuneResult> GpuConvAlgorithmPicker::AutotuneOneConvRunner(
 absl::StatusOr<AutotuneResult>
 GpuConvAlgorithmPicker::PickBestAlgorithmNoCacheCuda(
     const HloCustomCallInstruction* instr) {
-  AutotuneCacheKey instruction_info{config_.GetDeviceDescription(), *instr};
+  AutotuneCacheKey instruction_info{config_.GetModelStr(), *instr};
   std::string instr_str(instruction_info.GetHlo());
   XLA_SCOPED_LOGGING_TIMER(absl::StrCat(
       "GpuConvAlgorithmPicker::PickBestAlgorithmImpl for ", instr_str));
@@ -811,9 +816,8 @@ GpuConvAlgorithmPicker::PickBestAlgorithmNoCacheCuda(
         instr->precision_config().operand_precision(),
         [](int precision) { return precision <= PrecisionConfig::HIGH; });
   }
-  const se::EngineOptions engine_options{
-      RequireDeterminism(instr->GetModule()->config()), allow_tf32,
-      /*require_command_buffer=*/false};
+  const se::NumericOptions numeric_options{
+      RequireDeterminism(instr->GetModule()->config()), allow_tf32};
 
   // Use the first algorithm that's supported as reference. There isn't a
   // particular reason to use it, as any algorithm suffices. It doesn't make
@@ -827,7 +831,7 @@ GpuConvAlgorithmPicker::PickBestAlgorithmNoCacheCuda(
   TF_ASSIGN_OR_RETURN(
       std::vector<GenericConvRunner> runners,
       GetAlgorithms(runtime_arguments.gpu_conv_config, stream,
-                    /* use_fallback = */ false, engine_options));
+                    /* use_fallback = */ false, numeric_options));
 
   std::vector<AutotuneResult> profile_results;
   for (auto& runner_cache : runners) {
@@ -850,7 +854,7 @@ GpuConvAlgorithmPicker::PickBestAlgorithmNoCacheCuda(
     TF_ASSIGN_OR_RETURN(
         std::vector<GenericConvRunner> fallback_runners,
         GetAlgorithms(runtime_arguments.gpu_conv_config, stream,
-                      /* use_fallback = */ true, engine_options));
+                      /* use_fallback = */ true, numeric_options));
 
     for (auto& runner_cache : fallback_runners) {
       TF_ASSIGN_OR_RETURN(
@@ -915,9 +919,8 @@ GpuConvAlgorithmPicker::PickBestAlgorithmNoCacheRocm(
   const bool allow_tf32 = absl::c_all_of(
       instr->precision_config().operand_precision(),
       [](int precision) { return precision <= PrecisionConfig::HIGH; });
-  const se::EngineOptions engine_options{
-      RequireDeterminism(instr->GetModule()->config()), allow_tf32,
-      /*require_command_buffer=*/false};
+  const se::NumericOptions numeric_options{
+      RequireDeterminism(instr->GetModule()->config()), allow_tf32};
 
   se::StreamExecutor* stream_exec = config_.GetExecutor();
   const auto device_ordinal = stream_exec->device_ordinal();
@@ -971,7 +974,7 @@ GpuConvAlgorithmPicker::PickBestAlgorithmNoCacheRocm(
       std::vector<std::unique_ptr<const se::dnn::ConvRunner>> runners,
       GetMIOpenAlgorithms(instr, absl::MakeSpan(operand_buffers),
                           absl::MakeSpan(result_buffers), stream_exec,
-                          &scratch_allocator, stream, engine_options));
+                          &scratch_allocator, stream, numeric_options));
 
   std::vector<AutotuneResult> profile_results;
 
@@ -1154,7 +1157,7 @@ absl::StatusOr<bool> GpuConvAlgorithmPicker::RunOnComputation(
   return changed;
 }
 
-absl::StatusOr<bool> GpuConvAlgorithmPicker::RunImpl(
+absl::StatusOr<bool> GpuConvAlgorithmPicker::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   XLA_SCOPED_LOGGING_TIMER(

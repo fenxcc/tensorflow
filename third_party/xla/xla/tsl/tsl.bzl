@@ -1,7 +1,5 @@
 """Provides build configuration for TSL"""
 
-load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
-load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
 load("@rules_python//python:py_library.bzl", "py_library")
 load("@bazel_skylib//lib:new_sets.bzl", "sets")
 load(
@@ -11,10 +9,10 @@ load(
 load(
     "//xla/tsl/mkl:build_defs.bzl",
     "if_enable_mkl",
+    "if_mkl",
     "if_mkldnn_aarch64_acl",
+    "if_mkldnn_aarch64_acl_openmp",
     "if_mkldnn_openmp",
-    "if_onednn",
-    "if_onednn_async",
     "onednn_v3_define",
 )
 load(
@@ -235,67 +233,48 @@ def if_with_tpu_support(if_true, if_false = []):
         "//conditions:default": if_false,
     })
 
-def get_win_copts(
-        is_external = False,
-        is_msvc = False):
-    """Get the corresponding windows-specific build flags
-
-    Args:
-        is_external: sets dllexport
-        is_msvc: whether the compiler expects msvc-style flags.
-
-    Returns:
-        A list of copts to pass to the cc_library.
-    """
-    WINDOWS_COPTS = []
-    if is_msvc:
-        WINDOWS_COPTS += [
-            "/DPLATFORM_WINDOWS",
-            "/DEIGEN_HAS_C99_MATH",
-            "/DTENSORFLOW_USE_EIGEN_THREADPOOL",
-            "/DEIGEN_AVOID_STL_ARRAY",
-            "/Iexternal/gemmlowp",
-            "/wd4018",  # -Wno-sign-compare
-            # Bazel's CROSSTOOL currently pass /EHsc to enable exception by
-            # default. We can't pass /EHs-c- to disable exception, otherwise
-            # we will get a waterfall of flag conflict warnings. Wait for
-            # Bazel to fix this.
-            # "/D_HAS_EXCEPTIONS=0",
-            # "/EHs-c-",
-            "/wd4577",
-            "/DNOGDI",
-            # Also see build:windows lines in tensorflow/opensource_only/.bazelrc
-            # where we set some other options globally.
-        ]
-    else:
-        WINDOWS_COPTS += [
-            "-DPLATFORM_WINDOWS",
-            "-DEIGEN_HAS_C99_MATH",
-            "-DTENSORFLOW_USE_EIGEN_THREADPOOL",
-            "-DEIGEN_AVOID_STL_ARRAY",
-            "-Iexternal/gemmlowp",
-            "-Wno-sign-compare",
-            "-DNOGDI",
-        ]
+def get_win_copts(is_external = False):
+    WINDOWS_COPTS = [
+        # copybara:uncomment_begin(no MSVC flags in google)
+        # "-DPLATFORM_WINDOWS",
+        # "-DEIGEN_HAS_C99_MATH",
+        # "-DTENSORFLOW_USE_EIGEN_THREADPOOL",
+        # "-DEIGEN_AVOID_STL_ARRAY",
+        # "-Iexternal/gemmlowp",
+        # "-DNOGDI",
+        # copybara:uncomment_end_and_comment_begin
+        "/DPLATFORM_WINDOWS",
+        "/DEIGEN_HAS_C99_MATH",
+        "/DTENSORFLOW_USE_EIGEN_THREADPOOL",
+        "/DEIGEN_AVOID_STL_ARRAY",
+        "/Iexternal/gemmlowp",
+        "/wd4018",  # -Wno-sign-compare
+        # Bazel's CROSSTOOL currently pass /EHsc to enable exception by
+        # default. We can't pass /EHs-c- to disable exception, otherwise
+        # we will get a waterfall of flag conflict warnings. Wait for
+        # Bazel to fix this.
+        # "/D_HAS_EXCEPTIONS=0",
+        # "/EHs-c-",
+        "/wd4577",
+        "/DNOGDI",
+        # copybara:comment_end
+        # Also see build:windows lines in tensorflow/opensource_only/.bazelrc
+        # where we set some other options globally.
+    ]
 
     if is_external:
-        if is_msvc:
-            WINDOWS_COPTS.append(
-                "/UTF_COMPILE_LIBRARY",
-            )
-        else:
-            WINDOWS_COPTS.append(
-                "-UTF_COMPILE_LIBRARY",
-            )
-    elif is_msvc:
-        WINDOWS_COPTS.append(
-            "/DTF_COMPILE_LIBRARY",
-        )
+        # copybara:uncomment_begin(no MSVC flags in google)
+        # return WINDOWS_COPTS + ["-UTF_COMPILE_LIBRARY"]
+        # copybara:uncomment_end_and_comment_begin
+        return WINDOWS_COPTS + ["/UTF_COMPILE_LIBRARY"]
+        # copybara:comment_end
+
     else:
-        WINDOWS_COPTS.append(
-            "-DTF_COMPILE_LIBRARY",
-        )
-    return WINDOWS_COPTS
+        # copybara:uncomment_begin(no MSVC flags in google)
+        # return WINDOWS_COPTS + ["-DTF_COMPILE_LIBRARY"]
+        # copybara:uncomment_end_and_comment_begin
+        return WINDOWS_COPTS + ["/DTF_COMPILE_LIBRARY"]
+        # copybara:comment_end
 
 # TODO(b/356020232): cleanup non-use_pywrap_rules part once migration is done
 # buildozer: disable=function-docstring-args
@@ -338,14 +317,14 @@ def tsl_copts(
         if_tensorrt(["-DGOOGLE_TENSORRT=1"]) +
         if_rocm(["-DTENSORFLOW_USE_ROCM=1"]) +
         # Compile in oneDNN based ops when building for x86 platforms
-        if_onednn(["-DXLA_ONEDNN"]) +
+        if_mkl(["-DINTEL_MKL"]) +
         # Enable additional ops (e.g., ops with non-NHWC data layout) and
         # optimizations for Intel builds using oneDNN if configured
         if_enable_mkl(["-DENABLE_MKL"]) +
         if_mkldnn_openmp(["-DENABLE_ONEDNN_OPENMP"]) +
-        if_onednn_async(["-DENABLE_ONEDNN_ASYNC"]) +
         onednn_v3_define() +
         if_mkldnn_aarch64_acl(["-DDNNL_AARCH64_USE_ACL=1"]) +
+        if_mkldnn_aarch64_acl_openmp(["-DENABLE_ONEDNN_OPENMP"]) +
         if_enable_acl(["-DXLA_CPU_USE_ACL=1", "-fexceptions"]) +
         if_android_arm(["-mfpu=neon", "-fomit-frame-pointer"]) +
         if_linux_x86_64(["-msse3"]) +
@@ -356,7 +335,7 @@ def tsl_copts(
             clean_dep("//xla/tsl:android"): android_copts,
             clean_dep("//xla/tsl:emscripten"): [],
             clean_dep("//xla/tsl:macos"): [],
-            clean_dep("//xla/tsl:windows"): get_win_copts(is_external, is_msvc = False),
+            clean_dep("//xla/tsl:windows"): get_win_copts(is_external),
             clean_dep("//xla/tsl:ios"): [],
             clean_dep("//xla/tsl:no_lgpl_deps"): ["-D__TENSORFLOW_NO_LGPL_DEPS__", "-pthread"],
             "//conditions:default": ["-pthread"],
@@ -411,7 +390,7 @@ def tsl_gpu_library(deps = None, cuda_deps = None, copts = tsl_copts(), **kwargs
             "@local_config_rocm//rocm:hip",
             "@local_config_rocm//rocm:rocm_headers",
         ]),
-        copts = (copts + if_cuda(["-DGOOGLE_CUDA=1", "-DNV_CUDNN_DISABLE_EXCEPTION"]) + if_rocm(["-DTENSORFLOW_USE_ROCM=1"]) + if_xla_available(["-DTENSORFLOW_USE_XLA=1"]) + if_onednn(["-DXLA_ONEDNN"]) + if_enable_mkl(["-DENABLE_MKL"]) + if_tensorrt(["-DGOOGLE_TENSORRT=1"])),
+        copts = (copts + if_cuda(["-DGOOGLE_CUDA=1", "-DNV_CUDNN_DISABLE_EXCEPTION"]) + if_rocm(["-DTENSORFLOW_USE_ROCM=1"]) + if_xla_available(["-DTENSORFLOW_USE_XLA=1"]) + if_mkl(["-DINTEL_MKL=1"]) + if_enable_mkl(["-DENABLE_MKL"]) + if_tensorrt(["-DGOOGLE_TENSORRT=1"])),
         **kwargs
     )
 
@@ -500,6 +479,9 @@ def get_compatible_with_libtpu_portable():
 def filegroup(**kwargs):
     native.filegroup(**kwargs)
 
+def internal_hlo_deps():
+    return []
+
 # Config setting selector used when building for products
 # which requires restricted licenses to be avoided.
 def if_not_mobile_or_arm_or_macos_or_lgpl_restricted(a):
@@ -507,6 +489,9 @@ def if_not_mobile_or_arm_or_macos_or_lgpl_restricted(a):
     return select({
         "//conditions:default": [],
     })
+
+def tsl_grpc_cc_dependencies():
+    return [clean_dep("//xla/tsl:grpc++")]
 
 # Bazel rule for collecting the header files that a target depends on.
 def _transitive_hdrs_impl(ctx):
@@ -839,7 +824,7 @@ def tsl_pybind_extension_opensource(
     )
 
 def nvtx_headers():
-    return if_oss(["@nvtx_archive//:headers"]) + ["@local_config_cuda//cuda:cuda_headers"]
+    return if_oss(["@nvtx_archive//:headers"], ["@local_config_cuda//cuda:cuda_headers"])
 
 def tsl_google_bzl_deps():
     return []

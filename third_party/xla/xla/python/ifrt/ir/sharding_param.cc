@@ -322,22 +322,22 @@ absl::StatusOr<ShardingParam> ShardingParam::FromProto(
   return ShardingParam(std::move(dim_shards), std::move(minor_to_major));
 }
 
-absl::Status ShardingParam::ToProto(ShardingParamProto& proto,
-                                    SerDesVersion version) const {
+absl::StatusOr<ShardingParamProto> ShardingParam::ToProto(
+    SerDesVersion version) const {
   if (version.version_number() < SerDesVersionNumber(0)) {
     return absl::FailedPreconditionError(
         absl::StrCat("Unsupported ", version.version_number(),
                      " for ShardingParam serialization"));
   }
 
-  proto.Clear();
+  ShardingParamProto proto;
   proto.set_version_number(SerDesVersionNumber(0).value());
   proto.mutable_dim_shards()->Add(dim_shards().begin(), dim_shards().end());
   proto.mutable_permutation()->Add(minor_to_major().permutation.begin(),
                                    minor_to_major().permutation.end());
   proto.mutable_axis_sizes()->Add(minor_to_major().axis_sizes.begin(),
                                   minor_to_major().axis_sizes.end());
-  return absl::OkStatus();
+  return proto;
 }
 
 }  // namespace ifrt

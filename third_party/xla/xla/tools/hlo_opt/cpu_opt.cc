@@ -28,9 +28,10 @@ limitations under the License.
 #include "llvm/Target/TargetOptions.h"
 #include "xla/backends/cpu/codegen/cpu_features.h"
 #include "xla/backends/cpu/codegen/ir_compiler.h"
+#include "xla/backends/cpu/codegen/jit_compiler.h"
 #include "xla/backends/cpu/codegen/target_machine_features.h"
-#include "xla/backends/cpu/target_machine_options.h"
 #include "xla/debug_options_flags.h"
+#include "xla/hlo/analysis/alias_info.h"
 #include "xla/hlo/ir/hlo_computation.h"
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/ir/hlo_module.h"
@@ -41,10 +42,10 @@ limitations under the License.
 #include "xla/hlo/transforms/simplifiers/hlo_memory_scheduler.h"
 #include "xla/hlo/translate/hlo_to_mhlo/hlo_to_mlir_hlo.h"
 #include "xla/service/batchnorm_expander.h"
-#include "xla/service/buffer_value.h"
 #include "xla/service/change_op_data_type.h"
 #include "xla/service/copy_insertion.h"
 #include "xla/service/cpu/conv_canonicalization.h"
+#include "xla/service/cpu/cpu_compiler.h"
 #include "xla/service/cpu/cpu_executable.h"
 #include "xla/service/cpu/cpu_instruction_fusion.h"
 #include "xla/service/cpu/cpu_layout_assignment.h"
@@ -62,7 +63,6 @@ limitations under the License.
 #include "xla/service/sharding_propagation.h"
 #include "xla/service/spmd/stateful_rng_spmd_partitioner.h"
 #include "xla/service/transpose_folding.h"
-#include "xla/shape.h"
 #include "xla/shape_util.h"
 #include "xla/stream_executor/platform/initialize.h"
 #include "xla/tools/hlo_opt/compiled_opt_lib.h"
@@ -113,20 +113,20 @@ class CpuOptProvider : public CompiledOptProvider {
     DebugOptions debug_opts = GetDebugOptionsFromFlags();
     auto executor = GetExecutor();
     HloModuleConfig module_config = module.config();
-    static BufferValue::SizeFunction* const kSizeFunction =
-        new BufferValue::SizeFunction([](const BufferValue& buffer) {
-          const Shape& shape = buffer.shape();
-          // On the cpu, opaques are pointers.
-          if (shape.IsOpaque()) {
-            return static_cast<int64_t>(sizeof(void*));
-          }
-          return ShapeUtil::ByteSizeOf(shape, sizeof(void*));
-        });
+    BufferValue::SizeFunction size_func = [](const BufferValue& buffer) {
+      const Shape& shape = buffer.shape();
+      // On the cpu, opaques are pointers.
+      if (shape.IsOpaque()) {
+        return static_cast<int64_t>(sizeof(void*));
+      }
+      return ShapeUtil::ByteSizeOf(shape, sizeof(void*));
+    };
     absl::StatusOr<std::unique_ptr<llvm::TargetMachine>> jit_target_machine =
         cpu::IrCompiler::InferTargetMachine(
             CompilerTargetOptions(module_config),
             CodeGenOptLevel(module_config),
-            cpu::TargetMachineOptions(module_config.debug_options()));
+            cpu::CpuFeatureFromString(
+                module_config.debug_options().xla_cpu_max_isa()));
     if (!jit_target_machine.ok()) {
       LOG(ERROR) << "Failed to infer target machine: "
                  << jit_target_machine.status();
@@ -168,7 +168,7 @@ class CpuOptProvider : public CompiledOptProvider {
         },
         TransposeFolding::NeverFoldTranspose);
     RegisterPass<cpu::ConvCanonicalization>(&target_machine_features);
-    RegisterPass<HloMemoryScheduler>(alias_info_.get(), kSizeFunction);
+    RegisterPass<HloMemoryScheduler>(alias_info_.get(), size_func);
     RegisterPass<HostOffloader>(alias_info_.get());
 
     // Fails to register if module does not have entry computation layout

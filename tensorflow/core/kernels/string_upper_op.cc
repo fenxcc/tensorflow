@@ -63,7 +63,7 @@ class StringUpperOp : public OpKernel {
   }
 
  private:
-  std::string encoding_;
+  string encoding_;
 };
 
 REGISTER_KERNEL_BUILDER(Name("StringUpper").Device(DEVICE_CPU), StringUpperOp);

@@ -18,7 +18,6 @@ limitations under the License.
 
 #include <optional>
 
-#include "absl/synchronization/notification.h"
 #include "absl/time/time.h"
 #include "absl/types/optional.h"
 #include "tensorflow/core/common_runtime/device.h"
@@ -105,7 +104,7 @@ class Executor {
     const ConfigProto* session_config = nullptr;
     SessionState* session_state = nullptr;
     // Unique session identifier. Can be empty.
-    std::string session_handle;
+    string session_handle;
     TensorStore* tensor_store = nullptr;
     ScopedStepContainer* step_container = nullptr;
     CollectiveExecutor* collective_executor = nullptr;
@@ -139,7 +138,7 @@ class Executor {
   // Synchronous wrapper for RunAsync().
   virtual absl::Status Run(const Args& args) {
     absl::Status ret;
-    absl::Notification n;
+    Notification n;
     RunAsync(args, [&ret, &n](const absl::Status& s) {
       ret = s;
       n.Notify();

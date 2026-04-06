@@ -28,7 +28,7 @@ void FakeClockEnv::AdvanceByMicroseconds(int64_t micros) {
   }
 }
 
-uint64_t FakeClockEnv::NowMicros() const {
+uint64 FakeClockEnv::NowMicros() const {
   {
     mutex_lock l(mu_);
     return current_time_;

@@ -18,7 +18,6 @@ limitations under the License.
 
 #include <functional>
 
-#include "absl/synchronization/notification.h"
 #include "tensorflow/core/distributed_runtime/call_options.h"
 #include "tensorflow/core/distributed_runtime/message_wrappers.h"
 #include "tensorflow/core/lib/core/notification.h"
@@ -133,7 +132,7 @@ class WorkerInterface {
   absl::Status GetStatus(const GetStatusRequest* request,
                          GetStatusResponse* response) {
     absl::Status ret;
-    absl::Notification n;
+    Notification n;
     GetStatusAsync(/*opts=*/nullptr, request, response, /*fail_fast=*/true,
                    [&ret, &n](const absl::Status& s) {
                      ret = s;
@@ -209,7 +208,7 @@ class WorkerInterface {
   template <typename Method, typename Req, typename Resp>
   absl::Status CallAndWait(Method func, const Req* req, Resp* resp) {
     absl::Status ret;
-    absl::Notification n;
+    Notification n;
     (this->*func)(req, resp, [&ret, &n](const absl::Status& s) {
       ret = s;
       n.Notify();
@@ -222,7 +221,7 @@ class WorkerInterface {
   absl::Status CallAndWaitWithOptions(Method func, const Req* req, Resp* resp) {
     CallOptions call_opts;
     absl::Status ret;
-    absl::Notification n;
+    Notification n;
     (this->*func)(&call_opts, req, resp, [&ret, &n](const absl::Status& s) {
       ret = s;
       n.Notify();

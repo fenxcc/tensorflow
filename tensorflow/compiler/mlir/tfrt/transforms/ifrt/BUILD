@@ -3,7 +3,6 @@ load(
     "@local_xla//xla/tsl/platform:build_config.bzl",
     "tf_proto_library",
 )
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//tensorflow:tensorflow.bzl", "if_google", "tf_cc_test")
 
 package(
@@ -212,9 +211,10 @@ tf_cc_test(
         "@llvm-project//mlir:AllPassesAndDialects",
         "@llvm-project//mlir:IR",
         "@llvm-project//mlir:Parser",
-        "@llvm-project//mlir:RegisterAllDialects",  # buildcleaner: keep
         "@local_tsl//tsl/platform:protobuf",
+        "@local_xla//xla/pjrt:pjrt_client",
         "@local_xla//xla/pjrt:pjrt_compiler",
+        "@local_xla//xla/pjrt/gpu:se_gpu_pjrt_client",
         "@local_xla//xla/pjrt/plugin/xla_cpu:cpu_topology_description",
         "@local_xla//xla/python/ifrt",
         "@local_xla//xla/python/ifrt:mock",
@@ -222,7 +222,6 @@ tf_cc_test(
         "@local_xla//xla/python/pjrt_ifrt",
         "@local_xla//xla/python/pjrt_ifrt:tfrt_cpu_client_test_lib",
         "@local_xla//xla/service:computation_placer_hdr",
-        "@local_xla//xla/tsl/platform:statusor",
     ],
 )
 
@@ -278,7 +277,6 @@ tf_cc_test(
         "//tensorflow/core/tfrt/runtime",
         "//tensorflow/core/tfrt/saved_model:saved_model_testutil",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:status_matchers",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/synchronization",
         "@com_google_googletest//:gtest_main",
@@ -286,12 +284,12 @@ tf_cc_test(
         "@llvm-project//mlir:FuncDialect",
         "@llvm-project//mlir:IR",
         "@llvm-project//mlir:Parser",
-        "@llvm-project//mlir:RegisterAllDialects",
         "@local_xla//xla/python/ifrt",
         "@local_xla//xla/python/ifrt:test_util",
         "@local_xla//xla/python/pjrt_ifrt:tfrt_cpu_client_test_lib",
         "@local_xla//xla/tsl/framework/test_util:mock_serving_device_selector",
         "@local_xla//xla/tsl/platform:env",
+        "@local_xla//xla/tsl/platform:status_matchers",
         "@local_xla//xla/tsl/platform:statusor",
         "@tf_runtime//:hostcontext",
     ],

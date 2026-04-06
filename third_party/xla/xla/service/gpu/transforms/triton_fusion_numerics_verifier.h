@@ -24,7 +24,6 @@ limitations under the License.
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "xla/hlo/analysis/symbolic_expr.h"
 #include "xla/hlo/ir/hlo_instructions.h"
 #include "xla/hlo/ir/hlo_module.h"
 #include "xla/hlo/pass/hlo_pass_interface.h"
@@ -42,25 +41,23 @@ namespace xla::gpu {
 // generated with the regular emitters.
 class TritonFusionNumericsVerifier : public HloModulePass {
  public:
-  TritonFusionNumericsVerifier(const DeviceOrDevicelessConfig& config,
-                               mlir::MLIRContext* mlir_context)
-      : config_(config), mlir_context_(mlir_context) {}
+  explicit TritonFusionNumericsVerifier(const DeviceOrDevicelessConfig& config)
+      : config_(config) {}
 
   static absl::string_view Name() { return "triton-numerics-verifier"; }
   absl::string_view name() const override { return Name(); }
+
+  using HloPassInterface::Run;
+  absl::StatusOr<bool> Run(
+      HloModule* module,
+      const absl::flat_hash_set<absl::string_view>& execution_threads) override;
 
   using FusionCacheKey = std::string;
 
   int CacheHitsForTestingOnly() const { return cache_hits_; }
 
- protected:
-  absl::StatusOr<bool> RunImpl(
-      HloModule* module,
-      const absl::flat_hash_set<absl::string_view>& execution_threads) override;
-
  private:
   DeviceOrDevicelessConfig config_;
-  mlir::MLIRContext* mlir_context_;
 
   // In some models there are many identical fusions. These are cached to avoid
   // expensive recomputations.
@@ -73,7 +70,7 @@ namespace triton_fusion_numerics_pass_internal {
 absl::StatusOr<ScopedShapedBuffer> CompileAndRunFusion(
     AutotunerCompileUtil& util, const HloFusionInstruction& fusion,
     const DeviceOrDevicelessConfig& config, const DebugOptions& debug_opts,
-    bool disable_triton, mlir::MLIRContext* mlir_context);
+    bool disable_triton);
 absl::Status CompareBuffers(const ScopedShapedBuffer& current,
                             const ScopedShapedBuffer& expected,
                             const Shape& shape, const DebugOptions& debug_opts,

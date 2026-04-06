@@ -75,7 +75,7 @@ void DoImageProjectiveTransformOp(OpKernelContext* ctx,
     OP_REQUIRES(ctx, shape_t.NumElements() == 2,
                 errors::InvalidArgument("output shape must have two elements",
                                         shape_t.shape().DebugString()));
-    auto shape_vec = shape_t.vec<int32_t>();
+    auto shape_vec = shape_t.vec<int32>();
     out_height = shape_vec(0);
     out_width = shape_vec(1);
     OP_REQUIRES(ctx, out_height > 0 && out_width > 0,
@@ -121,7 +121,7 @@ class ImageProjectiveTransformV2 : public OpKernel {
  public:
   explicit ImageProjectiveTransformV2(OpKernelConstruction* ctx)
       : OpKernel(ctx) {
-    std::string interpolation_str;
+    string interpolation_str;
     OP_REQUIRES_OK(ctx, ctx->GetAttr("interpolation", &interpolation_str));
     if (interpolation_str == "NEAREST") {
       interpolation_ = Interpolation::NEAREST;
@@ -131,7 +131,7 @@ class ImageProjectiveTransformV2 : public OpKernel {
       LOG(ERROR) << "Invalid interpolation " << interpolation_str
                  << ". Supported types: NEAREST, BILINEAR";
     }
-    std::string mode_str;
+    string mode_str;
     OP_REQUIRES_OK(ctx, ctx->GetAttr("fill_mode", &mode_str));
     if (mode_str == "REFLECT") {
       fill_mode_ = Mode::FILL_REFLECT;

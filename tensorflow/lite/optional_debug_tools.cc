@@ -397,8 +397,6 @@ const char* TensorTypeName(TfLiteType type) {
       return "kTfLiteVariant";
     case kTfLiteInt4:
       return "kTfLiteInt4";
-    case kTfLiteInt2:
-      return "kTfLiteInt2";
   }
   return "(invalid)";
 }

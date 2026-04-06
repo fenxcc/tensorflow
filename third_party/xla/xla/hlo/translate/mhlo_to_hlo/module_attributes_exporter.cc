@@ -27,7 +27,6 @@ limitations under the License.
 #include "mlir/IR/BuiltinAttributes.h"
 #include "mlir/IR/BuiltinOps.h"
 #include "mlir/Support/LLVM.h"
-#include "xla/mlir_hlo/utils/unregistered_attributes.h"
 #include "xla/service/hlo.pb.h"
 #include "xla/service/hlo_module_config.h"
 #include "xla/tsl/platform/errors.h"
@@ -40,8 +39,8 @@ namespace mlir {
 namespace mhlo {
 namespace {
 
-// All module level attribute strings must be registered in
-//   `xla/mlir_hlo/utils/unregistered_attributes.h`.
+constexpr char kMhloNumPartitions[] = "mhlo.num_partitions";
+constexpr char kMhloNumReplicas[] = "mhlo.num_replicas";
 
 std::vector<int64_t> ConvertDenseIntAttr(DenseIntElementsAttr attr) {
   auto values = attr.getValues<int64_t>();
@@ -150,11 +149,11 @@ absl::StatusOr<xla::HloComputationProto*> FindEntryComputation(
 
 void ExportHloModuleConfig(xla::HloModuleConfig& config, ModuleOp module) {
   if (auto num_partitions =
-          module->getAttrOfType<IntegerAttr>(xla::kMhloNumPartitions)) {
+          module->getAttrOfType<IntegerAttr>(kMhloNumPartitions)) {
     config.set_num_partitions(num_partitions.getInt());
   }
   if (auto num_replicas =
-          module->getAttrOfType<IntegerAttr>(xla::kMhloNumReplicas)) {
+          module->getAttrOfType<IntegerAttr>(kMhloNumReplicas)) {
     config.set_replica_count(num_replicas.getInt());
   }
 }

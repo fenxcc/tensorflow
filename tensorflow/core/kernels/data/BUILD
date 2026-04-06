@@ -73,7 +73,6 @@ tf_kernel_library(
         "//tensorflow/core/util/tensor_bundle",
         "//tensorflow/core/util/tensor_bundle:naming",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings:str_format",
     ],
 )
 
@@ -603,7 +602,6 @@ tf_kernel_library(
         "//tensorflow/core/platform:env",
         "//tensorflow/core/platform:refcount",
         "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
         "@local_tsl//tsl/profiler/lib:traceme",
         "@local_tsl//tsl/profiler/lib:traceme_encode",
@@ -864,7 +862,6 @@ tf_kernel_library(
         "@com_google_absl//absl/base",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:str_format",
-        "@com_google_absl//absl/synchronization",
         "@local_xla//xla/tsl/platform:logging",
     ],
 )
@@ -914,7 +911,6 @@ tf_kernel_library(
         "//tensorflow/core/profiler/lib:traceme",
         "//tensorflow/core/profiler/lib:traceme_encode",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/synchronization",
     ],
 )
 

@@ -1,4 +1,3 @@
-load("//tensorflow:tensorflow.bzl", "tf_cc_test")
 load("//tensorflow:tensorflow.default.bzl", "filegroup")
 load("//tensorflow/core/platform:build_config.bzl", "tf_proto_library")
 load(
@@ -30,17 +29,6 @@ cc_library(
     ],
 )
 
-tf_cc_test(
-    name = "arena_test",
-    srcs = ["arena_test.cc"],
-    deps = [
-        ":arena",
-        "//tensorflow/core:test",
-        "//tensorflow/core/platform:macros",
-        "@local_xla//xla/tsl/platform:test_main",
-    ],
-)
-
 cc_library(
     name = "bitmap",
     hdrs = ["bitmap.h"],
@@ -68,16 +56,6 @@ cc_library(
     ],
 )
 
-tf_cc_test(
-    name = "coding_test",
-    srcs = ["coding_test.cc"],
-    deps = [
-        ":coding",
-        "//tensorflow/core:test",
-        "@local_xla//xla/tsl/platform:test_main",
-    ],
-)
-
 cc_library(
     name = "errors",
     hdrs = ["errors.h"],
@@ -89,6 +67,9 @@ cc_library(
 cc_library(
     name = "notification",
     hdrs = ["notification.h"],
+    deps = [
+        "//tensorflow/core/platform:notification",
+    ],
 )
 
 cc_library(
@@ -113,18 +94,6 @@ cc_library(
     ],
 )
 
-tf_cc_test(
-    name = "status_test",
-    srcs = ["status_test.cc"],
-    deps = [
-        ":errors",
-        ":status",
-        "//tensorflow/core:test",
-        "@com_google_absl//absl/strings",
-        "@local_xla//xla/tsl/platform:test_main",
-    ],
-)
-
 cc_library(
     name = "stringpiece",
     hdrs = ["stringpiece.h"],
@@ -138,20 +107,6 @@ cc_library(
     hdrs = ["threadpool.h"],
     deps = [
         "//tensorflow/core/platform:env",
-    ],
-)
-
-tf_cc_test(
-    name = "threadpool_test",
-    srcs = ["threadpool_test.cc"],
-    deps = [
-        ":threadpool",
-        "//tensorflow/core:framework_lite",
-        "//tensorflow/core:lib",
-        "//tensorflow/core:test",
-        "@com_google_absl//absl/synchronization",
-        "@com_google_absl//absl/time",
-        "@local_xla//xla/tsl/platform:test_main",
     ],
 )
 
@@ -227,6 +182,17 @@ filegroup(
         "threadpool_interface.h",
         "threadpool_options.h",
         "@local_xla//xla/tsl/lib/core:legacy_lib_core_all_headers",
+    ],
+    visibility = ["//tensorflow/core:__pkg__"],
+)
+
+filegroup(
+    name = "legacy_lib_core_all_tests",
+    srcs = [
+        "arena_test.cc",
+        "coding_test.cc",
+        "status_test.cc",
+        "threadpool_test.cc",
     ],
     visibility = ["//tensorflow/core:__pkg__"],
 )

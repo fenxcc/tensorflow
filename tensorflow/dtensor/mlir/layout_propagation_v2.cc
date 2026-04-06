@@ -849,7 +849,7 @@ class LayoutPrinter : public mlir::OpAsmPrinter {
       os_ << ": ";
       printType(arg.getType());
     }
-    printOptionalAttrDict(argAttrs, {});
+    printOptionalAttrDict(argAttrs, std::nullopt);
   }
 
   void printOperand(mlir::Value value) override { printOperand(value, os_); }
@@ -1022,7 +1022,7 @@ class LayoutPrinter : public mlir::OpAsmPrinter {
     os_ << symbolRef;
   };
 
-  void printNamedAttribute(mlir::NamedAttribute attr) override {
+  void printNamedAttribute(mlir::NamedAttribute attr) {
     os_ << attr.getName().strref() << " = ";
     printAttribute(attr.getValue());
   }

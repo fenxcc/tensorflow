@@ -24,7 +24,6 @@ limitations under the License.
 #include "xla/runtime/buffer_use.h"
 #include "xla/runtime/resource_use.h"
 #include "xla/service/buffer_assignment.h"
-#include "xla/shape.h"
 #include "xla/tsl/platform/statusor.h"
 #include "xla/tsl/platform/test.h"
 
@@ -67,18 +66,17 @@ TEST(ExecutionGraphTest, EdgePriority) {
 TEST(ExecutionGraphTest, DependencyOrdering) {
   BufferAllocation alloc(/*index=*/0, /*size=*/80, /*color=*/0);
 
-  Shape slice_shape = ShapeUtil::MakeShape(F32, {10});
   BufferAllocation::Slice slice0(&alloc, /*offset=*/0, /*size=*/40);
   BufferAllocation::Slice slice1(&alloc, /*offset=*/40, /*size=*/40);
   BufferAllocation::Slice slice2(&alloc, /*offset=*/20, /*size=*/40);
 
   std::vector<Operation> operations;
-  operations.push_back(Operation({BufferUse::Read(slice0, slice_shape),
-                                  BufferUse::Write(slice0, slice_shape)}));
-  operations.push_back(Operation({BufferUse::Read(slice1, slice_shape),
-                                  BufferUse::Write(slice1, slice_shape)}));
-  operations.push_back(Operation({BufferUse::Read(slice2, slice_shape),
-                                  BufferUse::Write(slice2, slice_shape)}));
+  operations.push_back(
+      Operation({BufferUse::Read(slice0), BufferUse::Write(slice0)}));
+  operations.push_back(
+      Operation({BufferUse::Read(slice1), BufferUse::Write(slice1)}));
+  operations.push_back(
+      Operation({BufferUse::Read(slice2), BufferUse::Write(slice2)}));
 
   TF_ASSERT_OK_AND_ASSIGN(ExecutionGraph execution_graph,
                           ExecutionGraph::Create<Operation>(operations));
@@ -101,16 +99,15 @@ TEST(ExecutionGraphTest, DependencyOrdering) {
 
 TEST(ExecutionGraphTest, SequentialOrdering) {
   BufferAllocation alloc(/*index=*/0, /*size=*/80, /*color=*/0);
-  Shape slice_shape = ShapeUtil::MakeShape(F32, {10});
   BufferAllocation::Slice slice(&alloc, /*offset=*/0, /*size=*/40);
 
   std::vector<Operation> operations;
-  operations.push_back(Operation({BufferUse::Read(slice, slice_shape),
-                                  BufferUse::Write(slice, slice_shape)}));
-  operations.push_back(Operation({BufferUse::Read(slice, slice_shape),
-                                  BufferUse::Write(slice, slice_shape)}));
-  operations.push_back(Operation({BufferUse::Read(slice, slice_shape),
-                                  BufferUse::Write(slice, slice_shape)}));
+  operations.push_back(
+      Operation({BufferUse::Read(slice), BufferUse::Write(slice)}));
+  operations.push_back(
+      Operation({BufferUse::Read(slice), BufferUse::Write(slice)}));
+  operations.push_back(
+      Operation({BufferUse::Read(slice), BufferUse::Write(slice)}));
 
   TF_ASSERT_OK_AND_ASSIGN(ExecutionGraph execution_graph,
                           ExecutionGraph::Create<Operation>(operations));
@@ -136,19 +133,18 @@ TEST(ExecutionGraphTest, SequentialOrdering) {
 TEST(ExecutionGraphTest, TokenResourceOrdering) {
   BufferAllocation alloc(/*index=*/0, /*size=*/80, /*color=*/0);
 
-  Shape slice_shape = ShapeUtil::MakeShape(F32, {10});
   BufferAllocation::Slice slice0(&alloc, /*offset=*/0, /*size=*/40);
   BufferAllocation::Slice slice1(&alloc, /*offset=*/40, /*size=*/40);
 
   auto resource = Resource::Create(Resource::Kind::kToken);
 
   std::vector<Operation> operations;
-  operations.push_back(Operation({BufferUse::Read(slice0, slice_shape),
-                                  BufferUse::Write(slice0, slice_shape)},
-                                 {ResourceUse::Write(resource)}));
-  operations.push_back(Operation({BufferUse::Read(slice1, slice_shape),
-                                  BufferUse::Write(slice1, slice_shape)},
-                                 {ResourceUse::Write(resource)}));
+  operations.push_back(
+      Operation({BufferUse::Read(slice0), BufferUse::Write(slice0)},
+                {ResourceUse::Write(resource)}));
+  operations.push_back(
+      Operation({BufferUse::Read(slice1), BufferUse::Write(slice1)},
+                {ResourceUse::Write(resource)}));
 
   TF_ASSERT_OK_AND_ASSIGN(ExecutionGraph execution_graph,
                           ExecutionGraph::Create<Operation>(operations));
@@ -169,22 +165,21 @@ TEST(ExecutionGraphTest, TokenResourceOrdering) {
 TEST(ExecutionGraphTest, CollectivesResourceOrdering) {
   BufferAllocation alloc(/*index=*/0, /*size=*/80, /*color=*/0);
 
-  Shape slice_shape = ShapeUtil::MakeShape(F32, {10});
   BufferAllocation::Slice slice0(&alloc, /*offset=*/0, /*size=*/40);
   BufferAllocation::Slice slice1(&alloc, /*offset=*/40, /*size=*/40);
 
   auto resource = Resource::Create(Resource::Kind::kCollectiveCommunicator);
 
   std::vector<Operation> operations;
-  operations.push_back(Operation({BufferUse::Read(slice0, slice_shape),
-                                  BufferUse::Write(slice0, slice_shape)},
-                                 {ResourceUse::Write(resource)}));
-  operations.push_back(Operation({BufferUse::Read(slice1, slice_shape),
-                                  BufferUse::Write(slice1, slice_shape)},
-                                 {ResourceUse::Write(resource)}));
-  operations.push_back(Operation({BufferUse::Read(slice1, slice_shape),
-                                  BufferUse::Write(slice1, slice_shape)},
-                                 {ResourceUse::Write(resource)}));
+  operations.push_back(
+      Operation({BufferUse::Read(slice0), BufferUse::Write(slice0)},
+                {ResourceUse::Write(resource)}));
+  operations.push_back(
+      Operation({BufferUse::Read(slice1), BufferUse::Write(slice1)},
+                {ResourceUse::Write(resource)}));
+  operations.push_back(
+      Operation({BufferUse::Read(slice1), BufferUse::Write(slice1)},
+                {ResourceUse::Write(resource)}));
 
   TF_ASSERT_OK_AND_ASSIGN(ExecutionGraph execution_graph,
                           ExecutionGraph::Create<Operation>(operations));
@@ -213,16 +208,15 @@ TEST(ExecutionGraphTest, CollectivesResourceOrdering) {
 
 TEST(ExecutionGraphTest, TransitiveReduction) {
   BufferAllocation alloc(/*index=*/0, /*size=*/80, /*color=*/0);
-  Shape slice_shape = ShapeUtil::MakeShape(F32, {10});
   BufferAllocation::Slice slice(&alloc, /*offset=*/0, /*size=*/40);
 
   std::vector<Operation> operations;
-  operations.push_back(Operation({BufferUse::Read(slice, slice_shape),
-                                  BufferUse::Write(slice, slice_shape)}));
-  operations.push_back(Operation({BufferUse::Read(slice, slice_shape),
-                                  BufferUse::Write(slice, slice_shape)}));
-  operations.push_back(Operation({BufferUse::Read(slice, slice_shape),
-                                  BufferUse::Write(slice, slice_shape)}));
+  operations.push_back(
+      Operation({BufferUse::Read(slice), BufferUse::Write(slice)}));
+  operations.push_back(
+      Operation({BufferUse::Read(slice), BufferUse::Write(slice)}));
+  operations.push_back(
+      Operation({BufferUse::Read(slice), BufferUse::Write(slice)}));
 
   TF_ASSERT_OK_AND_ASSIGN(ExecutionGraph execution_graph,
                           ExecutionGraph::Create<Operation>(operations));
@@ -246,7 +240,6 @@ TEST(ExecutionGraphTest, TransitiveReduction) {
 
 TEST(ExecutionGraphTest, TransitiveReductionKeepsExecutionEdge) {
   BufferAllocation alloc(/*index=*/0, /*size=*/80, /*color=*/0);
-  Shape slice_shape = ShapeUtil::MakeShape(F32, {10});
   BufferAllocation::Slice slice(&alloc, /*offset=*/0, /*size=*/40);
 
   auto resource = Resource::Create(Resource::Kind::kCollectiveCommunicator);
@@ -256,12 +249,12 @@ TEST(ExecutionGraphTest, TransitiveReductionKeepsExecutionEdge) {
   // All three operations connected with scheduling edges, but because execution
   // edge provides stronger ordering guarantee, we must keep an 0-2 execution
   // edge, or we might get a data race.
-  operations.push_back(Operation({BufferUse::Write(slice, slice_shape)},
-                                 {ResourceUse::Write(resource)}));
+  operations.push_back(
+      Operation({BufferUse::Write(slice)}, {ResourceUse::Write(resource)}));
   operations.push_back(
       Operation(/*buffers=*/{}, {ResourceUse::Write(resource)}));
-  operations.push_back(Operation({BufferUse::Write(slice, slice_shape)},
-                                 {ResourceUse::Write(resource)}));
+  operations.push_back(
+      Operation({BufferUse::Write(slice)}, {ResourceUse::Write(resource)}));
 
   TF_ASSERT_OK_AND_ASSIGN(ExecutionGraph execution_graph,
                           ExecutionGraph::Create<Operation>(operations));

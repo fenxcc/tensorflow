@@ -132,7 +132,7 @@ py_strict_library(
     srcs = ["fenced_doctest_lib.py"],
     deps = [
         ":tf_doctest_lib",
-        "@pypi//astor",
+        "@pypi_astor//:pkg",
     ],
 )
 
@@ -169,7 +169,7 @@ py_strict_test(
         ":generate2_lib",
         "//tensorflow:tensorflow_py",
         "//tensorflow/python/platform:test",
-        "@pypi//packaging",
+        "@pypi_packaging//:pkg",
     ],
 )
 
@@ -200,7 +200,7 @@ py_strict_library(
         "//tensorflow/python/util:tf_inspect",
         "@absl_py//absl:app",
         "@absl_py//absl/flags",
-        "@pypi//packaging",
+        "@pypi_packaging//:pkg",
     ],
 )
 

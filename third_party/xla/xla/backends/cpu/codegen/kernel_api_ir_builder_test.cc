@@ -33,7 +33,7 @@ limitations under the License.
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Type.h"
 #include "llvm/Support/Casting.h"
-#include "xla/backends/cpu/alignment.h"
+#include "xla/cpu_function_runtime.h"
 #include "xla/hlo/analysis/alias_info.h"
 #include "xla/hlo/analysis/hlo_ordering.h"
 #include "xla/hlo/ir/hlo_instruction.h"
@@ -88,8 +88,7 @@ class KernelApiIrBuilderTestBase : public HloHardwareIndependentTestBase {
         [](const BufferValue& buffer) {
           return CpuExecutable::ShapeSizeBytes(buffer.shape());
         },
-        &alias_info_, [](LogicalBuffer::Color) { return /*alignment=*/1; },
-        BufferAssigner::Options{});
+        &alias_info_, [](LogicalBuffer::Color) { return /*alignment=*/1; });
   }
 
   void SetKernelFunctionAttributes(llvm::Function* function) {
@@ -211,7 +210,7 @@ TEST_F(KernelApiIrBuilderTest, BuildKernelPrototype) {
     CHECK: }
 
     #0 = { uwtable "frame-pointer"="all" "prefer-vector-width"="256" }
-    CHECK-DAG: ![[ALIGNMENT]] = !{i64 )", MinAlign(), R"(}
+    CHECK-DAG: ![[ALIGNMENT]] = !{i64 )", cpu_function_runtime::MinAlign(), R"(}
     CHECK-DAG: ![[SCOPE0]] = !{}
     CHECK-DAG: ![[SCOPE1]] = !{![[RES0:.+]], ![[RES1:.+]]}
     CHECK-DAG: ![[SCOPE2]] = !{![[RES0]]}
@@ -430,7 +429,7 @@ TEST_F(KernelApiIrBuilderTestNoBufferValidation, PartialOverlap) {
     CHECK: }
 
     #0 = { uwtable "frame-pointer"="all" "prefer-vector-width"="256" }
-    CHECK-DAG: ![[ALIGNMENT]] = !{i64 )", MinAlign(), R"(}
+    CHECK-DAG: ![[ALIGNMENT]] = !{i64 )", cpu_function_runtime::MinAlign(), R"(}
     CHECK-DAG: ![[EMPTY_NODE]] = !{}
     CHECK-DAG: ![[DOMAIN:.+]] = !{!"XLA host kernel test AA domain"}
     CHECK-DAG: ![[RES0:.+]] = !{!"{{.*}}, offset:288, size:512}", ![[DOMAIN]]}

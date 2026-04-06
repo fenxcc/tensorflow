@@ -32,13 +32,14 @@ limitations under the License.
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "xla/comparison_util.h"
+#include "xla/hlo/ir/collective_device_list.h"
 #include "xla/hlo/ir/dfs_hlo_visitor_with_default.h"
 #include "xla/hlo/ir/hlo_casting_utils.h"
 #include "xla/hlo/ir/hlo_computation.h"
 #include "xla/hlo/ir/hlo_instructions.h"
 #include "xla/hlo/ir/hlo_opcode.h"
+#include "xla/hlo/ir/hlo_original_value.h"
 #include "xla/hlo/ir/hlo_sharding.h"
-#include "xla/hlo/ir/replica_group.h"
 #include "xla/hlo/testlib/hlo_hardware_independent_test_base.h"
 #include "xla/hlo/testlib/pattern_matcher_gmock.h"
 #include "xla/hlo/testlib/test.h"
@@ -864,7 +865,7 @@ TEST_F(HloInstructionTest, AsyncOp) {
           add, {ShapeUtil::MakeScalarShape(U32)}, "parallel_thread"));
   auto* async_start = async_done->operand(0);
 
-  EXPECT_EQ(async_start->shape().tuple_shapes().size(), 3);
+  EXPECT_EQ(async_start->shape().tuple_shapes_size(), 3);
   EXPECT_EQ(async_start->async_execution_thread(), "parallel_thread");
   EXPECT_EQ(async_done->async_execution_thread(), "parallel_thread");
   EXPECT_TRUE(ShapeUtil::Equal(async_start->shape().tuple_shapes(2),
@@ -921,7 +922,7 @@ TEST_F(HloInstructionTest, AsyncOpWithDeps) {
   EXPECT_EQ(async_done->control_successors().size(), 1);
   EXPECT_EQ(async_done->control_successors()[0], add2);
 
-  EXPECT_EQ(async_start->shape().tuple_shapes().size(), 3);
+  EXPECT_EQ(async_start->shape().tuple_shapes_size(), 3);
   EXPECT_EQ(async_start->async_execution_thread(), "parallel_thread");
   EXPECT_EQ(async_done->async_execution_thread(), "parallel_thread");
   EXPECT_TRUE(ShapeUtil::Equal(async_start->shape().tuple_shapes(2),
@@ -1242,38 +1243,6 @@ ENTRY entry (param: f32[]) -> (f32[], f32[], f32[]) {
 
   EXPECT_TRUE(StructuralEqual(*t1, *t2));
   EXPECT_FALSE(StructuralEqual(*t1, *t3));
-}
-
-TEST_F(HloInstructionTest, IdenticalSendInstructions) {
-  auto param_0 = HloInstruction::CreateParameter(
-      0, ShapeUtil::MakeShape(F32, {}), "param_0");
-  auto param_1 = HloInstruction::CreateParameter(
-      1, ShapeUtil::MakeShape(F32, {}), "param_1");
-  auto token_0 = HloInstruction::CreateToken();
-  auto token_1 = HloInstruction::CreateToken();
-
-  auto send_0 = HloInstruction::CreateSend(param_0.get(), token_0.get(),
-                                           /*channel_id=*/42,
-                                           /*is_host_transfer=*/true);
-  auto send_1 = HloInstruction::CreateSend(param_1.get(), token_1.get(),
-                                           /*channel_id=*/42,
-                                           /*is_host_transfer=*/true);
-  auto send_2 = HloInstruction::CreateSend(param_1.get(), token_1.get(),
-                                           /*channel_id=*/42,
-                                           /*is_host_transfer=*/false);
-  auto send_3 = HloInstruction::CreateSend(param_1.get(), token_1.get(),
-                                           /*channel_id=*/43,
-                                           /*is_host_transfer=*/true);
-  auto eq_operand_shapes = [](const HloInstruction* a,
-                              const HloInstruction* b) {
-    return ShapeUtil::Equal(a->shape(), b->shape());
-  };
-  EXPECT_TRUE(send_0->Identical(*send_1, eq_operand_shapes));
-  EXPECT_FALSE(send_0->Identical(*send_2, eq_operand_shapes));
-  EXPECT_FALSE(send_0->Identical(*send_3, eq_operand_shapes));
-
-  send_1->set_frontend_attribute("foo", "bar");
-  EXPECT_FALSE(send_0->Identical(*send_1, eq_operand_shapes));
 }
 
 TEST_F(HloInstructionTest, FunctionVisitor) {
@@ -1718,6 +1687,35 @@ TEST_F(HloInstructionTest, StringifyDot) {
             "lhs_contracting_dims={1}, rhs_contracting_dims={0}");
 }
 
+TEST_F(HloInstructionTest, StringifySparseDot) {
+  HloComputation::Builder builder("SparseDot");
+  HloInstruction* x = builder.AddInstruction(HloInstruction::CreateParameter(
+      0, ShapeUtil::MakeShape(F32, {5, 16}), "x"));
+  HloInstruction* y = builder.AddInstruction(HloInstruction::CreateParameter(
+      1, ShapeUtil::MakeShape(F32, {32, 20}), "y"));
+  HloInstruction* meta = builder.AddInstruction(HloInstruction::CreateParameter(
+      1, ShapeUtil::MakeShape(U16, {5, 2}), "meta"));
+
+  DotDimensionNumbers dot_dnums;
+  dot_dnums.add_lhs_contracting_dimensions(1);
+  dot_dnums.add_rhs_contracting_dimensions(0);
+  SparsityDescriptor sparsity_descriptor;
+  sparsity_descriptor.set_type(SparsityType::SPARSITY_STRUCTURED_N_M);
+  sparsity_descriptor.set_n(2);
+  sparsity_descriptor.set_m(4);
+  sparsity_descriptor.set_index(0);
+  sparsity_descriptor.set_dimension(1);
+  std::vector<HloInstruction*> meta_operands = {meta};
+  HloInstruction* dot = builder.AddInstruction(HloInstruction::CreateDot(
+      ShapeUtil::MakeShape(F32, {5, 20}), x, y, dot_dnums,
+      DefaultPrecisionConfig(2), {sparsity_descriptor}, meta_operands));
+
+  EXPECT_EQ(
+      dot->ToString(),
+      "%dot = f32[5,20]{1,0} dot(%x, %y, %meta), lhs_contracting_dims={1}, "
+      "rhs_contracting_dims={0}, sparsity=L.1@2:4");
+}
+
 TEST_F(HloInstructionTest, StringifyConditional) {
   const Shape s1 = ShapeUtil::MakeShape(F32, {5, 10});
   const Shape s2 = ShapeUtil::MakeShape(F32, {20, 10});
@@ -2102,7 +2100,7 @@ TEST_F(HloInstructionTest, StringifyAsyncOpsWithReduceScatter) {
 
 ENTRY %Entry (pentry: f32[20]) -> f32[10] {
   %pentry = f32[20]{0} parameter(0)
-  %reduce-scatter-start = ((f32[20]{0}), f32[10]{0}) reduce-scatter-start(%pentry), async_execution_thread="parallel_thread", replica_groups={}, dimensions={0}, to_apply=%add
+  %reduce-scatter-start = ((f32[20]{0}), f32[10]{0}) reduce-scatter-start(%pentry), async_execution_thread="parallel_thread", mode=cross_replica, replica_groups={}, dimensions={0}, to_apply=%add
   %reduce-scatter-update = ((f32[20]{0}), f32[10]{0}) reduce-scatter-update(%reduce-scatter-start)
   ROOT %reduce-scatter-done = f32[10]{0} reduce-scatter-done(%reduce-scatter-update)
 }
@@ -2124,7 +2122,7 @@ ENTRY %Entry (pentry: f32[20]) -> f32[10] {
 
 %AsyncOp (pasync: f32[20]) -> f32[10] {
   %pasync = f32[20]{0} parameter(0)
-  ROOT %reduce-scatter = f32[10]{0} reduce-scatter(%pasync), replica_groups={}, dimensions={0}, to_apply=%add
+  ROOT %reduce-scatter = f32[10]{0} reduce-scatter(%pasync), mode=cross_replica, replica_groups={}, dimensions={0}, to_apply=%add
 }, execution_thread="parallel_thread"
 
 ENTRY %Entry (pentry: f32[20]) -> f32[10] {
@@ -2171,10 +2169,10 @@ TEST_F(HloInstructionTest, CanonicalStringificationFusion) {
   computation->SetExecutionThread(kParallelThreadName);
   HloInstruction* fusion = computation->CreateFusionInstruction(
       {dot, reshape}, HloInstruction::FusionKind::kLoop);
-  fusion->set_called_computations_execution_thread(kParallelThreadName);
+  fusion->set_called_computations_execution_thread(
+      kParallelThreadName,
+      /*skip_async_execution_thread_overwrite*/ false);
 
-  // Fusion is embedded call context, so the execution thread is not printed.
-  // here.
   const std::string expected_fusion =
       R"(f32[5,20]{1,0} fusion(f32[5,10]{1,0}, f32[20,10]{1,0}), kind=kLoop, calls=
 {
@@ -3379,6 +3377,29 @@ TEST_F(HloInstructionTest, DifferentResultAccuracy) {
   result_accuracy_rtol.mutable_tolerance()->set_rtol(0.4);
   exp2->set_result_accuracy(result_accuracy_rtol);
   EXPECT_FALSE(exp1->equal_result_accuracy(exp2));
+}
+
+TEST_F(HloInstructionTest, PreserveOriginalValueThroughClone) {
+  HloComputation::Builder builder(TestName());
+  auto* constant = builder.AddInstruction(
+      HloInstruction::CreateConstant(LiteralUtil::CreateR2<float>({
+          {1, 2},
+          {3, 4},
+      })));
+  constant->set_original_value(OriginalValue::CreateFromInstruction(constant));
+  auto* tuple =
+      builder.AddInstruction(HloInstruction::CreateTuple({constant, constant}));
+  tuple->set_original_value(OriginalValue::CreateFromInstruction(constant));
+  auto clone_shape = ShapeUtil::MakeShape(F32, {2, 2});
+  auto tuple_clone_same_shape = tuple->CloneWithNewOperands(
+      ShapeUtil::MakeTupleShape({clone_shape, clone_shape}), {});
+  clone_shape = ShapeUtil::MakeShape(F32, {3, 3});
+  auto tuple_clone_different_shape = tuple->CloneWithNewOperands(
+      ShapeUtil::MakeTupleShape({clone_shape, clone_shape}), {});
+  // Only the tuple clone with the same shape as the original tuple should
+  // preserve the original value.
+  EXPECT_TRUE(tuple_clone_same_shape->original_value());
+  EXPECT_FALSE(tuple_clone_different_shape->original_value());
 }
 
 }  // namespace

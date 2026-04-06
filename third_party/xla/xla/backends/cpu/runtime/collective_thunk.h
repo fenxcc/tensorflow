@@ -30,14 +30,13 @@ limitations under the License.
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "xla/backends/cpu/runtime/thunk.h"
-#include "xla/core/collectives/communicator.h"
-#include "xla/future.h"
-#include "xla/runtime/device_id.h"
 #include "xla/runtime/resource_use.h"
 #include "xla/service/buffer_assignment.h"
 #include "xla/service/collective_ops_utils.h"
+#include "xla/service/global_device_id.h"
 #include "xla/shape.h"
 #include "xla/stream_executor/device_memory.h"
+#include "xla/tsl/concurrency/async_value.h"
 #include "xla/tsl/concurrency/async_value_ref.h"
 #include "xla/xla_data.pb.h"
 
@@ -106,8 +105,8 @@ class CollectiveThunk : public Thunk {
   ResourceUses resource_uses() const final;
 
   // Callback for collective thunk implementations.
-  using Callback = absl::AnyInvocable<Future<>(const RendezvousKey& key,
-                                               Communicator& comm)>;
+  using Callback = absl::AnyInvocable<tsl::AsyncValueRef<Communicator::Event>(
+      const RendezvousKey& key, Communicator& comm)>;
 
   static bool IsDataTypeSupportedByCollectiveReduce(PrimitiveType datatype);
 
@@ -121,8 +120,8 @@ class CollectiveThunk : public Thunk {
 
   // Acquires collective communicator for the given parameters and executes the
   // user provided callback with acquired rendezvous key, rank and communicator.
-  Future<> ExecuteWithCommunicator(const Thunk::CollectiveExecuteParams* params,
-                                   Callback callback);
+  tsl::AsyncValueRef<ExecuteEvent> ExecuteWithCommunicator(
+      const Thunk::CollectiveExecuteParams* params, Callback callback);
 
   const BufferAllocation::Slice& source_buffer(int64_t index) const;
   absl::Span<const BufferAllocation::Slice> source_buffers() const;
@@ -133,23 +132,6 @@ class CollectiveThunk : public Thunk {
   absl::Span<const BufferAllocation::Slice> destination_buffers() const;
 
   const Shape& destination_shape(int64_t index) const;
-
-  // Collective operations are typically completed asynchronously on the IO
-  // thread pool, owned by the underlying collective implementation.
-  bool ExecutesOnExternalThreadPool() const final { return true; }
-
- protected:
-  tsl::AsyncValueRef<ExecuteEvent> ToExecuteEvent(Future<> future) {
-    auto event = tsl::MakeConstructedAsyncValueRef<ExecuteEvent>();
-    future.OnReady([event](absl::Status status) {
-      if (!status.ok()) {
-        event.SetError(status);
-      } else {
-        event.SetStateConcrete();
-      }
-    });
-    return event;
-  }
 
  private:
   OpParams op_params_;

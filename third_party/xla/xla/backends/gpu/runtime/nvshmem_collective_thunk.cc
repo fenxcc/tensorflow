@@ -27,26 +27,25 @@ limitations under the License.
 #include "absl/synchronization/mutex.h"
 #include "xla/backends/gpu/collectives/gpu_clique_key.h"
 #include "xla/backends/gpu/collectives/gpu_collectives.h"
-#include "xla/backends/gpu/runtime/collective_execution.h"
 #include "xla/backends/gpu/runtime/collective_thunk.h"
 #include "xla/backends/gpu/runtime/thunk.h"
 #include "xla/core/collectives/collectives.h"
 #include "xla/core/collectives/collectives_registry.h"
+#include "xla/core/collectives/communicator.h"
 #include "xla/primitive_util.h"
 #include "xla/shape.h"
-#include "xla/status_macros.h"
 #include "xla/stream_executor/event.h"
 #include "xla/stream_executor/stream.h"
 #include "xla/stream_executor/stream_executor.h"
-#include "xla/tsl/platform/errors.h"
-#include "xla/tsl/platform/statusor.h"
-#include "xla/xla_data.pb.h"
-#include "tsl/platform/casts.h"
+#include "tsl/platform/errors.h"
+#include "tsl/platform/logging.h"
+#include "tsl/platform/statusor.h"
 
 namespace xla {
 namespace gpu {
 
 namespace {
+static constexpr CollectiveStreamId kNoStreamId = CollectiveStreamId(0);
 
 bool IsTypeSupportedByNvshmem(PrimitiveType element_type,
                               Thunk::Kind reduction_op) {
@@ -90,14 +89,15 @@ absl::StatusOr<xla::gpu::GpuCollectives*> GetNvshmemCollectivesFromRegistry() {
   return tsl::down_cast<xla::gpu::GpuCollectives*>(collectives);
 }
 
-absl::Status NvshmemCollectiveThunk::Prepare(const PrepareParams& params) {
-  TF_RET_CHECK(params.collective_params != nullptr);
+absl::Status NvshmemCollectiveThunk::Prepare(
+    const PrepareParams& params, ResourceRequestsInterface& resource_requests) {
+  TF_ASSIGN_OR_RETURN(GpuCollectives * collectives, GetGpuCollectives(params));
   TF_ASSIGN_OR_RETURN(
       GpuCliqueKey clique_key,
-      GetGpuCliqueKey(*params.collective_params, config().replica_groups,
-                      config().group_mode, GetAsyncStreamKind(),
-                      /*include_participant_groups=*/false));
-  return params.clique_requests->RequestClique(clique_key);
+      GetGpuCliqueKey(collectives, *params.collective_params,
+                      config().replica_groups, config().group_mode,
+                      GetAsyncStreamKind(), /*use_nccl= */ false));
+  return resource_requests.AddClique(clique_key);
 }
 
 absl::Status NvshmemCollectiveThunk::Initialize(
@@ -105,10 +105,15 @@ absl::Status NvshmemCollectiveThunk::Initialize(
   if (async_events_) {
     TF_RETURN_IF_ERROR(async_events_->Initialize(params.executor));
   }
-  // Any nvshmem collective will need to require a barrier at the end of
-  // graph execution to make sure all reads and writes to symmetrics buffers
-  // are finished and ready for the next iteration of executable.
-  params.collective_params->need_barrier = true;
+  if (!barrier_called_) {
+    TF_ASSIGN_OR_RETURN(auto* collectives, GetNvshmemCollectivesFromRegistry());
+    TF_ASSIGN_OR_RETURN(std::unique_ptr<Communicator> nvshmem_comm,
+                        collectives->CreateCommunicator());
+
+    TF_RETURN_IF_ERROR(
+        nvshmem_comm->Barrier(GpuCollectives::On(*params.stream)));
+    barrier_called_ = true;
+  }
   return absl::OkStatus();
 }
 
@@ -137,6 +142,10 @@ absl::Status NvshmemCollectiveThunk::ExecuteOnStream(
   } else {
     // Launch collective operation on a main stream.
     TF_RETURN_IF_ERROR(RunNvshmemCollective(params, *params.stream));
+  }
+
+  if (barrier_called_) {
+    barrier_called_ = false;
   }
   return absl::OkStatus();
 }
@@ -172,7 +181,7 @@ absl::Status IsValidNvshmemOperand(Shape shape, Thunk::Kind reduction_op) {
 
 absl::StatusOr<void*> NvshmemBufferAddresses::GetNvshmemPtr(
     int device_ordinal) {
-  absl::MutexLock lock(mu_);
+  absl::MutexLock lock(&mu_);
   auto it = buffer_addrs_.find(device_ordinal);
   if (it != buffer_addrs_.end()) {
     return it->second;
@@ -182,7 +191,7 @@ absl::StatusOr<void*> NvshmemBufferAddresses::GetNvshmemPtr(
 
 void NvshmemBufferAddresses::StoreNvshmemPtr(int device_ordinal,
                                              void* buffer_addr) {
-  absl::MutexLock lock(mu_);
+  absl::MutexLock lock(&mu_);
   buffer_addrs_[device_ordinal] = buffer_addr;
 }
 

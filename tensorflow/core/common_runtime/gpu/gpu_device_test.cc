@@ -21,7 +21,6 @@ limitations under the License.
 
 #include "tensorflow/core/common_runtime/gpu/gpu_device.h"
 
-#include "absl/synchronization/notification.h"
 #include "xla/stream_executor/gpu/gpu_cudamallocasync_allocator.h"
 #include "xla/stream_executor/gpu/gpu_init.h"
 #include "xla/tsl/framework/device_id.h"
@@ -68,12 +67,12 @@ se::CudaComputeCapability GetComputeCapability() {
 }
 
 bool IsRocm() {
-  return se::GPUMachineManager()
-      ->ExecutorForDevice(0)
-      .value()
-      ->GetDeviceDescription()
-      .gpu_compute_capability()
-      .IsRocm();
+  return std::holds_alternative<se::RocmComputeCapability>(
+      se::GPUMachineManager()
+          ->ExecutorForDevice(0)
+          .value()
+          ->GetDeviceDescription()
+          .gpu_compute_capability());
 }
 
 void ExpectErrorMessageSubstr(const Status& s, StringPiece substr) {
@@ -609,7 +608,7 @@ TEST_F(GPUDeviceTest, CopyTensorInSameDevice) {
   CopyCPUToGPU(&cpu_tensor, &output_tensor, device, device_context);
   InitCPUTensor(&cpu_tensor, kNumElements, 1);
   CopyCPUToGPU(&cpu_tensor, &input_tensor, device, device_context);
-  absl::Notification note;
+  Notification note;
   device->CopyTensorInSameDevice(&input_tensor, &output_tensor, device_context,
                                  [&note](const Status& s) {
                                    TF_ASSERT_OK(s);

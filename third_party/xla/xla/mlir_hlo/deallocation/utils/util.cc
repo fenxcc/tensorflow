@@ -23,13 +23,8 @@ namespace deallocation {
 SmallVector<RegionEdge> getSuccessorRegions(RegionBranchOpInterface op,
                                             RegionBranchPoint point) {
   SmallVector<RegionEdge> edges;
-  auto* parentRegion =
-      point.getTerminatorPredecessorOrNull()
-          ? point.getTerminatorPredecessorOrNull()->getParentRegion()
-          : nullptr;
-
-  if (parentRegion) {
-    if (parentRegion->empty()) {
+  if (Region* region = point.getRegionOrNull()) {
+    if (region->empty()) {
       return edges;
     }
   }
@@ -40,8 +35,9 @@ SmallVector<RegionEdge> getSuccessorRegions(RegionBranchOpInterface op,
   for (const auto& successor : successors) {
     auto& edge = edges.emplace_back();
     edge.predecessorRegionPoint = point;
-    edge.predecessorOp = parentRegion ? parentRegion->front().getTerminator()
-                                      : op.getOperation();
+    auto* region = point.getRegionOrNull();
+    edge.predecessorOp =
+        region ? region->front().getTerminator() : op.getOperation();
     edge.predecessorOperandIndex = edge.predecessorOp->getNumOperands() -
                                    successor.getSuccessorInputs().size();
 
@@ -50,9 +46,7 @@ SmallVector<RegionEdge> getSuccessorRegions(RegionBranchOpInterface op,
       edge.successorOpOrRegion = op.getOperation();
       edge.successorValueIndex = 0;
     } else {
-      edge.successorRegionPoint =
-          RegionBranchPoint(cast<RegionBranchTerminatorOpInterface>(
-              successor.getSuccessor()->front().getTerminator()));
+      edge.successorRegionPoint = successor.getSuccessor();
       edge.successorOpOrRegion = successor.getSuccessor();
       edge.successorValueIndex = llvm::isa<scf::ForOp>(op) ? 1 : 0;
     }
@@ -74,8 +68,7 @@ SmallVector<RegionEdge> getPredecessorRegions(RegionBranchOpInterface op,
   };
   checkPredecessor(point.parent());
   for (Region& region : op->getRegions()) {
-    checkPredecessor(RegionBranchPoint(cast<RegionBranchTerminatorOpInterface>(
-        region.front().getTerminator())));
+    checkPredecessor(region);
   }
   return result;
 }

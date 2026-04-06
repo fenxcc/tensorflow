@@ -115,7 +115,8 @@ static void BM_ConvFloat(::testing::benchmark::State& state, int batch,
                          const string& label) {
   if (!IsGoogleCudaEnabled() && use_gpu) {
     state.SkipWithError(
-        absl::StrCat("Skipping GPU test (no --config=cuda): ", label));
+        strings::StrCat("Skipping GPU test (no --config=cuda): ", label)
+            .c_str());
     return;
   }
   state.SetLabel(label);
@@ -543,7 +544,8 @@ static void BM_ConvFloatDepthwise(::testing::benchmark::State& state, int batch,
                                   const string& label) {
   if (!IsGoogleCudaEnabled() && use_gpu) {
     state.SkipWithError(
-        absl::StrCat("Skipping GPU test (no --config=cuda): ", label));
+        strings::StrCat("Skipping GPU test (no --config=cuda): ", label)
+            .c_str());
     return;
   }
   state.SetLabel(label);
@@ -1161,7 +1163,8 @@ static void BM_MaxPoolBk(::testing::benchmark::State& state, int batch_size,
                          int num_threads, bool use_gpu, const string& label) {
   if (!IsGoogleCudaEnabled() && use_gpu) {
     state.SkipWithError(
-        absl::StrCat("Skipping GPU test (no --config=cuda): ", label));
+        strings::StrCat("Skipping GPU test (no --config=cuda): ", label)
+            .c_str());
     return;
   }
 
@@ -1395,7 +1398,8 @@ static void BM_ImageNetSoftmaxFwd(::testing::benchmark::State& state,
                                   const string& label) {
   if (!IsGoogleCudaEnabled() && use_gpu) {
     state.SkipWithError(
-        absl::StrCat("Skipping GPU test (no --config=cuda): ", label));
+        strings::StrCat("Skipping GPU test (no --config=cuda): ", label)
+            .c_str());
     return;
   }
 
@@ -1447,7 +1451,8 @@ static void BM_TopK(::testing::benchmark::State& state, int rows, int cols,
                     int k, int num_threads, bool use_gpu, const string& label) {
   if (!IsGoogleCudaEnabled() && use_gpu) {
     state.SkipWithError(
-        absl::StrCat("Skipping GPU test (no --config=cuda): ", label));
+        strings::StrCat("Skipping GPU test (no --config=cuda): ", label)
+            .c_str());
     return;
   }
   state.SetLabel(label);

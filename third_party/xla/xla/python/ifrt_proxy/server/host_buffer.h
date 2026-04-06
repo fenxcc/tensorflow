@@ -45,15 +45,10 @@ class HostBufferStore {
   // handle already exists.
   absl::Status Store(uint64_t handle, std::string data);
 
-  // Reads the data associated with the given handle from storage and stores it.
-  // Returns an error if the handle already exists.
-  absl::Status ReadFromDisk(uint64_t handle);
-
   // Retrieves the data associated with the handle. Returns an error if the
   // handle does not exist within the given timeout or if `Shutdown()` is
   // called.
-  using MemRegion = std::shared_ptr<const absl::string_view>;
-  absl::StatusOr<MemRegion> Lookup(
+  absl::StatusOr<std::shared_ptr<const std::string>> Lookup(
       uint64_t handle, absl::Duration timeout = absl::ZeroDuration());
 
   // Deletes the host buffer associated with the handle. Returns an error if the
@@ -67,8 +62,8 @@ class HostBufferStore {
 
  private:
   absl::Mutex mu_;
-
-  absl::flat_hash_map<uint64_t, MemRegion> buffers_ ABSL_GUARDED_BY(mu_);
+  absl::flat_hash_map<uint64_t, std::shared_ptr<const std::string>> buffers_
+      ABSL_GUARDED_BY(mu_);
   std::optional<std::string> shutdown_msg_ ABSL_GUARDED_BY(mu_);
 };
 

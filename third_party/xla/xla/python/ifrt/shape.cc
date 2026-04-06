@@ -70,20 +70,21 @@ absl::StatusOr<Shape> Shape::FromProto(const ShapeProto& proto) {
   return Shape(std::move(dims));
 }
 
-void Shape::ToProto(ShapeProto& proto, SerDesVersion version) const {
+ShapeProto Shape::ToProto(SerDesVersion version) const {
   // TODO(b/423702568): Change the return type to `absl::StatusOr<...>` for
   // graceful error handling.
   CHECK_GE(version.version_number(), SerDesVersionNumber(0))
       << "Unsupported " << version.version_number()
       << " for Shape serialization";
 
-  proto.Clear();
+  ShapeProto proto;
   proto.set_version_number(SerDesVersionNumber(0).value());
 
   proto.mutable_dims()->Reserve(dims().size());
   for (int64_t dim : dims()) {
     proto.mutable_dims()->AddAlreadyReserved(dim);
   }
+  return proto;
 }
 
 int64_t Shape::num_elements() const {
@@ -115,21 +116,22 @@ absl::StatusOr<BoundedDynamicShapeTag> BoundedDynamicShapeTag::FromProto(
   return BoundedDynamicShapeTag(std::move(dynamic_dims));
 }
 
-void BoundedDynamicShapeTag::ToProto(BoundedDynamicShapeTagProto& proto,
-                                     SerDesVersion version) const {
+BoundedDynamicShapeTagProto BoundedDynamicShapeTag::ToProto(
+    SerDesVersion version) const {
   // TODO(b/423702568): Change the return type to `absl::StatusOr<...>` for
   // graceful error handling.
   CHECK_GE(version.version_number(), SerDesVersionNumber(0))
       << "Unsupported " << version.version_number()
       << " for BoundedDynamicShapeTag serialization";
 
-  proto.Clear();
+  BoundedDynamicShapeTagProto proto;
   proto.set_version_number(SerDesVersionNumber(0).value());
 
   proto.mutable_is_dynamic_dims()->Reserve(dynamic_dims_.size());
   for (bool dynamic_dim : dynamic_dims_) {
     proto.mutable_is_dynamic_dims()->AddAlreadyReserved(dynamic_dim);
   }
+  return proto;
 }
 
 absl::StatusOr<DynamicShape> DynamicShape::Create(Shape shape,
@@ -184,25 +186,25 @@ absl::StatusOr<DynamicShape> DynamicShape::FromProto(
   return InvalidArgument("Only support bounded dynamic shape.");
 }
 
-void DynamicShape::ToProto(DynamicShapeProto& proto,
-                           SerDesVersion version) const {
+DynamicShapeProto DynamicShape::ToProto(SerDesVersion version) const {
   // TODO(b/423702568): Change the return type to `absl::StatusOr<...>` for
   // graceful error handling.
   CHECK_GE(version.version_number(), SerDesVersionNumber(0))
       << "Unsupported " << version.version_number()
       << " for DynamicShape serialization";
 
-  proto.Clear();
+  DynamicShapeProto proto;
   proto.set_version_number(SerDesVersionNumber(0).value());
 
-  shape_.ToProto(*proto.mutable_shape(), version);
+  *proto.mutable_shape() = shape_.ToProto(version);
   std::visit(
       overloaded{
           [&proto, version](BoundedDynamicShapeTag tag) {
-            tag.ToProto(*proto.mutable_bounded_dynamic_shape_tag(), version);
+            *proto.mutable_bounded_dynamic_shape_tag() = tag.ToProto(version);
           },
       },
       tag_);
+  return proto;
 }
 
 std::string DynamicShape::DebugString() const {

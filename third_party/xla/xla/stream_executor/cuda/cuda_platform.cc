@@ -23,9 +23,7 @@ limitations under the License.
 #include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/str_cat.h"
 #include "third_party/gpus/cuda/include/cuda.h"
-#include "third_party/gpus/cuda/nvml/include/nvml.h"
 #include "xla/stream_executor/cuda/cuda_diagnostics.h"
 #include "xla/stream_executor/cuda/cuda_executor.h"
 #include "xla/stream_executor/cuda/cuda_platform_id.h"
@@ -35,6 +33,7 @@ limitations under the License.
 #include "xla/stream_executor/platform/initialize.h"
 #include "xla/stream_executor/platform_manager.h"
 #include "xla/tsl/platform/errors.h"
+#include "xla/tsl/platform/status.h"
 
 namespace stream_executor {
 namespace gpu {
@@ -45,19 +44,14 @@ namespace {
 static absl::Status InternalInit() {
   absl::Status status =
       cuda::ToStatus(cuInit(0 /* = flags */), "Failed call to cuInit");
-  if (!status.ok()) {
-    LOG(ERROR) << "failed call to cuInit: " << status;
-    cuda::Diagnostician::LogDiagnosticInformation();
+  if (status.ok()) {
     return status;
   }
 
-  nvmlReturn_t init_result = nvmlInit();
-  if (init_result != NVML_SUCCESS) {
-    return absl::InternalError(
-        absl::StrCat("NVML init failed with ", init_result));
-  }
+  LOG(ERROR) << "failed call to cuInit: " << status;
 
-  return absl::OkStatus();
+  cuda::Diagnostician::LogDiagnosticInformation();
+  return status;
 }
 
 static absl::Status PlatformInitialize() {
@@ -72,13 +66,6 @@ static absl::Status PlatformInitialize() {
 }  // namespace
 
 CudaPlatform::CudaPlatform() : name_("CUDA") {}
-
-CudaPlatform::~CudaPlatform() {
-  nvmlReturn_t shutdown_result = nvmlShutdown();
-  if (shutdown_result != NVML_SUCCESS) {
-    LOG(ERROR) << "NVML shutdown failed with " << shutdown_result;
-  }
-}
 
 Platform::Id CudaPlatform::id() const { return cuda::kCudaPlatformId; }
 
@@ -128,7 +115,7 @@ CudaPlatform::GetUncachedExecutor(int ordinal) {
 }  // namespace gpu
 
 static void InitializeCudaPlatform() {
-  CHECK_OK(
+  TF_CHECK_OK(
       PlatformManager::RegisterPlatform(std::make_unique<gpu::CudaPlatform>()));
 }
 

@@ -27,6 +27,8 @@ limitations under the License.
 #include "xla/pjrt/pjrt_client.h"
 #include "xla/pjrt/pjrt_executable.h"
 #include "xla/shape_util.h"
+#include "tsl/platform/logging.h"
+#include "tsl/platform/status.h"
 
 namespace xla {
 
@@ -34,9 +36,6 @@ static thread_local int on_send_guard = 0;
 
 void EnterHostCallback() { ++on_send_guard; }
 void LeaveHostCallback() { --on_send_guard; }
-
-HostCallbackScope::HostCallbackScope() { ++on_send_guard; }
-HostCallbackScope::~HostCallbackScope() { --on_send_guard; }
 
 bool ThisThreadIsInsideHostCallback() { return on_send_guard > 0; }
 
@@ -52,7 +51,7 @@ absl::Status HostCallbackContext::OnSend(int arg_num,
     DCHECK_GE(data.size(), host_size);
 
     auto delinearized = PjRtChunk::AllocateDefault(host_size);
-    CHECK_OK(host_memory_for_device_manager_->ToHostLayout(
+    TF_CHECK_OK(host_memory_for_device_manager_->ToHostLayout(
         data.data(), data.size(), device_shape, delinearized.data(),
         delinearized.size(), host_shape));
 
@@ -91,11 +90,9 @@ absl::Status HostCallbackContext::OnSend(int arg_num,
     result_ptrs.push_back(results.back().data());
   }
 
-  absl::Status status;
-  {
-    xla::HostCallbackScope scope;
-    status = host_callback_.callback(result_ptrs.data(), arg_ptrs.data());
-  }
+  EnterHostCallback();
+  auto status = host_callback_.callback(result_ptrs.data(), arg_ptrs.data());
+  LeaveHostCallback();
 
   // TODO(chky): Consider populating garbage data in results upon errors.
 
@@ -122,7 +119,7 @@ void HostCallbackContext::Receive(int res_num,
   result_channel->Pop().OnReady(
       [this, res_num, metadata,
        stream = std::move(stream)](absl::StatusOr<PjRtChunk> chunk) mutable {
-        CHECK_OK(chunk.status());
+        TF_CHECK_OK(chunk.status());
 
         if (!use_major_to_minor_data_layout_for_callbacks_) {
           const auto& host_shape = host_callback_.results.at(res_num).shape;
@@ -134,7 +131,7 @@ void HostCallbackContext::Receive(int res_num,
         }
 
         stream->AddChunk(*std::move(chunk)).OnReady([](absl::Status s) {
-          CHECK_OK(s);
+          TF_CHECK_OK(s);
         });
       });
 }
@@ -178,11 +175,7 @@ CreateHostCallbackStateAndAppendSendRecvCallbacks(
 
 // First 64 bits of SHA-512 of "xla::FfiLoadedHostCallbacks".
 ffi::TypeId FfiLoadedHostCallbacks::id = {7357244197867843242};
-ffi::TypeInfo FfiLoadedHostCallbacks::info =
-    ffi::MakeTypeInfo<FfiLoadedHostCallbacks>();
-
 XLA_FFI_REGISTER_TYPE(ffi::GetXlaFfiApi(), "FfiLoadedHostCallbacks",
-                      &FfiLoadedHostCallbacks::id,
-                      &FfiLoadedHostCallbacks::info);
+                      &FfiLoadedHostCallbacks::id);
 
 }  // namespace xla

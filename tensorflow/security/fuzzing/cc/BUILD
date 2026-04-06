@@ -1,6 +1,5 @@
 # Fuzzing TensorFlow.
 
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load(
     "//tensorflow/core/platform:build_config.bzl",
     "tf_proto_library",
@@ -33,7 +32,6 @@ tf_cc_fuzz_test(
     deps = [
         "//tensorflow/core/platform:str_util",
         "//tensorflow/core/platform:stringpiece",
-        "@com_google_absl//absl/strings",
     ],
 )
 
@@ -105,7 +103,6 @@ tf_cc_fuzz_test(
         "//tensorflow/core:portable_gif_internal",
         "//tensorflow/core/platform:str_util",
         "//tensorflow/core/platform:stringpiece",
-        "@com_google_absl//absl/strings:string_view",
     ],
 )
 
@@ -146,7 +143,6 @@ tf_cc_fuzz_test(
     tags = ["no_oss"],
     deps = [
         "//tensorflow/core/platform:stringprintf",
-        "@com_google_absl//absl/strings:str_format",
     ],
 )
 
@@ -157,7 +153,6 @@ tf_cc_fuzz_test(
     deps = [
         "//tensorflow/core/platform:str_util",
         "//tensorflow/core/platform:stringpiece",
-        "@com_google_absl//absl/strings:string_view",
     ],
 )
 

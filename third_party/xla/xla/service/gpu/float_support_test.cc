@@ -75,9 +75,15 @@ ENTRY e {
 }
 
 TEST_F(FloatSupportTestWithTriton, MixedTypeDotWithBF16IsNotUpcasted) {
-  if (GetGpuComputeCapability().IsRocm() ||
-      !GetGpuComputeCapability().cuda_compute_capability()->IsAtLeast(
-          se::CudaComputeCapability::kAmpere)) {
+  bool skip_test =
+      std::visit(absl::Overload(
+                     [](const se::CudaComputeCapability& cc) {
+                       return !cc.IsAtLeast(se::CudaComputeCapability::kAmpere);
+                     },
+                     [](const se::RocmComputeCapability&) { return true; }),
+                 GetGpuComputeCapability());
+
+  if (skip_test) {
     GTEST_SKIP() << "Not supported on this GPU architecture";
   }
 

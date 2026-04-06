@@ -23,7 +23,6 @@ td_library(
     deps = [
         "@llvm-project//mlir:BuiltinDialectTdFiles",
         "@llvm-project//mlir:OpBaseTdFiles",
-        "@llvm-project//mlir:SideEffectInterfacesTdFiles",
     ],
 )
 
@@ -69,10 +68,7 @@ gentbl_cc_library(
     },
     tblgen = "@llvm-project//mlir:mlir-tblgen",
     td_file = "xla_cpu_ops.td",
-    deps = [
-        ":xla_cpu_td_files",
-        "//xla/codegen/emitters/ir:xla_td_files",
-    ],
+    deps = [":xla_cpu_td_files"],
 )
 
 cc_library(
@@ -95,6 +91,5 @@ cc_library(
         "@llvm-project//llvm:Support",
         "@llvm-project//mlir:BytecodeOpInterface",
         "@llvm-project//mlir:IR",
-        "@llvm-project//mlir:SideEffectInterfaces",
     ],
 )

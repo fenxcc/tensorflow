@@ -14,46 +14,23 @@ limitations under the License.
 ==============================================================================*/
 
 #include <memory>
-#include <string>
 #include <utility>
 #include <vector>
 
-#include "xla/tests/xla_test_backend_predicates.h"
-#include <gtest/gtest.h>
-#include "absl/log/check.h"
-#include "absl/log/log.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/match.h"
-#include "absl/strings/string_view.h"
-#include "absl/types/span.h"
 #include "xla/client/client_library.h"
 #include "xla/client/local_client.h"
-#include "xla/comparison_util.h"
-#include "xla/executable_run_options.h"
 #include "xla/hlo/ir/hlo_input_output_alias_config.h"
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/ir/hlo_opcode.h"
 #include "xla/hlo/testlib/verified_hlo_module.h"
 #include "xla/literal.h"
-#include "xla/literal_util.h"
 #include "xla/service/backend.h"
 #include "xla/service/executable.h"
-#include "xla/service/hlo_module_config.h"
-#include "xla/service/maybe_owning_device_memory.h"
-#include "xla/service/service_executable_run_options.h"
-#include "xla/service/shaped_buffer.h"
-#include "xla/shape.h"
-#include "xla/shape_tree.h"
-#include "xla/shape_util.h"
-#include "xla/stream_executor/device_memory.h"
-#include "xla/stream_executor/device_memory_allocator.h"
-#include "xla/stream_executor/platform.h"
-#include "xla/stream_executor/stream_executor.h"
+#include "xla/status_macros.h"
 #include "xla/stream_executor/stream_executor_memory_allocator.h"
 #include "xla/tests/hlo_test_base.h"
 #include "xla/tests/literal_test_util.h"
 #include "xla/tsl/lib/core/status_test_util.h"
-#include "xla/tsl/platform/statusor.h"
 
 namespace xla {
 namespace {
@@ -71,7 +48,7 @@ class BufferDonationTest : public HloTestBase {
     backend_ = client_->mutable_backend();
     platform_ = backend_->platform();
     executor_ = backend_->default_stream_executor();
-    CHECK_OK(executor_->Init());
+    TF_CHECK_OK(executor_->Init());
   }
 
  protected:
@@ -128,7 +105,7 @@ class BufferDonationTest : public HloTestBase {
               argument_literal.shape(), &memory_allocator,
               executor_->device_ordinal()));
       ShapedBuffer shaped_buffer = scoped_shaped_buffer.release();
-      CHECK_OK(backend_->transfer_manager()->TransferLiteralToDevice(
+      TF_CHECK_OK(backend_->transfer_manager()->TransferLiteralToDevice(
           stream.get(), argument_literal, shaped_buffer));
       ShapeTree<se::DeviceMemoryBase> input_buffers = shaped_buffer.buffers();
       inputs_buffers.push_back(input_buffers);
@@ -166,19 +143,19 @@ class BufferDonationTest : public HloTestBase {
               << "             size = " << result_root_buffer.size();
 
     // Check for expected aliasing between input and output buffers.
-    if (!test::DeviceTypeIs(test::kInterpreter)) {
-      alias_config.ForEachAlias(
-          [&](const ShapeIndex& output_index,
-              const HloInputOutputAliasConfig::Alias& alias) {
-            int arg_num = alias.parameter_number;
-            const void* input_ptr =
-                inputs_buffers[arg_num].element(alias.parameter_index).opaque();
-            const void* output_ptr =
-                output.Result().buffer(output_index).opaque();
-            ASSERT_EQ(input_ptr == output_ptr,
-                      expected_runtime_aliasing[arg_num]);
-          });
-    }
+#ifndef XLA_TEST_BACKEND_INTERPRETER
+    alias_config.ForEachAlias(
+        [&](const ShapeIndex& output_index,
+            const HloInputOutputAliasConfig::Alias& alias) {
+          int arg_num = alias.parameter_number;
+          const void* input_ptr =
+              inputs_buffers[arg_num].element(alias.parameter_index).opaque();
+          const void* output_ptr =
+              output.Result().buffer(output_index).opaque();
+          ASSERT_EQ(input_ptr == output_ptr,
+                    expected_runtime_aliasing[arg_num]);
+        });
+#endif
 
     TF_ASSERT_OK(run_options.stream()->BlockHostUntilDone());
     TF_ASSERT_OK_AND_ASSIGN(
@@ -330,10 +307,10 @@ ENTRY entry {
       {LiteralUtil::CreateR0<float>(0.1), LiteralUtil::CreateR0<float>(0.2)});
 
   // Alias-passthrough-params is only implemented on GPU.
-  if (test::DeviceTypeIs(test::kGpu)) {
-    RunAndCheck(std::move(*module), args, /*donate_arguments=*/{false, false},
-                /*expected_runtime_aliasing=*/{true, true}, expected);
-  }
+#ifdef XLA_TEST_BACKEND_GPU
+  RunAndCheck(std::move(*module), args, /*donate_arguments=*/{false, false},
+              /*expected_runtime_aliasing=*/{true, true}, expected);
+#endif
 }
 
 TEST_F(BufferDonationTest, TestMustAliasNotDonated) {
@@ -360,12 +337,12 @@ ENTRY entry {
   Literal expected = LiteralUtil::MakeTupleFromSlices(
       {LiteralUtil::CreateR0<float>(0.1), LiteralUtil::CreateR0<float>(0.2)});
 
-  if (!test::DeviceTypeIs(test::kInterpreter)) {
-    RunAndCheck(std::move(*module), args,
-                /*donate_arguments=*/{false, false}, {true, false}, expected,
-                "An input was configured to be must-alias at "
-                "compile time but not donated at runtime:");
-  }
+#ifndef XLA_TEST_BACKEND_INTERPRETER
+  RunAndCheck(std::move(*module), args,
+              /*donate_arguments=*/{false, false}, {true, false}, expected,
+              "An input was configured to be must-alias at "
+              "compile time but not donated at runtime:");
+#endif
 }
 
 }  // namespace

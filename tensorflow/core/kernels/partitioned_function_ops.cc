@@ -258,8 +258,8 @@ void PartitionedCallOp::RunFunction(FunctionLibraryRuntime::Handle handle,
             step_container](const absl::Status& status) {
              if (!status.ok()) {
                const string function_and_msg =
-                   absl::StrCat(errors::FormatFunctionForError(func_name), " ",
-                                status.message());
+                   strings::StrCat(errors::FormatFunctionForError(func_name),
+                                   " ", status.message());
                ctx->SetStatus(
                    errors::CreateWithUpdatedMessage(status, function_and_msg));
              } else {

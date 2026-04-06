@@ -306,10 +306,10 @@ RankedTensorType DropFirstDimension(Type type) {
 Operation* InsertCast(OpBuilder& b, Location loc, Type dst_type, Value input) {
   Type element_type = getElementTypeOrSelf(dst_type);
   if (mlir::isa<IndexType>(element_type))
-    return tensor::CastOp::create(b, loc, dst_type, input);
+    return b.create<tensor::CastOp>(loc, dst_type, input);
   if (isa<TensorFlowDialect, BuiltinDialect>(element_type.getDialect()))
-    return TF::CastOp::create(b, loc, dst_type, input,
-                              /*truncate=*/b.getBoolAttr(false));
+    return b.create<TF::CastOp>(loc, dst_type, input,
+                                /*truncate=*/b.getBoolAttr(false));
   return nullptr;
 }
 

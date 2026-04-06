@@ -43,27 +43,26 @@ namespace {
 
 constexpr char kApiDefFilePattern[] = "api_def_*.pbtxt";
 
-std::string DefaultApiDefDir() {
+string DefaultApiDefDir() {
   return GetDataDependencyFilepath(
       io::JoinPath("tensorflow", "core", "api_def", "base_api"));
 }
 
-std::string PythonApiDefDir() {
+string PythonApiDefDir() {
   return GetDataDependencyFilepath(
       io::JoinPath("tensorflow", "core", "api_def", "python_api"));
 }
 
 // Reads golden ApiDef files and returns a map from file name to ApiDef file
 // contents.
-void GetGoldenApiDefs(
-    Env* env, const std::string& api_files_dir,
-    std::unordered_map<std::string, ApiDef>* name_to_api_def) {
-  std::vector<std::string> matching_paths;
+void GetGoldenApiDefs(Env* env, const string& api_files_dir,
+                      std::unordered_map<string, ApiDef>* name_to_api_def) {
+  std::vector<string> matching_paths;
   TF_CHECK_OK(env->GetMatchingPaths(
       io::JoinPath(api_files_dir, kApiDefFilePattern), &matching_paths));
 
   for (auto& file_path : matching_paths) {
-    std::string file_contents;
+    string file_contents;
     TF_CHECK_OK(ReadFileToString(env, file_path, &file_contents));
     file_contents = PBTxtFromMultiline(file_contents);
 
@@ -77,9 +76,8 @@ void GetGoldenApiDefs(
 }
 
 void TestAllApiDefsHaveCorrespondingOp(
-    const OpList& ops,
-    const std::unordered_map<std::string, ApiDef>& api_defs_map) {
-  std::unordered_set<std::string> op_names;
+    const OpList& ops, const std::unordered_map<string, ApiDef>& api_defs_map) {
+  std::unordered_set<string> op_names;
   for (const auto& op : ops.op()) {
     op_names.insert(op.name());
   }
@@ -91,8 +89,7 @@ void TestAllApiDefsHaveCorrespondingOp(
 }
 
 void TestAllApiDefInputArgsAreValid(
-    const OpList& ops,
-    const std::unordered_map<std::string, ApiDef>& api_defs_map) {
+    const OpList& ops, const std::unordered_map<string, ApiDef>& api_defs_map) {
   for (const auto& op : ops.op()) {
     const auto api_def_iter = api_defs_map.find(op.name());
     if (api_def_iter == api_defs_map.end()) {
@@ -116,8 +113,7 @@ void TestAllApiDefInputArgsAreValid(
 }
 
 void TestAllApiDefOutputArgsAreValid(
-    const OpList& ops,
-    const std::unordered_map<std::string, ApiDef>& api_defs_map) {
+    const OpList& ops, const std::unordered_map<string, ApiDef>& api_defs_map) {
   for (const auto& op : ops.op()) {
     const auto api_def_iter = api_defs_map.find(op.name());
     if (api_def_iter == api_defs_map.end()) {
@@ -141,8 +137,7 @@ void TestAllApiDefOutputArgsAreValid(
 }
 
 void TestAllApiDefAttributeNamesAreValid(
-    const OpList& ops,
-    const std::unordered_map<std::string, ApiDef>& api_defs_map) {
+    const OpList& ops, const std::unordered_map<string, ApiDef>& api_defs_map) {
   for (const auto& op : ops.op()) {
     const auto api_def_iter = api_defs_map.find(op.name());
     if (api_def_iter == api_defs_map.end()) {
@@ -164,7 +159,7 @@ void TestAllApiDefAttributeNamesAreValid(
 }
 
 void TestDeprecatedAttributesSetCorrectly(
-    const std::unordered_map<std::string, ApiDef>& api_defs_map) {
+    const std::unordered_map<string, ApiDef>& api_defs_map) {
   for (const auto& name_and_api_def : api_defs_map) {
     int num_deprecated_endpoints = 0;
     const auto& api_def = name_and_api_def.second;
@@ -191,7 +186,7 @@ void TestDeprecatedAttributesSetCorrectly(
 }
 
 void TestDeprecationVersionSetCorrectly(
-    const std::unordered_map<std::string, ApiDef>& api_defs_map) {
+    const std::unordered_map<string, ApiDef>& api_defs_map) {
   for (const auto& name_and_api_def : api_defs_map) {
     const auto& name = name_and_api_def.first;
     const auto& api_def = name_and_api_def.second;
@@ -210,13 +205,13 @@ class BaseApiTest : public ::testing::Test {
  protected:
   BaseApiTest() {
     OpRegistry::Global()->Export(false, &ops_);
-    const std::vector<std::string> multi_line_fields = {"description"};
+    const std::vector<string> multi_line_fields = {"description"};
 
     Env* env = Env::Default();
     GetGoldenApiDefs(env, DefaultApiDefDir(), &api_defs_map_);
   }
   OpList ops_;
-  std::unordered_map<std::string, ApiDef> api_defs_map_;
+  std::unordered_map<string, ApiDef> api_defs_map_;
 };
 
 // Check that all ops have an ApiDef.
@@ -238,7 +233,7 @@ TEST_F(BaseApiTest, AllApiDefsHaveCorrespondingOp) {
   TestAllApiDefsHaveCorrespondingOp(ops_, api_defs_map_);
 }
 
-std::string GetOpDefHasDocStringError(const std::string& op_name) {
+string GetOpDefHasDocStringError(const string& op_name) {
   return strings::Printf(
       "OpDef for %s has a doc string. "
       "Doc strings must be defined in ApiDef instead of OpDef. "
@@ -306,13 +301,13 @@ class PythonApiTest : public ::testing::Test {
  protected:
   PythonApiTest() {
     OpRegistry::Global()->Export(false, &ops_);
-    const std::vector<std::string> multi_line_fields = {"description"};
+    const std::vector<string> multi_line_fields = {"description"};
 
     Env* env = Env::Default();
     GetGoldenApiDefs(env, PythonApiDefDir(), &api_defs_map_);
   }
   OpList ops_;
-  std::unordered_map<std::string, ApiDef> api_defs_map_;
+  std::unordered_map<string, ApiDef> api_defs_map_;
 };
 
 // Check that ApiDefs have a corresponding op.

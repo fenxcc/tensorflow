@@ -22,7 +22,6 @@ limitations under the License.
 #include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
-#include "xla/hlo/analysis/alias_info.h"
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/testlib/hlo_hardware_independent_test_base.h"
 #include "xla/service/cost_modelling/op_cost.h"
@@ -66,9 +65,9 @@ class MemorySpaceAssignmentCostAnalysisTest
             "HloCostAnalysis",
             CreateHloCostAnalysisCalculator(*hlo_cost_analysis_wrapper_),
             /*enable_cache=*/false));
-    TF_ASSIGN_OR_RETURN(cost_analysis_,
-                        CostAnalysis::Create(*op_cost_manager_, options_,
-                                             &alias_info_, *module));
+    TF_ASSIGN_OR_RETURN(
+        cost_analysis_,
+        CostAnalysis::Create(*op_cost_manager_, options_, *module));
     return absl::OkStatus();
   }
 
@@ -77,7 +76,6 @@ class MemorySpaceAssignmentCostAnalysisTest
   std::unique_ptr<HloCostAnalysisWithAcceptState> hlo_cost_analysis_wrapper_;
   std::unique_ptr<OpCostManager> op_cost_manager_;
   std::unique_ptr<CostAnalysis> cost_analysis_;
-  AliasInfo alias_info_;
 };
 
 TEST_F(MemorySpaceAssignmentCostAnalysisTest, NoPipelineOverhead) {

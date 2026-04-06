@@ -21,14 +21,12 @@ limitations under the License.
 #include <optional>
 
 #include "absl/synchronization/barrier.h"
-#include "absl/synchronization/mutex.h"
-#include "absl/time/time.h"
+#include "absl/synchronization/blocking_counter.h"
 #include "tensorflow/core/platform/context.h"
 #include "tensorflow/core/platform/env.h"
 #include "tensorflow/core/platform/mutex.h"
 #include "tensorflow/core/platform/test.h"
 #include "tensorflow/core/platform/test_benchmark.h"
-#include "tsl/platform/platform.h"  // IWYU pragma: keep
 
 namespace tensorflow {
 namespace thread {
@@ -356,28 +354,18 @@ TEST(ThreadPool, ParallelForWithWorkerId) {
 TEST(ThreadPool, Parallelism) {
   // Test that if we have N threads and schedule N tasks,
   // all tasks will be scheduled at the same time.
-  // Failure mode for this test will be timeouts.
+  // Failure mode for this test will be episodic timeouts (does not terminate).
   ThreadPool pool(Env::Default(), "test", kNumThreads);
   for (int iter = 0; iter < 2000; iter++) {
     absl::Barrier barrier(kNumThreads);
-    // Expect each loop finishes less than 1s or much less. The semantic of
-    // counter, mutex and done here is the same as absl::BlockingCounter except
-    // that it waits for the condition with timeout.
-    std::atomic<int> counter(kNumThreads);
-    absl::Mutex mutex;
-    bool done = false;
+    absl::BlockingCounter counter(kNumThreads);
     for (int t = 0; t < kNumThreads; ++t) {
       pool.Schedule([&]() {
         barrier.Block();
-        if (--counter <= 0) {
-          absl::MutexLock lock(mutex);
-          done = true;
-        }
+        counter.DecrementCount();
       });
     }
-    absl::MutexLock lock(mutex);
-    absl::Condition cond(+[](bool* done) { return *done; }, &done);
-    EXPECT_TRUE(mutex.AwaitWithTimeout(cond, absl::Seconds(1)));
+    counter.Wait();
   }
 }
 

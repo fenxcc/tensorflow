@@ -17,7 +17,6 @@ limitations under the License.
 #include <cstdint>
 #include <optional>
 #include <string>
-#include <vector>
 
 #include <gtest/gtest.h>
 #include "absl/status/status.h"
@@ -38,7 +37,6 @@ limitations under the License.
 #include "mlir/Target/LLVMIR/Dialect/ROCDL/ROCDLToLLVMIRTranslation.h"
 #include "xla/codegen/emitters/computation_partitioner.h"
 #include "xla/hlo/analysis/indexing_map.h"
-#include "xla/hlo/analysis/symbolic_expr.h"
 #include "xla/hlo/ir/hlo_casting_utils.h"
 #include "xla/hlo/ir/hlo_instructions.h"
 #include "xla/hlo/testlib/filecheck.h"
@@ -61,8 +59,8 @@ class DummyCopyEmitter : public EmitterBase {
     return std::nullopt;
   }
 
-  std::optional<std::vector<IndexingMap>> ComputeThreadIdToInputIndexing(
-      int64_t, mlir::MLIRContext*) const final {
+  std::optional<IndexingMap> ComputeThreadIdToInputIndexing(
+      int64_t, int64_t, mlir::MLIRContext*) const final {
     return std::nullopt;
   }
 
@@ -75,11 +73,11 @@ class DummyCopyEmitter : public EmitterBase {
     mlir::ImplicitLocOpBuilder b(entry_function.getLoc(), entry_function);
     b.setInsertionPointToStart(entry_function.addEntryBlock());
     auto thread_id = EmitThreadId(b, 0);
-    auto value = mlir::tensor::ExtractOp::create(
-        b, entry_function.getArgument(0), mlir::ValueRange{thread_id});
-    auto result = mlir::tensor::InsertOp::create(
-        b, value, entry_function.getArgument(1), mlir::ValueRange{thread_id});
-    mlir::func::ReturnOp::create(b, result->getResults());
+    auto value = b.create<mlir::tensor::ExtractOp>(
+        entry_function.getArgument(0), mlir::ValueRange{thread_id});
+    auto result = b.create<mlir::tensor::InsertOp>(
+        value, entry_function.getArgument(1), mlir::ValueRange{thread_id});
+    b.create<mlir::func::ReturnOp>(result->getResults());
     return absl::OkStatus();
   }
 };
@@ -87,11 +85,11 @@ class DummyCopyEmitter : public EmitterBase {
 class EmitterBaseTest : public HloHardwareIndependentTestBase {
  protected:
   EmitterBaseTest() {
-    mlir_context_.appendDialectRegistry(EmitterBase::GetDialectRegistry());
-    mlir_context_.loadAllAvailableDialects();
+    context_.appendDialectRegistry(EmitterBase::GetDialectRegistry());
+    context_.loadAllAvailableDialects();
   }
 
-  mlir::MLIRContext mlir_context_;
+  mlir::MLIRContext context_;
   stream_executor::DeviceDescription device_info_ =
       TestGpuDeviceInfo::CudaOrRocmDeviceInfo();
 };
@@ -112,7 +110,7 @@ TEST_F(EmitterBaseTest, CreateMlirModule) {
   TF_ASSERT_OK_AND_ASSIGN(
       auto mlir_module,
       emitter.CreateMLIRModule(
-          mlir_context_,
+          context_,
           *Cast<HloFusionInstruction>(
               module->entry_computation()->root_instruction()),
           "fusion",
@@ -143,7 +141,7 @@ TEST_F(EmitterBaseTest, CreateLLVMModule) {
   TF_ASSERT_OK_AND_ASSIGN(
       auto llvm_module,
       emitter.CreateLLVMModule(
-          mlir_context_, llvm_context, device_info_,
+          context_, llvm_context, device_info_,
           *Cast<HloFusionInstruction>(
               module->entry_computation()->root_instruction()),
           "fusion",

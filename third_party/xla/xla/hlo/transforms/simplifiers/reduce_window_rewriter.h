@@ -20,6 +20,7 @@ limitations under the License.
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "xla/hlo/ir/hlo_computation.h"
@@ -55,8 +56,8 @@ class ReduceWindowRewriter : public HloModulePass {
 
   absl::string_view name() const override { return "reduce-window-rewriter"; }
 
- protected:
-  absl::StatusOr<bool> RunImpl(
+  using HloPassInterface::Run;
+  absl::StatusOr<bool> Run(
       HloModule* module,
       const absl::flat_hash_set<absl::string_view>& execution_threads) override;
 
@@ -88,15 +89,8 @@ class ReduceWindowRewriter : public HloModulePass {
       std::vector<HloInstruction*>& tiled_inputs,
       std::vector<Shape>& tiled_shapes, bool forward_scan);
 
-  // Slice out the last (first if reverse scan) column.
-  // slices [x, y/base, base] -> [x, y/base, 1] slice {x, y/base}
-  // reshape [x, y/base, 1] -> [x, y/base]
-  void SliceOutLastColumn(HloComputation* hlo_computation,
-                          const Shape& subshape, HloInstruction* outer_shape,
-                          int64_t rank, int64_t last_dim, bool forward_scan,
-                          int64_t num_columns,
-                          std::vector<Shape>& column_shapes,
-                          std::vector<HloInstruction*>& last_cols);
+  absl::Status ReplaceReduceWindowWithReshape(
+      HloReduceWindowInstruction* reduce_window);
 
   absl::StatusOr<bool> TryOptimizeCumSumOrProd(
       HloReduceWindowInstruction* reduce_window);

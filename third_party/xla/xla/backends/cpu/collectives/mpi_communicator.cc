@@ -27,15 +27,15 @@ limitations under the License.
 #include "absl/types/span.h"
 #include "mpi.h"
 #include "xla/core/collectives/rank_id.h"
-#include "xla/future.h"
 #include "xla/primitive_util.h"
 #include "xla/service/collective_ops_utils.h"
 #include "xla/status_macros.h"
 #include "xla/stream_executor/device_memory.h"
+#include "xla/tsl/concurrency/async_value_ref.h"
 #include "xla/tsl/platform/errors.h"
 #include "xla/tsl/platform/logging.h"
-#include "xla/tsl/platform/statusor.h"
 #include "xla/xla_data.pb.h"
+#include "tsl/platform/statusor.h"
 
 namespace xla::cpu {
 
@@ -125,19 +125,18 @@ MpiCommunicator::MpiCommunicator(int color, int key) {
 
 MpiCommunicator::~MpiCommunicator() { MPI_Comm_free(&comm_); };
 
-Future<> MpiCommunicator::AllReduce(se::DeviceMemoryBase send_buffer,
-                                    se::DeviceMemoryBase recv_buffer,
-                                    PrimitiveType dtype, size_t count,
-                                    ReductionKind reduction_kind,
-                                    const Executor& executor) {
+tsl::AsyncValueRef<MpiCommunicator::Event> MpiCommunicator::AllReduce(
+    se::DeviceMemoryBase send_buffer, se::DeviceMemoryBase recv_buffer,
+    PrimitiveType dtype, size_t count, ReductionKind reduction_kind,
+    const Executor& executor) {
   TF_ASSIGN_OR_RETURN(MPI_Datatype type, PrimitiveTypeToMpiType(dtype));
   TF_ASSIGN_OR_RETURN(MPI_Op op, ReductionKindToMpiOp(reduction_kind, type));
   TF_RETURN_IF_ERROR(MpiErrorToAbslStatus(MPI_Allreduce(
       send_buffer.opaque(), recv_buffer.opaque(), count, type, op, comm_)));
-  return absl::OkStatus();
+  return OkEvent();
 }
 
-Future<> MpiCommunicator::CollectivePermute(
+tsl::AsyncValueRef<MpiCommunicator::Event> MpiCommunicator::CollectivePermute(
     se::DeviceMemoryBase send_buffer, se::DeviceMemoryBase recv_buffer,
     PrimitiveType dtype, size_t count, std::optional<RankId> source_rank,
     absl::Span<const RankId> target_ranks, const Executor& executor) {
@@ -178,10 +177,10 @@ Future<> MpiCommunicator::CollectivePermute(
         MpiErrorToAbslStatus(MPI_Wait(&request, MPI_STATUS_IGNORE)));
   }
 
-  return absl::OkStatus();
+  return OkEvent();
 }
 
-Future<> MpiCommunicator::AllToAll(
+tsl::AsyncValueRef<MpiCommunicator::Event> MpiCommunicator::AllToAll(
     absl::InlinedVector<se::DeviceMemoryBase, 4> send_buffers,
     absl::InlinedVector<se::DeviceMemoryBase, 4> recv_buffers,
     PrimitiveType dtype, size_t count, const Executor& executor) {
@@ -215,26 +214,24 @@ Future<> MpiCommunicator::AllToAll(
                      recv_rank, tag, comm_, MPI_STATUS_IGNORE)));
   }
 
-  return absl::OkStatus();
+  return OkEvent();
 }
 
-Future<> MpiCommunicator::AllGather(se::DeviceMemoryBase send_buffer,
-                                    se::DeviceMemoryBase recv_buffer,
-                                    PrimitiveType dtype, size_t count,
-                                    const Executor& executor) {
+tsl::AsyncValueRef<MpiCommunicator::Event> MpiCommunicator::AllGather(
+    se::DeviceMemoryBase send_buffer, se::DeviceMemoryBase recv_buffer,
+    PrimitiveType dtype, size_t count, const Executor& executor) {
   TF_ASSIGN_OR_RETURN(MPI_Datatype type, PrimitiveTypeToMpiType(dtype));
   TF_RETURN_IF_ERROR(MpiErrorToAbslStatus(
       MPI_Allgather(send_buffer.opaque(), count, type, recv_buffer.opaque(),
                     count, type, comm_)));
 
-  return absl::OkStatus();
+  return OkEvent();
 }
 
-Future<> MpiCommunicator::ReduceScatter(se::DeviceMemoryBase send_buffer,
-                                        se::DeviceMemoryBase recv_buffer,
-                                        PrimitiveType dtype, size_t count,
-                                        ReductionKind reduction_kind,
-                                        const Executor& executor) {
+tsl::AsyncValueRef<MpiCommunicator::Event> MpiCommunicator::ReduceScatter(
+    se::DeviceMemoryBase send_buffer, se::DeviceMemoryBase recv_buffer,
+    PrimitiveType dtype, size_t count, ReductionKind reduction_kind,
+    const Executor& executor) {
   const int size = mpi_size_;
   std::vector<int> recvcounts(size, count);
   TF_ASSIGN_OR_RETURN(MPI_Datatype type, PrimitiveTypeToMpiType(dtype));
@@ -243,7 +240,7 @@ Future<> MpiCommunicator::ReduceScatter(se::DeviceMemoryBase send_buffer,
       MPI_Reduce_scatter(send_buffer.opaque(), recv_buffer.opaque(),
                          recvcounts.data(), type, op, comm_)));
 
-  return absl::OkStatus();
+  return OkEvent();
 }
 
 }  // namespace xla::cpu

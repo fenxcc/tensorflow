@@ -14,25 +14,18 @@ limitations under the License.
 ==============================================================================*/
 #include "xla/tsl/profiler/rpc/client/profiler_client.h"
 
-#include <cstdint>
 #include <limits>
 #include <memory>
-#include <string>
-#include <utility>
 
 #include "absl/memory/memory.h"
-#include "absl/status/status.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "grpcpp/grpcpp.h"  // IWYU pragma: keep
-#include "grpcpp/security/credentials.h"
-#include "grpcpp/support/channel_arguments.h"
-#include "grpcpp/support/status.h"
 #include "xla/tsl/platform/errors.h"
 #include "xla/tsl/platform/logging.h"
+#include "xla/tsl/platform/status.h"
+#include "xla/tsl/platform/types.h"
 #include "xla/tsl/protobuf/error_codes.pb.h"
-#include "tsl/profiler/protobuf/profiler_analysis.grpc.pb.h"
-#include "tsl/profiler/protobuf/profiler_service.grpc.pb.h"
 
 namespace tsl {
 namespace profiler {
@@ -55,7 +48,7 @@ template <typename T>
 std::unique_ptr<typename T::Stub> CreateStub(
     const std::string& service_address) {
   ::grpc::ChannelArguments channel_args;
-  channel_args.SetMaxReceiveMessageSize(std::numeric_limits<int32_t>::max());
+  channel_args.SetMaxReceiveMessageSize(std::numeric_limits<int32>::max());
   // Default URI prefix is "dns:///" if not provided.
   auto channel = ::grpc::CreateCustomChannel(
       service_address, ::grpc::InsecureChannelCredentials(), channel_args);
@@ -113,7 +106,7 @@ absl::Status MonitorGrpc(const std::string& service_address,
 RemoteProfilerSession::RemoteProfilerSession(
     const std::string& service_address, absl::Time deadline,
     const ProfileRequest& profile_request)
-    : response_(std::make_unique<ProfileResponse>()),
+    : response_(absl::make_unique<ProfileResponse>()),
       service_address_(service_address),
       stub_(CreateStub<tensorflow::grpc::ProfilerService>(service_address_)),
       deadline_(deadline),
@@ -142,7 +135,7 @@ void RemoteProfilerSession::ProfileAsync() {
 std::unique_ptr<ProfileResponse> RemoteProfilerSession::WaitForCompletion(
     absl::Status& out_status) {
   if (!response_) {
-    out_status = absl::FailedPreconditionError(
+    out_status = errors::FailedPrecondition(
         "WaitForCompletion must only be called once.");
     return nullptr;
   }
@@ -156,7 +149,7 @@ std::unique_ptr<ProfileResponse> RemoteProfilerSession::WaitForCompletion(
   bool success = cq_.Next(&got_tag, &ok);
   if (!success || !ok || got_tag == nullptr) {
     out_status =
-        absl::InternalError("Missing or invalid event from completion queue.");
+        errors::Internal("Missing or invalid event from completion queue.");
     return nullptr;
   }
 

@@ -28,7 +28,6 @@ limitations under the License.
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Target/TargetMachine.h"
-#include "llvm/TargetParser/Triple.h"
 #include "xla/backends/cpu/codegen/target_machine_features.h"
 #include "xla/hlo/ir/hlo_module.h"
 #include "xla/hlo/ir/hlo_module_group.h"
@@ -50,10 +49,9 @@ absl::StatusOr<unsigned int> GetTargetVectorRegisterByteSize(
   // Unfortunately we need a lot of boilerplate to get to an
   // llvm::TargetMachine.
 
-  llvm::Triple target_triple(triple);
   std::string error;
   const llvm::Target* target =
-      llvm::TargetRegistry::lookupTarget(target_triple, error);
+      llvm::TargetRegistry::lookupTarget(triple, error);
   if (target == nullptr) {
     return Internal("TargetRegistry::lookupTarget failed: %s", error);
   }
@@ -66,8 +64,7 @@ absl::StatusOr<unsigned int> GetTargetVectorRegisterByteSize(
 
   std::unique_ptr<llvm::TargetMachine> target_machine =
       absl::WrapUnique(target->createTargetMachine(
-          /*TT=*/target_triple, /*CPU=*/"", /*Features=*/"",
-          llvm::TargetOptions{},
+          /*TT=*/triple, /*CPU=*/"", /*Features=*/"", llvm::TargetOptions{},
           /*RM=*/std::nullopt));
   cpu::TargetMachineFeatures target_machine_features(target_machine.get());
   return target_machine_features.vector_register_byte_size(*function);
@@ -93,6 +90,8 @@ ENTRY main {
   TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<HloModule> hlo_module,
                           ParseAndReturnVerifiedModule(text));
   cpu::CpuCompiler cpu_compiler;
+  auto module_group = std::make_unique<HloModuleGroup>("group");
+  module_group->push_back(std::move(hlo_module));
 
   // Check that the GetTargetVectorRegisterByteSize is itself working.
   TF_ASSERT_OK_AND_ASSIGN(
@@ -120,7 +119,7 @@ ENTRY main {
 
   TF_ASSERT_OK_AND_ASSIGN(
       std::vector<std::unique_ptr<AotCompilationResult>> aot_compilation_result,
-      cpu_compiler.CompileAheadOfTime(std::move(hlo_module),
+      cpu_compiler.CompileAheadOfTime(std::move(module_group),
                                       aot_compilation_options));
   EXPECT_EQ(aot_compilation_result.size(), 1);
 }

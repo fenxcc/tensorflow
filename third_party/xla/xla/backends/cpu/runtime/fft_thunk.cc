@@ -197,8 +197,8 @@ tsl::AsyncValueRef<Thunk::ExecuteEvent> FftThunk::Execute(
 }
 
 Thunk::BufferUses FftThunk::buffer_uses() const {
-  return {BufferUse::Read(input_buffer_, input_shape_),
-          BufferUse::Write(output_buffer_, output_shape_)};
+  return {{input_buffer_, BufferUse::kRead},
+          {output_buffer_, BufferUse::kWrite}};
 }
 
 }  // namespace xla::cpu

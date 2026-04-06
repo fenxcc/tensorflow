@@ -36,7 +36,6 @@ limitations under the License.
 #include "xla/shape_tree.h"
 #include "xla/shape_util.h"
 #include "xla/tsl/concurrency/async_value_ref.h"
-#include "xla/tsl/concurrency/chain.h"
 
 namespace xla {
 
@@ -65,9 +64,16 @@ namespace xla {
 // strategy for compiling and executing offloaded executables.
 class HostOffloadingExecutable {
  public:
-  using ExecuteEvent = tsl::Chain;
-
   virtual ~HostOffloadingExecutable() = default;
+
+  // A callback that might be called by the host offloading executable to
+  // signal the readiness of the result buffer so that the caller can start
+  // reading the result buffer memory before the whole computation is finished.
+  //
+  // This callback is optional, and not all host offloading executables will
+  // use it. The caller must assume that all buffers are ready when host
+  // offloading executable completes.
+  using OnResultReady = absl::AnyInvocable<void(const ShapeIndex&)>;
 
   struct ExecuteOptions {
     int32_t device_index;
@@ -75,15 +81,12 @@ class HostOffloadingExecutable {
     const ExecuteContext* context;
   };
 
-  // Executes host offloading executable with given `parameters` and writes
-  // to `result` buffer(s).
-  // Returns an async value that signals when the execution is done. The value
-  // should be waited on (e.x. with tsl::BlockUntilReady) before reading the
-  // buffer(s) in `result`.
-  virtual tsl::AsyncValueRef<ExecuteEvent> Execute(
+  // Executes host offloading executable with given parameters and writes
+  // to result buffer(s).
+  virtual absl::Status Execute(
       absl::Span<const ShapeTree<HostOffloadingBuffer>> parameters,
       const ShapeTree<HostOffloadingBuffer>& result,
-      const ExecuteOptions& execute_options) = 0;
+      const ExecuteOptions& execute_options, OnResultReady on_result_ready) = 0;
 
   // Host offloading executable name (for debugging and tracing).
   virtual absl::string_view name() const = 0;

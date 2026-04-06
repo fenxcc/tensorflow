@@ -28,7 +28,6 @@ limitations under the License.
 #include "mlir/Pass/Pass.h"
 #include "mlir/Pass/PassOptions.h"
 #include "mlir/Transforms/DialectConversion.h"
-#include "google/protobuf/repeated_ptr_field.h"
 #include "xla/python/ifrt/executable.h"
 #include "xla/python/ifrt/ir/atom_program_compiler.h"
 #include "xla/python/ifrt/ir/ifrt_ir_program.h"
@@ -154,9 +153,7 @@ void createIfrtToOutlinedAtomProgramsPipeline(
 void createIfrtPopulateAtomProgramMetadataPipeline(mlir::OpPassManager& pm);
 
 // Creates pipeline to lower an IFRT XLA program to be ready for compilation.
-void createIfrtCompileXlaPreprocessingPipeline(
-    mlir::OpPassManager& pm,
-    std::shared_ptr<xla::ifrt::IfrtIRCompileOptions> compile_options);
+void createIfrtCompileXlaPreprocessingPipeline(mlir::OpPassManager& pm);
 
 struct OutlinedAtomProgramsToCompiledPipelineOptions
     : mlir::PassPipelineOptions<OutlinedAtomProgramsToCompiledPipelineOptions> {

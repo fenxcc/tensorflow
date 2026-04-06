@@ -57,13 +57,13 @@ class GenTypeScriptOp {
   ~GenTypeScriptOp();
 
   // Returns the generated code as a string:
-  std::string Code();
+  string Code();
 
  private:
   void ProcessArgs();
   void ProcessAttrs();
-  void AddAttrForArg(const std::string& attr, int arg_index);
-  std::string InputForAttr(const OpDef::AttrDef& op_def_attr);
+  void AddAttrForArg(const string& attr, int arg_index);
+  string InputForAttr(const OpDef::AttrDef& op_def_attr);
 
   void AddMethodSignature();
   void AddOpAttrs();
@@ -73,7 +73,7 @@ class GenTypeScriptOp {
   const ApiDef& api_def_;
 
   // Placeholder string for all generated code:
-  std::string result_;
+  string result_;
 
   // Holds in-order vector of Op inputs:
   std::vector<ArgDefs> input_op_args_;
@@ -82,7 +82,7 @@ class GenTypeScriptOp {
   std::vector<OpAttrs> op_attrs_;
 
   // Stores attributes-to-arguments by name:
-  typedef std::unordered_map<std::string, std::vector<int>> AttrArgIdxMap;
+  typedef std::unordered_map<string, std::vector<int>> AttrArgIdxMap;
   AttrArgIdxMap attr_arg_idx_map_;
 
   // Holds number of outputs:
@@ -94,7 +94,7 @@ GenTypeScriptOp::GenTypeScriptOp(const OpDef& op_def, const ApiDef& api_def)
 
 GenTypeScriptOp::~GenTypeScriptOp() = default;
 
-std::string GenTypeScriptOp::Code() {
+string GenTypeScriptOp::Code() {
   ProcessArgs();
   ProcessAttrs();
 
@@ -103,7 +103,7 @@ std::string GenTypeScriptOp::Code() {
   AddOpAttrs();
   AddMethodReturnAndClose();
 
-  absl::StrAppend(&result_, "\n");
+  strings::StrAppend(&result_, "\n");
   return result_;
 }
 
@@ -144,7 +144,7 @@ void GenTypeScriptOp::ProcessAttrs() {
   }
 }
 
-void GenTypeScriptOp::AddAttrForArg(const std::string& attr, int arg_index) {
+void GenTypeScriptOp::AddAttrForArg(const string& attr, int arg_index) {
   // Keep track of attributes-to-arguments by name. These will be used for
   // construction Op attributes that require information about the inputs.
   auto iter = attr_arg_idx_map_.find(attr);
@@ -155,60 +155,60 @@ void GenTypeScriptOp::AddAttrForArg(const std::string& attr, int arg_index) {
   }
 }
 
-std::string GenTypeScriptOp::InputForAttr(const OpDef::AttrDef& op_def_attr) {
-  std::string inputs;
+string GenTypeScriptOp::InputForAttr(const OpDef::AttrDef& op_def_attr) {
+  string inputs;
   auto arg_list = attr_arg_idx_map_.find(op_def_attr.name());
   if (arg_list != attr_arg_idx_map_.end()) {
     for (auto iter = arg_list->second.begin(); iter != arg_list->second.end();
          ++iter) {
-      absl::StrAppend(&inputs, input_op_args_[*iter].op_def_arg.name());
+      strings::StrAppend(&inputs, input_op_args_[*iter].op_def_arg.name());
     }
   }
   return inputs;
 }
 
 void GenTypeScriptOp::AddMethodSignature() {
-  absl::StrAppend(&result_, "export function ", api_def_.endpoint(0).name(),
-                  "(");
+  strings::StrAppend(&result_, "export function ", api_def_.endpoint(0).name(),
+                     "(");
 
   bool is_first = true;
   for (auto& in_arg : input_op_args_) {
     if (is_first) {
       is_first = false;
     } else {
-      absl::StrAppend(&result_, ", ");
+      strings::StrAppend(&result_, ", ");
     }
 
     auto op_def_arg = in_arg.op_def_arg;
 
-    absl::StrAppend(&result_, op_def_arg.name(), ": ");
+    strings::StrAppend(&result_, op_def_arg.name(), ": ");
     if (IsListAttr(op_def_arg)) {
-      absl::StrAppend(&result_, "tfc.Tensor[]");
+      strings::StrAppend(&result_, "tfc.Tensor[]");
     } else {
-      absl::StrAppend(&result_, "tfc.Tensor");
+      strings::StrAppend(&result_, "tfc.Tensor");
     }
   }
 
   if (num_outputs_ == 1) {
-    absl::StrAppend(&result_, "): tfc.Tensor {\n");
+    strings::StrAppend(&result_, "): tfc.Tensor {\n");
   } else {
-    absl::StrAppend(&result_, "): tfc.Tensor[] {\n");
+    strings::StrAppend(&result_, "): tfc.Tensor[] {\n");
   }
 }
 
 void GenTypeScriptOp::AddOpAttrs() {
-  absl::StrAppend(&result_, "  const opAttrs = [\n");
+  strings::StrAppend(&result_, "  const opAttrs = [\n");
 
   bool is_first = true;
   for (auto& attr : op_attrs_) {
     if (is_first) {
       is_first = false;
     } else {
-      absl::StrAppend(&result_, ",\n");
+      strings::StrAppend(&result_, ",\n");
     }
 
     // Append 4 spaces to start:
-    absl::StrAppend(&result_, "    ");
+    strings::StrAppend(&result_, "    ");
 
     if (attr.op_def_attr.type() == "type") {
       // Type OpAttributes can be generated from a helper function:
@@ -216,17 +216,17 @@ void GenTypeScriptOp::AddOpAttrs() {
                          attr.op_def_attr.name(), "', ",
                          InputForAttr(attr.op_def_attr), ")");
     } else if (attr.op_def_attr.type() == "int") {
-      absl::StrAppend(&result_, "{name: '", attr.op_def_attr.name(), "', ");
-      absl::StrAppend(&result_, "type: nodeBackend().binding.TF_ATTR_INT, ");
-      absl::StrAppend(&result_, "value: ", InputForAttr(attr.op_def_attr),
-                      ".length}");
+      strings::StrAppend(&result_, "{name: '", attr.op_def_attr.name(), "', ");
+      strings::StrAppend(&result_, "type: nodeBackend().binding.TF_ATTR_INT, ");
+      strings::StrAppend(&result_, "value: ", InputForAttr(attr.op_def_attr),
+                         ".length}");
     }
   }
-  absl::StrAppend(&result_, "\n  ];\n");
+  strings::StrAppend(&result_, "\n  ];\n");
 }
 
 void GenTypeScriptOp::AddMethodReturnAndClose() {
-  absl::StrAppend(&result_, "  return null;\n}\n");
+  strings::StrAppend(&result_, "  return null;\n}\n");
 }
 
 void WriteTSOp(const OpDef& op_def, const ApiDef& api_def, WritableFile* ts) {
@@ -235,7 +235,7 @@ void WriteTSOp(const OpDef& op_def, const ApiDef& api_def, WritableFile* ts) {
 }
 
 void StartFile(WritableFile* ts_file) {
-  const std::string header =
+  const string header =
       R"header(/**
  * @license
  * Copyright 2018 Google Inc. All Rights Reserved.
@@ -266,7 +266,7 @@ import {createTensorsTypeOpAttr, nodeBackend} from './op_utils';
 }  // namespace
 
 void WriteTSOps(const OpList& ops, const ApiDefMap& api_def_map,
-                const std::string& ts_filename) {
+                const string& ts_filename) {
   Env* env = Env::Default();
 
   std::unique_ptr<WritableFile> ts_file = nullptr;

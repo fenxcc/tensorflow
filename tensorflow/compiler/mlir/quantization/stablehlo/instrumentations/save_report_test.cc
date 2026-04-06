@@ -21,7 +21,6 @@ limitations under the License.
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include "absl/status/status.h"
-#include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
@@ -33,6 +32,7 @@ limitations under the License.
 #include "tensorflow/compiler/mlir/quantization/stablehlo/cc/io.h"
 #include "tensorflow/compiler/mlir/quantization/stablehlo/passes/passes.h"
 #include "tensorflow/compiler/mlir/quantization/stablehlo/quantization_config.pb.h"
+#include "xla/tsl/platform/status_matchers.h"
 #include "tsl/platform/protobuf.h"  // IWYU pragma: keep
 
 namespace mlir::quant::stablehlo {
@@ -43,6 +43,8 @@ using ::stablehlo::quantization::io::ReadFileToString;
 using ::testing::SizeIs;
 using ::testing::StrEq;
 using ::tsl::protobuf::TextFormat;
+using ::tsl::testing::IsOk;
+using ::tsl::testing::StatusIs;
 
 using SaveQuantizationReportInstrumentationTest = QuantizationTestBase;
 
@@ -86,7 +88,7 @@ TEST_F(SaveQuantizationReportInstrumentationTest, SaveReport) {
   // `composite_dot_general_fn` with quantized with `static_range_ptq` method.
   const absl::StatusOr<std::string> file_data =
       ReadFileToString(report_file_path);
-  ASSERT_THAT(file_data, absl_testing::IsOk());
+  ASSERT_THAT(file_data, IsOk());
 
   /*
   results {
@@ -144,7 +146,7 @@ TEST_F(SaveQuantizationReportInstrumentationTest,
   // The report file is not created because `QuantizeCompositeFunctionsPass` was
   // not run.
   EXPECT_THAT(ReadFileToString(report_file_path),
-              absl_testing::StatusIs(absl::StatusCode::kNotFound));
+              StatusIs(absl::StatusCode::kNotFound));
 }
 
 TEST_F(SaveQuantizationReportInstrumentationTest,

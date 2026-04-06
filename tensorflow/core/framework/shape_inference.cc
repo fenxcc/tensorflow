@@ -15,7 +15,6 @@ limitations under the License.
 #include "tensorflow/core/framework/shape_inference.h"
 
 #include <cstdint>
-#include <limits>
 #include <memory>
 
 #include "tensorflow/core/framework/bounds_check.h"
@@ -283,41 +282,41 @@ DimensionHandle InferenceContext::NumElements(ShapeHandle s) {
   }
 }
 
-std::string InferenceContext::DebugString(ShapeHandle s) {
+string InferenceContext::DebugString(ShapeHandle s) {
   if (RankKnown(s)) {
-    std::vector<std::string> vals;
+    std::vector<string> vals;
     for (auto d : s->dims_) vals.push_back(DebugString(d));
-    return absl::StrCat("[", absl::StrJoin(vals, ","), "]");
+    return strings::StrCat("[", absl::StrJoin(vals, ","), "]");
   } else {
     return "?";
   }
 }
 
-std::string InferenceContext::DebugString(DimensionHandle d) {
-  return ValueKnown(d) ? absl::StrCat(Value(d)) : "?";
+string InferenceContext::DebugString(DimensionHandle d) {
+  return ValueKnown(d) ? strings::StrCat(Value(d)) : "?";
 }
 
-std::string InferenceContext::DebugString() const {
-  return absl::StrCat("InferenceContext for node: ", attrs_.SummarizeNode());
+string InferenceContext::DebugString() const {
+  return strings::StrCat("InferenceContext for node: ", attrs_.SummarizeNode());
 }
 
-std::string InferenceContext::DebugString(const ShapeAndType& shape_and_type) {
-  return absl::StrCat(DebugString(shape_and_type.shape), ":",
-                      DataTypeString(shape_and_type.dtype));
+string InferenceContext::DebugString(const ShapeAndType& shape_and_type) {
+  return strings::StrCat(DebugString(shape_and_type.shape), ":",
+                         DataTypeString(shape_and_type.dtype));
 }
 
-std::string InferenceContext::DebugString(
+string InferenceContext::DebugString(
     absl::Span<const ShapeAndType> shape_and_types) {
-  std::vector<std::string> pieces;
+  std::vector<string> pieces;
   for (const ShapeAndType& s : shape_and_types) {
     pieces.push_back(DebugString(s));
   }
-  return absl::StrCat("[", absl::StrJoin(pieces, ","), "]");
+  return strings::StrCat("[", absl::StrJoin(pieces, ","), "]");
 }
 
 absl::Status InferenceContext::WithRank(ShapeHandle shape, int64_t rank,
                                         ShapeHandle* out) {
-  if (rank > std::numeric_limits<int32_t>::max()) {
+  if (rank > kint32max) {
     return errors::InvalidArgument("Rank cannot exceed kint32max");
   }
   const int32_t existing = Rank(shape);
@@ -342,7 +341,7 @@ absl::Status InferenceContext::WithRank(ShapeHandle shape, int64_t rank,
 
 absl::Status InferenceContext::WithRankAtLeast(ShapeHandle shape, int64_t rank,
                                                ShapeHandle* out) {
-  if (rank > std::numeric_limits<int32_t>::max()) {
+  if (rank > kint32max) {
     return errors::InvalidArgument("Rank cannot exceed kint32max");
   }
   const int32_t existing = Rank(shape);
@@ -357,7 +356,7 @@ absl::Status InferenceContext::WithRankAtLeast(ShapeHandle shape, int64_t rank,
 
 absl::Status InferenceContext::WithRankAtMost(ShapeHandle shape, int64_t rank,
                                               ShapeHandle* out) {
-  if (rank > std::numeric_limits<int32_t>::max()) {
+  if (rank > kint32max) {
     return errors::InvalidArgument("Rank cannot exceed kint32max");
   }
   const int32_t existing = Rank(shape);
@@ -703,8 +702,7 @@ ShapeHandle InferenceContext::UnknownShape() {
 }
 
 ShapeHandle InferenceContext::UnknownShapeOfRank(int64_t rank) {
-  CHECK_LE(rank, std::numeric_limits<int32_t>::max())
-      << "rank must be less than kint32max";
+  CHECK_LE(rank, kint32max) << "rank must be less than kint32max";
   if (rank == kUnknownRank) {
     return UnknownShape();
   }
@@ -814,7 +812,7 @@ absl::Status InferenceContext::InternalMakeShapeFromTensor(
 
   if (t->shape().dims() == 0) {
     if (t->dtype() == DataType::DT_INT32) {
-      auto flat_t = t->scalar<int32_t>();
+      auto flat_t = t->scalar<int32>();
       if (flat_t() != -1) {
         *out = nullptr;
         return errors::InvalidArgument(
@@ -855,7 +853,7 @@ absl::Status InferenceContext::InternalMakeShapeFromTensor(
   }
   std::vector<DimensionHandle> dims;
   if (t->dtype() == DataType::DT_INT32) {
-    auto flat_t = t->flat<int32_t>();
+    auto flat_t = t->flat<int32>();
     for (int i = 0; i < flat_t.size(); ++i) {
       const int32_t val = flat_t(i);
       if (val < -1) {
@@ -941,7 +939,7 @@ absl::Status InferenceContext::GetScalarFromTensor(const Tensor* t,
     *val = t->scalar<int16_t>()();
     return absl::OkStatus();
   } else if (t->dtype() == DataType::DT_INT32) {
-    *val = t->scalar<int32_t>()();
+    *val = t->scalar<int32>()();
     return absl::OkStatus();
   } else if (t->dtype() == DataType::DT_INT64) {
     *val = t->scalar<int64_t>()();
@@ -961,7 +959,7 @@ absl::Status InferenceContext::GetScalarFromTensor(const Tensor* t, int64_t idx,
   }
 
   if (t->dtype() == DataType::DT_INT32) {
-    auto flat_t = t->flat<int32_t>();
+    auto flat_t = t->flat<int32>();
     if (idx < 0 || idx >= flat_t.size()) {
       return errors::InvalidArgument("Invalid index ", idx,
                                      " for Tensor of size ", flat_t.size());
@@ -1071,7 +1069,7 @@ absl::Status InferenceContext::Add(DimensionHandle first,
     // get pair of values which cannot be store in output. Check below will
     // report error. We still need to avoid undefined behavior of signed
     // overflow and use unsigned addition.
-    const int64_t sum = static_cast<uint64_t>(first_value) + second_value;
+    const int64_t sum = static_cast<uint64>(first_value) + second_value;
     if (sum < 0) {
       return errors::InvalidArgument("Dimension size overflow from adding ",
                                      first_value, " and ", second_value);
@@ -1172,15 +1170,15 @@ absl::Status InferenceContext::Max(DimensionHandle first,
 }
 
 absl::Status InferenceContext::AttachContext(const absl::Status& status) {
-  std::vector<std::string> input_shapes;
+  std::vector<string> input_shapes;
   input_shapes.reserve(inputs_.size());
   for (const ShapeHandle& input_shape : inputs_) {
     input_shapes.emplace_back(DebugString(input_shape));
   }
 
   // Add information about the input tensors and partial tensor shapes used.
-  std::vector<std::string> input_from_tensors_str;
-  std::vector<std::string> input_from_tensors_as_shape_str;
+  std::vector<string> input_from_tensors_str;
+  std::vector<string> input_from_tensors_as_shape_str;
   input_from_tensors_as_shape_str.reserve(inputs_.size());
   for (int i = 0, end = inputs_.size(); i < end; ++i) {
     const int input_tensors_as_shapes_size = input_tensors_as_shapes_.size();
@@ -1189,7 +1187,7 @@ absl::Status InferenceContext::AttachContext(const absl::Status& status) {
         i < input_tensors_as_shapes_size &&
         input_tensors_as_shapes_[i].IsSet() &&
         RankKnown(input_tensors_as_shapes_[i])) {
-      input_from_tensors_as_shape_str.push_back(absl::StrCat(
+      input_from_tensors_as_shape_str.push_back(strings::StrCat(
           "input[", i, "] = ", DebugString(input_tensors_as_shapes_[i])));
     } else if (requested_input_tensor_[i] && i < input_tensors_size &&
                input_tensors_[i] != nullptr) {
@@ -1199,22 +1197,22 @@ absl::Status InferenceContext::AttachContext(const absl::Status& status) {
     }
   }
 
-  std::string error_context =
-      absl::StrCat(" for '", attrs_.SummarizeNode(),
-                   "' with input shapes: ", absl::StrJoin(input_shapes, ", "));
+  string error_context = strings::StrCat(
+      " for '", attrs_.SummarizeNode(),
+      "' with input shapes: ", absl::StrJoin(input_shapes, ", "));
   if (!input_from_tensors_str.empty()) {
-    absl::StrAppend(&error_context, " and with computed input tensors: ",
-                    absl::StrJoin(input_from_tensors_str, ", "));
+    strings::StrAppend(&error_context, " and with computed input tensors: ",
+                       absl::StrJoin(input_from_tensors_str, ", "));
   }
   if (!input_from_tensors_as_shape_str.empty()) {
-    absl::StrAppend(&error_context,
-                    " and with input tensors computed as partial shapes: ",
-                    absl::StrJoin(input_from_tensors_as_shape_str, ","));
+    strings::StrAppend(&error_context,
+                       " and with input tensors computed as partial shapes: ",
+                       absl::StrJoin(input_from_tensors_as_shape_str, ","));
   }
 
-  absl::StrAppend(&error_context, ".");
+  strings::StrAppend(&error_context, ".");
   return errors::CreateWithUpdatedMessage(
-      status, absl::StrCat(status.message(), error_context));
+      status, strings::StrCat(status.message(), error_context));
 }
 
 bool InferenceContext::MergeHandleShapesAndTypes(

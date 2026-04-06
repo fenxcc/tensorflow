@@ -40,6 +40,7 @@ limitations under the License.
 #include "xla/pjrt/utils.h"
 #include "xla/service/compiler.h"
 #include "xla/service/dump.h"
+#include "xla/service/gpu/executable.pb.h"
 #include "xla/service/hlo.pb.h"
 #include "xla/service/hlo_module_config.h"
 #include "xla/service/hlo_module_util.h"
@@ -124,7 +125,7 @@ StreamExecutorGpuCompiler::Compile(CompileOptions options,
                       GetCompilerForPlatform(requested_platform_id_));
 
   CompileOptions input_options = options;
-  if (!options.gpu_target_config) {
+  if (!options.target_config) {
     if (client != nullptr) {
       TF_RET_CHECK(IsGpuClient(*client))
           << "GPU compilation requires a GPU PjRt client.";
@@ -137,10 +138,8 @@ StreamExecutorGpuCompiler::Compile(CompileOptions options,
         tensorflow::down_cast<const xla::StreamExecutorGpuTopologyDescription&>(
             topology);
     if (gpu_topology.target_config().has_value()) {
-      TF_ASSIGN_OR_RETURN(
-          Compiler::GpuTargetConfig target_config,
-          Compiler::GpuTargetConfig::FromProto(*gpu_topology.target_config()));
-      options.gpu_target_config.emplace(std::move(target_config));
+      options.target_config.emplace(
+          Compiler::TargetConfig(*gpu_topology.target_config()));
     } else {
       return absl::UnimplementedError(
           "Compilation without client and without target_config specified is "
@@ -168,10 +167,10 @@ StreamExecutorGpuCompiler::Compile(CompileOptions options,
                                   gpu_compiler.get(), std::placeholders::_1));
   DumpHloModuleIfEnabled(*hlo_module, kBeforeOptimizationsDumpName);
   Compiler::CompileOptions opts;
-  opts.gpu_target_config = options.gpu_target_config;
+  opts.target_config = options.target_config;
 
   AotCompilationOptions aot_options(gpu_compiler->PlatformId());
-  aot_options.set_gpu_target_config(*options.gpu_target_config);
+  aot_options.set_target_config(*options.target_config);
   aot_options.set_run_backend_only(
       options.executable_build_options.run_backend_only());
 
@@ -179,9 +178,12 @@ StreamExecutorGpuCompiler::Compile(CompileOptions options,
   const int num_partitions = hlo_module->config().num_partitions();
   const std::string name = hlo_module->name();
   const std::string fingerprint = hlo_module->GetFingerprint128();
+  auto unique_module_group =
+      std::make_unique<HloModuleGroup>(std::move(hlo_module));
   TF_ASSIGN_OR_RETURN(
       std::vector<std::unique_ptr<AotCompilationResult>> aot_results,
-      gpu_compiler->CompileAheadOfTime(std::move(hlo_module), aot_options));
+      gpu_compiler->CompileAheadOfTime(std::move(unique_module_group),
+                                       aot_options));
   return std::make_unique<StreamExecutorExecutable>(
       std::move(input_options), std::move(aot_results), num_replicas,
       num_partitions, name, fingerprint,
@@ -193,7 +195,7 @@ StreamExecutorGpuCompiler::Compile(CompileOptions options,
                                    mlir::ModuleOp module,
                                    const PjRtTopologyDescription& topology,
                                    PjRtClient* client) {
-  if (!options.gpu_target_config && client != nullptr) {
+  if (!options.target_config && client != nullptr) {
     TF_RET_CHECK(IsGpuClient(*client))
         << "GPU compilation requires a GPU PjRt client.";
     TF_RETURN_IF_ERROR(IsValidTopologyAndClientForCompile(topology, client));
@@ -208,8 +210,7 @@ StreamExecutorGpuCompiler::Compile(CompileOptions options,
       module, xla_computation,
       /*use_tuple_args=*/options.parameter_is_tupled_arguments,
       /*return_tuple=*/false,
-      /*exec_build_options=*/&input_options.executable_build_options,
-      mlir::mhlo::getGpuChloToHighLevelMhloOptions()));
+      /*use_shardy=*/false));
   return Compile(std::move(input_options), xla_computation, topology, client);
 }
 }  // namespace xla

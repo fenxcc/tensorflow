@@ -514,7 +514,7 @@ constexpr const char* const kMapGraphNoAutotuneProto = R"pb(
 
 TEST(Scalar, Standalone) {
   struct TestCase {
-    std::string graph_string;
+    string graph_string;
     std::vector<int64_t> expected_outputs;
   };
   auto test_cases = {

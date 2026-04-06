@@ -23,7 +23,6 @@ limitations under the License.
 #include <vector>
 
 #include "absl/status/status.h"
-#include "absl/strings/str_format.h"
 #include "tensorflow/core/data/global_shuffle_utils.h"
 #include "tensorflow/core/data/name_utils.h"
 #include "tensorflow/core/data/serialization_utils.h"
@@ -176,7 +175,10 @@ class CacheDatasetOp::FileDatasetBase : public DatasetBase {
         env_(env),
         num_tensors_(input->output_dtypes().size()),
         tensor_index_padding_size_(StringPaddingSize(num_tensors_)),
-        item_index_padding_size_(StringPaddingSize(kMaxItems)) {
+        item_index_padding_size_(StringPaddingSize(kMaxItems)),
+        tensor_format_string_(strings::Printf(kKeyStrFormat,
+                                              item_index_padding_size_,
+                                              tensor_index_padding_size_)) {
     input_->Ref();
     DCHECK_EQ(item_index_padding_size_, 7);
   }
@@ -228,9 +230,9 @@ class CacheDatasetOp::FileDatasetBase : public DatasetBase {
     return strings::Printf(kPaddingSizeStrFormat, num_tensors - 1).size();
   }
 
-  std::string FormatName(size_t item_index, size_t tensor_index) const {
-    return absl::StrFormat("%*zu_%*zu", item_index_padding_size_, item_index,
-                           tensor_index_padding_size_, tensor_index);
+  string FormatName(size_t item_index, size_t tensor_index) const {
+    return strings::Printf(tensor_format_string_.c_str(), item_index,
+                           tensor_index);
   }
 
   class FileIterator : public DatasetIterator<FileDatasetBase> {
@@ -320,8 +322,9 @@ class CacheDatasetOp::FileDatasetBase : public DatasetBase {
           : DatasetIterator<FileDatasetBase>(params),
             cur_index_(0),
             shard_id_(0),
-            filename_(absl::StrCat(params.dataset->filename_, "_", shard_id_)),
-            lockfile_(absl::StrCat(filename_, kLockFileSuffix)),
+            filename_(
+                strings::StrCat(params.dataset->filename_, "_", shard_id_)),
+            lockfile_(strings::StrCat(filename_, kLockFileSuffix)),
             lockfile_created_(false),
             iteration_completed_(false) {}
 
@@ -330,7 +333,7 @@ class CacheDatasetOp::FileDatasetBase : public DatasetBase {
           LOG(WARNING) << kIncompleteCacheErrorMessage;
           std::vector<string> cache_files;
           absl::Status s = dataset()->env_->GetMatchingPaths(
-              absl::StrCat(filename_, "*"), &cache_files);
+              strings::StrCat(filename_, "*"), &cache_files);
           if (!s.ok()) {
             LOG(WARNING) << "Failed to get matching files on " << filename_
                          << "* : " << s.ToString();
@@ -431,8 +434,8 @@ class CacheDatasetOp::FileDatasetBase : public DatasetBase {
 
           // Start caching to a new shard.
           shard_id_++;
-          filename_ = absl::StrCat(dataset()->filename_, "_", shard_id_);
-          lockfile_ = absl::StrCat(filename_, kLockFileSuffix);
+          filename_ = strings::StrCat(dataset()->filename_, "_", shard_id_);
+          lockfile_ = strings::StrCat(filename_, kLockFileSuffix);
           lockfile_created_ = false;
         }
         TF_RETURN_IF_ERROR(SaveInput(ctx, writer, input_impl_));
@@ -470,8 +473,8 @@ class CacheDatasetOp::FileDatasetBase : public DatasetBase {
             return errors::Internal("Invalid value for shard_id ", temp);
           }
         }
-        filename_ = absl::StrCat(dataset()->filename_, "_", shard_id_);
-        lockfile_ = absl::StrCat(filename_, kLockFileSuffix);
+        filename_ = strings::StrCat(dataset()->filename_, "_", shard_id_);
+        lockfile_ = strings::StrCat(filename_, kLockFileSuffix);
         writer_ = std::make_unique<BundleWriter>(dataset()->env_, filename_);
         return absl::OkStatus();
       }
@@ -524,7 +527,7 @@ class CacheDatasetOp::FileDatasetBase : public DatasetBase {
         TF_RETURN_IF_ERROR(
             dataset()->env_->NewWritableFile(lockfile_, &lockfile));
         TF_RETURN_IF_ERROR(lockfile->Append(
-            absl::StrCat(kCreatedAt, ": ", EnvTime::NowSeconds())));
+            strings::StrCat(kCreatedAt, ": ", EnvTime::NowSeconds())));
 
         // At this point we know that
         // 1. There is no conflicting checkpoint with prefix `filename_`.
@@ -555,7 +558,8 @@ class CacheDatasetOp::FileDatasetBase : public DatasetBase {
           std::vector<tstring> prefixes;
           prefixes.reserve(shard_id_ + 1);
           for (size_t i = 0; i <= shard_id_; ++i) {
-            prefixes.emplace_back(absl::StrCat(dataset()->filename_, "_", i));
+            prefixes.emplace_back(
+                strings::StrCat(dataset()->filename_, "_", i));
           }
           TF_RETURN_IF_ERROR(
               MergeBundles(dataset()->env_, prefixes, dataset()->filename_));
@@ -563,7 +567,7 @@ class CacheDatasetOp::FileDatasetBase : public DatasetBase {
         // Delete all lockfiles.
         for (size_t i = 0; i <= shard_id_; ++i) {
           TF_RETURN_IF_ERROR(dataset()->env_->DeleteFile(
-              absl::StrCat(dataset()->filename_, "_", i, kLockFileSuffix)));
+              strings::StrCat(dataset()->filename_, "_", i, kLockFileSuffix)));
         }
         return absl::OkStatus();
       }
@@ -686,12 +690,12 @@ class CacheDatasetOp::FileDatasetBase : public DatasetBase {
         case Mode::read:
           iterator_ =
               std::make_unique<FileReaderIterator>(FileReaderIterator::Params{
-                  dataset(), absl::StrCat(prefix(), kImpl)});
+                  dataset(), strings::StrCat(prefix(), kImpl)});
           break;
         case Mode::write:
           iterator_ =
               std::make_unique<FileWriterIterator>(FileWriterIterator::Params{
-                  dataset(), absl::StrCat(prefix(), kImpl)});
+                  dataset(), strings::StrCat(prefix(), kImpl)});
       }
       TF_RETURN_IF_ERROR(iterator_->InitializeBase(ctx, this));
       return iterator_->Initialize(ctx);
@@ -708,6 +712,7 @@ class CacheDatasetOp::FileDatasetBase : public DatasetBase {
   const size_t tensor_index_padding_size_;
   static constexpr size_t kMaxItems = 10000000;  // 10 million
   const size_t item_index_padding_size_;
+  const string tensor_format_string_;
 };  // FileDatasetBase
 
 class CacheDatasetOp::FileDataset : public CacheDatasetOp::FileDatasetBase {
@@ -1053,12 +1058,12 @@ class CacheDatasetOp::MemoryDatasetBase : public DatasetBase {
       if (cache_->IsCompleted()) {
         iterator_ = std::make_unique<MemoryReaderIterator>(
             MemoryReaderIterator::Params{dataset(),
-                                         absl::StrCat(prefix(), kImpl)},
+                                         strings::StrCat(prefix(), kImpl)},
             cache_);
       } else {
         iterator_ = std::make_unique<MemoryWriterIterator>(
             MemoryWriterIterator::Params{dataset(),
-                                         absl::StrCat(prefix(), kImpl)},
+                                         strings::StrCat(prefix(), kImpl)},
             cache_);
       }
       TF_RETURN_IF_ERROR(iterator_->InitializeBase(ctx, this));

@@ -16,18 +16,19 @@ limitations under the License.
 #ifndef XLA_SERVICE_SHAPED_BUFFER_H_
 #define XLA_SERVICE_SHAPED_BUFFER_H_
 
-#include <optional>
+#include <memory>
 #include <ostream>
 #include <string>
-#include <utility>
 
 #include "absl/log/check.h"
 #include "absl/status/statusor.h"
+#include "absl/types/span.h"
 #include "xla/shape.h"
 #include "xla/shape_tree.h"
 #include "xla/shape_util.h"
 #include "xla/stream_executor/device_memory.h"
 #include "xla/stream_executor/device_memory_allocator.h"
+#include "xla/stream_executor/stream_executor.h"
 #include "xla/xla_data.pb.h"
 
 namespace xla {
@@ -67,9 +68,7 @@ class ShapedBuffer {
 
   // Returns the shape of the on-host representation of the data held by this
   // ShapedBuffer.
-  const Shape& on_host_shape() const {
-    return on_host_shape_ ? *on_host_shape_ : on_device_shape_;
-  }
+  const Shape& on_host_shape() const { return on_host_shape_; }
 
   // Returns the shape of the on-device representation of the data held by this
   // ShapedBuffer.
@@ -110,11 +109,7 @@ class ShapedBuffer {
     CHECK(ShapeUtil::EqualStructure(on_device_shape, on_device_shape_))
         << "Structures are not the same. new: " << on_device_shape
         << ", old: " << on_device_shape_;
-    if (!ShapeUtil::DeviceShapeIsHostShape(on_device_shape)) {
-      on_host_shape_ = ShapeUtil::DeviceShapeToHostShape(on_device_shape);
-    } else {
-      on_host_shape_ = std::nullopt;
-    }
+    on_host_shape_ = ShapeUtil::DeviceShapeToHostShape(on_device_shape);
     on_device_shape_ = on_device_shape;
     buffers_.replace_shape_ptr(on_device_shape_);
   }
@@ -136,9 +131,7 @@ class ShapedBuffer {
   std::string ToString() const;
 
  protected:
-  // The shape of the data on the host. If not set, the on-device shape is
-  // assumed to be the same as the on-host shape.
-  std::optional<Shape> on_host_shape_;
+  Shape on_host_shape_;
 
   // The shape of the data on the device.
   Shape on_device_shape_;

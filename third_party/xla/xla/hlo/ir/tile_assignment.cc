@@ -126,14 +126,10 @@ TransposeKind GetTransposeKind(absl::Span<const int64_t> dims,
   for (int i = 0; i < perm.size(); ++i) {
     const auto& d = perm[i];
     if (dims[d] == 1) {
-      if (d != i && dims[i] != 1) {
-        kind = TransposeKind::kReshape;
-      }
+      if (d != i && dims[i] != 1) kind = TransposeKind::kReshape;
       continue;
     }
-    if (d <= prev_non_one_dim) {
-      return TransposeKind::kTranspose;
-    }
+    if (d <= prev_non_one_dim) return TransposeKind::kTranspose;
     prev_non_one_dim = d;
   }
   return kind;
@@ -217,19 +213,12 @@ DecanonicalizationInfo FullyDecanonicalize(
   return IotaTileAssignment(dims, dims_span, perm_span);
 }
 
-// Materializes array representation of IotaTileAssignment.
-Array<int64_t> ToArray(absl::Span<const int64_t> reshape_dims,
-                       absl::Span<const int> transpose_perm,
-                       absl::Span<const int64_t> dims) {
-  Array<int64_t> array(reshape_dims);
-  array.FillIota(0);
-  array.TransposeDimensions(transpose_perm);
-  array.Reshape(dims);
-  return array;
-}
-
 Array<int64_t> IotaTileAssignment::ToArray() const {
-  return ::xla::ToArray(reshape_dims(), transpose_perm(), dims());
+  Array<int64_t> array(reshape_dims());
+  array.FillIota(0);
+  array.TransposeDimensions(transpose_perm());
+  array.Reshape(dims());
+  return array;
 }
 
 IotaTileAssignment::IotaTileAssignment(const IotaTileAssignment& other)
@@ -272,9 +261,7 @@ std::optional<IotaTileAssignment> IotaTileAssignment::Transpose(
   DCHECK_EQ(ndims_, perm.size());
   auto dims = this->dims();
   const TransposeKind kind = GetTransposeKind(dims, perm);
-  if (kind == TransposeKind::kNoop) {
-    return *this;
-  }
+  if (kind == TransposeKind::kNoop) return *this;
   absl::InlinedVector<int64_t, 6> new_dims(ndims_);
   for (int64_t i = 0; i < ndims_; ++i) {
     new_dims[i] = dims[perm[i]];
@@ -310,9 +297,7 @@ std::optional<IotaTileAssignment> IotaTileAssignment::Transpose(
     absl::InlinedVector<int, 6> new_perm;
     new_perm.reserve(non_one_dims.size());
     for (int i = 0; i < ndims_; ++i) {
-      if (dims[perm[i]] == 1) {
-        continue;
-      }
+      if (dims[perm[i]] == 1) continue;
       new_perm.push_back(transpose_perm[one_to_non_one[perm[i]]]);
     }
     CHECK_EQ(reshape_ndims_, new_perm.size());
@@ -438,8 +423,10 @@ std::optional<IotaTileAssignment> IotaTileAssignment::Transpose(
                                     flattened_transpose_perm);
 }
 
-void IotaTileAssignment::PrintArray(Printer* printer) const {
+void IotaTileAssignment::Print(Printer* printer) const {
   printer->Append("[");
+  AppendJoin(printer, dims(), ",");
+  printer->Append("]<=[");
   AppendJoin(printer, reshape_dims(), ",");
   printer->Append("]");
   if (reshape_ndims_ > 1) {
@@ -447,19 +434,6 @@ void IotaTileAssignment::PrintArray(Printer* printer) const {
     AppendJoin(printer, transpose_perm(), ",");
     printer->Append(")");
   }
-}
-
-void IotaTileAssignment::Print(Printer* printer) const {
-  printer->Append("[");
-  AppendJoin(printer, dims(), ",");
-  printer->Append("]<=");
-  PrintArray(printer);
-}
-
-std::string IotaTileAssignment::ArrayToString() const {
-  StringPrinter printer;
-  PrintArray(&printer);
-  return std::move(printer).ToString();
 }
 
 std::string IotaTileAssignment::ToString() const {
@@ -495,13 +469,13 @@ int64_t IotaTileAssignment::value_at(absl::Span<const int64_t> index) const {
 
 TileAssignment::TileAssignment(const TileAssignment& other) {
   iota_ = other.iota_;
-  absl::MutexLock other_lock(other.mu_);
+  absl::MutexLock other_lock(&other.mu_);
   shared_array_ = other.shared_array_;
   array_ = other.array_;
 }
 
 TileAssignment::TileAssignment(TileAssignment&& other) {
-  absl::MutexLock other_lock(other.mu_);
+  absl::MutexLock other_lock(&other.mu_);
   iota_ = other.iota_;
   shared_array_ = std::move(other.shared_array_);
   array_ = other.array_;
@@ -512,11 +486,11 @@ TileAssignment& TileAssignment::operator=(const TileAssignment& other) {
   std::shared_ptr<const Array<int64_t>> shared_array;
   const Array<int64_t>* array;
   {
-    absl::MutexLock other_lock(other.mu_);
+    absl::MutexLock other_lock(&other.mu_);
     shared_array = other.shared_array_;
     array = other.array_;
   }
-  absl::MutexLock lock(mu_);
+  absl::MutexLock lock(&mu_);
   shared_array_ = shared_array;
   array_ = array;
   return *this;
@@ -527,11 +501,11 @@ TileAssignment& TileAssignment::operator=(TileAssignment&& other) {
   std::shared_ptr<const Array<int64_t>> shared_array;
   const Array<int64_t>* array;
   {
-    absl::MutexLock other_lock(other.mu_);
+    absl::MutexLock other_lock(&other.mu_);
     shared_array = std::move(other.shared_array_);
     array = other.array_;
   }
-  absl::MutexLock lock(mu_);
+  absl::MutexLock lock(&mu_);
   shared_array_ = shared_array;
   array_ = array;
   return *this;
@@ -545,31 +519,31 @@ bool TileAssignment::operator==(const TileAssignment& other) const {
 }
 
 int64_t TileAssignment::operator()(absl::Span<const int64_t> indexes) const {
-  absl::MutexLock lock(mu_);
+  absl::MutexLock lock(&mu_);
   return array_ ? (*array_)(indexes) : iota_->value_at(indexes);
 }
 
 absl::Span<const int64_t> TileAssignment::dimensions() const {
-  absl::MutexLock lock(mu_);
+  absl::MutexLock lock(&mu_);
   return array_ ? array_->dimensions() : iota_->dims();
 }
 
 int64_t TileAssignment::num_dimensions() const {
-  absl::MutexLock lock(mu_);
+  absl::MutexLock lock(&mu_);
   return array_ ? array_->num_dimensions() : iota_->ndims();
 }
 
 int64_t TileAssignment::dim(int64_t n) const {
-  absl::MutexLock lock(mu_);
+  absl::MutexLock lock(&mu_);
   return array_ ? array_->dim(n) : iota_->dim(n);
 }
 int64_t TileAssignment::num_elements() const {
-  absl::MutexLock lock(mu_);
+  absl::MutexLock lock(&mu_);
   return array_ ? array_->num_elements() : iota_->num_elements();
 }
 
 int64_t TileAssignment::first() const {
-  absl::MutexLock lock(mu_);
+  absl::MutexLock lock(&mu_);
   return array_ ? *array_->begin() : 0;
 }
 
@@ -577,7 +551,7 @@ void TileAssignment::Each(
     absl::FunctionRef<void(absl::Span<const int64_t>, int64_t)> f) const {
   Array<int64_t> const* array;
   {
-    absl::MutexLock lock(mu_);
+    absl::MutexLock lock(&mu_);
     MaybeMaterializeFullArray();
     array = array_;
   }
@@ -589,7 +563,7 @@ absl::Status TileAssignment::EachStatus(
     const {
   Array<int64_t> const* array;
   {
-    absl::MutexLock lock(mu_);
+    absl::MutexLock lock(&mu_);
     MaybeMaterializeFullArray();
     array = array_;
   }
@@ -600,8 +574,10 @@ absl::Status TileAssignment::EachStatus(
     absl::Span<const int64_t> new_dimensions) const {
   if (iota_) {
     CHECK_EQ(Product(new_dimensions), iota_->num_elements());
-    return TileAssignment(new_dimensions, iota_->reshape_dims(),
-                          iota_->transpose_perm());
+    return TileAssignment(
+        IotaTileAssignment(new_dimensions, iota_->reshape_dims(),
+                           iota_->transpose_perm()),
+        /*shared_array=*/nullptr);
   }
   std::shared_ptr<Array<int64_t>> reshaped = shared_array_clone();
   reshaped->Reshape(new_dimensions);
@@ -625,14 +601,6 @@ absl::Status TileAssignment::EachStatus(
   return TileAssignment(std::move(cloned_array));
 }
 
-void TileAssignment::PrintArray(Printer* printer) const {
-  if (iota_) {
-    iota_->PrintArray(printer);
-  } else {
-    AppendJoin(printer, array(), ",");
-  }
-}
-
 void TileAssignment::Print(Printer* printer) const {
   if (iota_) {
     printer->Append("devices=");
@@ -643,12 +611,6 @@ void TileAssignment::Print(Printer* printer) const {
     printer->Append("]");
     AppendJoin(printer, array(), ",");
   }
-}
-
-std::string TileAssignment::ArrayToString() const {
-  StringPrinter printer;
-  PrintArray(&printer);
-  return std::move(printer).ToString();
 }
 
 std::string TileAssignment::ToString() const {
@@ -663,18 +625,18 @@ bool TileAssignment::UsesDevice(int64_t device) const {
 }
 
 const Array<int64_t>& TileAssignment::array() const {
-  absl::MutexLock lock(mu_);
+  absl::MutexLock lock(&mu_);
   MaybeMaterializeFullArray();
   return *array_;
 }
 std::shared_ptr<const Array<int64_t>> TileAssignment::shared_array() const {
-  absl::MutexLock lock(mu_);
+  absl::MutexLock lock(&mu_);
   MaybeMaterializeFullArray();
   return shared_array_;
 }
 
 std::shared_ptr<Array<int64_t>> TileAssignment::shared_array_clone() const {
-  absl::MutexLock lock(mu_);
+  absl::MutexLock lock(&mu_);
   MaybeMaterializeFullArray();
   return std::make_shared<Array<int64_t>>(*array_);
 }

@@ -16,20 +16,23 @@ limitations under the License.
 #ifndef XLA_BACKENDS_CPU_ONEDNN_FUSION_H_
 #define XLA_BACKENDS_CPU_ONEDNN_FUSION_H_
 
-#include <vector>
+// oneDNN-fusion-related defines that don't depend on oneDNN Graph API.
+// For anything dependent on Graph API, put it in onednn_fusion_graph.h.
 
-#include "oneapi/dnnl/dnnl_graph.hpp"
+#include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
+#include "xla/shape.h"
+#include "xla/xla_data.pb.h"
 
 namespace xla::cpu {
 
-// oneDNN fusion encapsulates logical tensors corresponding to fusion parameters
-// and results, and oneDNN graph constructed from an XLA fusion computation,
-// where each HLO op has a corresponding oneDNN operation in the graph.
-struct OneDnnFusion {
-  std::vector<dnnl::graph::logical_tensor> parameters;
-  std::vector<dnnl::graph::logical_tensor> results;
-  dnnl::graph::graph graph;
-};
+inline constexpr absl::string_view kOneDnnFusionKind = "__onednn_fusion";
+
+// Returns true if the dot operation is supported by oneDNN. Returns an error
+// if the dot operation shape is invalid.
+absl::StatusOr<bool> IsOneDnnDotSupported(
+    const DotDimensionNumbers& dot_dimensions, const Shape& lhs_shape,
+    const Shape& rhs_shape, const Shape& out_shape);
 
 }  // namespace xla::cpu
 

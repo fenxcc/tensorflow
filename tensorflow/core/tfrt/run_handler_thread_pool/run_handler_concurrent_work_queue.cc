@@ -65,12 +65,8 @@ RunHandlerThreadWorkQueue::RunHandlerThreadWorkQueue(const Options& options)
 }
 
 absl::StatusOr<std::unique_ptr<tensorflow::tfrt_stub::WorkQueueInterface>>
-RunHandlerThreadWorkQueue::InitializeRequest(int64_t request_id,
-                                             int priority) const {
+RunHandlerThreadWorkQueue::InitializeRequest(int64_t request_id) const {
   RunHandlerOptions options;
-  if (options_.enable_priority_based_queuing) {
-    options.priority = priority;
-  }
   std::unique_ptr<RunHandler> handler =
       handler_pool_->Get(request_id, options_.init_timeout_ms, options);
   if (!handler) {
@@ -135,9 +131,7 @@ std::ostream& operator<<(std::ostream& strm,
               << options.use_adaptive_waiting_time
               << ", wait_if_no_active_request = "
               << options.wait_if_no_active_request
-              << ", enable_wake_up = " << options.enable_wake_up
-              << ", enable_priority_based_queuing = "
-              << options.enable_priority_based_queuing << " }";
+              << ", enable_wake_up = " << options.enable_wake_up << "}";
 }
 
 }  // namespace tf

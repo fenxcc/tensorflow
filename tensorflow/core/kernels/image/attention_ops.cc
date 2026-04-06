@@ -33,12 +33,12 @@ namespace tensorflow {
 class ExtractGlimpseOp : public OpKernel {
  public:
   explicit ExtractGlimpseOp(OpKernelConstruction* context) : OpKernel(context) {
-    const std::string& op = context->def().op();
+    const string& op = context->def().op();
     version_ = (op == "ExtractGlimpse") ? 1 : 2;
     OP_REQUIRES_OK(context, context->GetAttr("normalized", &normalized_));
     OP_REQUIRES_OK(context, context->GetAttr("centered", &centered_));
     bool uniform_noise = false;
-    std::string noise;
+    string noise;
     OP_REQUIRES_OK(context, context->GetAttr("uniform_noise", &uniform_noise));
     OP_REQUIRES_OK(context, context->GetAttr("noise", &noise));
     OP_REQUIRES(context,
@@ -132,7 +132,7 @@ class ExtractGlimpseOp : public OpKernel {
   bool normalized_;
   bool centered_;
   Eigen::ExtractGlimpsesNoiseMode noise_;
-  int32_t version_;
+  int32 version_;
 };
 
 REGISTER_KERNEL_BUILDER(Name("ExtractGlimpse").Device(DEVICE_CPU),

@@ -69,8 +69,9 @@ class CollectivePermuteDecomposer : public HloModulePass {
     return "collective-permute-decomposer";
   }
 
- protected:
-  absl::StatusOr<bool> RunImpl(
+  // Runs CollectivePermuteDecomposer pass on computations in 'module'.
+  // Returns whether the 'module' was changed.
+  absl::StatusOr<bool> Run(
       HloModule* module,
       const absl::flat_hash_set<absl::string_view>& execution_threads) override;
 

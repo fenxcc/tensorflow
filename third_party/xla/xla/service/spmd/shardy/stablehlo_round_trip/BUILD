@@ -47,7 +47,6 @@ cc_library(
     hdrs = ["export_ops.h"],
     deps = [
         "//xla/mlir_hlo",
-        "//xla/service/spmd/shardy:constants",
         "@llvm-project//llvm:Support",
         "@llvm-project//mlir:IR",
         "@llvm-project//mlir:Pass",
@@ -68,7 +67,6 @@ cc_library(
         "//xla/service/spmd/shardy:constants",
         "@com_google_absl//absl/log:check",
         "@llvm-project//llvm:Support",
-        "@llvm-project//mlir:FuncDialect",
         "@llvm-project//mlir:IR",
         "@llvm-project//mlir:InliningUtils",
         "@llvm-project//mlir:Pass",
@@ -106,7 +104,6 @@ cc_library(
         ":export_shardings",
         ":shard_map_export",
         "//xla/service/spmd/shardy/round_trip_common:export_named_computations",
-        "@llvm-project//llvm:Support",
         "@llvm-project//mlir:Pass",
         "@llvm-project//mlir:Support",
     ],
@@ -118,7 +115,6 @@ cc_library(
     hdrs = ["stablehlo_import.h"],
     deps = [
         ":shard_map_import",
-        "//xla:shape_util",
         "//xla:util",
         "//xla:xla_data_proto_cc",
         "//xla/hlo/ir:hlo",
@@ -131,7 +127,6 @@ cc_library(
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/strings",
         "@llvm-project//llvm:Support",
-        "@llvm-project//mlir:AsmParser",
         "@llvm-project//mlir:FuncDialect",
         "@llvm-project//mlir:IR",
         "@llvm-project//mlir:Pass",
@@ -146,8 +141,6 @@ xla_cc_test(
     srcs = ["stablehlo_import_test.cc"],
     deps = [
         ":stablehlo_import",
-        "//xla:shape_util",
-        "//xla:xla_data_proto_cc",
         "//xla/hlo/ir:hlo",
         "@com_google_googletest//:gtest_main",
         "@llvm-project//llvm:Support",

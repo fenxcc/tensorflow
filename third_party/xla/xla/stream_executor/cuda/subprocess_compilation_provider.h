@@ -16,15 +16,17 @@ limitations under the License.
 #ifndef XLA_STREAM_EXECUTOR_CUDA_SUBPROCESS_COMPILATION_PROVIDER_H_
 #define XLA_STREAM_EXECUTOR_CUDA_SUBPROCESS_COMPILATION_PROVIDER_H_
 
+#include <cstdint>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "xla/stream_executor/cuda/compilation_options.h"
 #include "xla/stream_executor/cuda/compilation_provider.h"
-#include "xla/stream_executor/cuda/cuda_compute_capability.h"
+#include "xla/stream_executor/device_description.h"
 
 namespace stream_executor::cuda {
 
@@ -53,11 +55,14 @@ class SubprocessCompilationProvider : public CompilationProvider {
   bool SupportsCompileToRelocatableModule() const override { return true; }
   bool SupportsCompileAndLink() const override { return true; }
 
-  absl::StatusOr<int> GetLatestPtxIsaVersion() const override;
-
   std::string name() const override;
 
  private:
+  absl::StatusOr<std::vector<uint8_t>> CompileHelper(
+      const CudaComputeCapability& cc, absl::string_view ptx,
+      const CompilationOptions& options,
+      bool compile_to_relocatable_module) const;
+
   std::string path_to_ptxas_;
   std::string path_to_nvlink_;
 };

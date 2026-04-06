@@ -31,7 +31,7 @@ class GuardRenderer : public Renderer {
   void Close();
 
  private:
-  std::string guard_;
+  string guard_;
 };
 
 }  // namespace cpp

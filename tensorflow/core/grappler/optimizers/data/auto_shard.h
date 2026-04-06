@@ -32,7 +32,7 @@ class AutoShard : public TFDataOptimizerBase {
   AutoShard() = default;
   ~AutoShard() override = default;
 
-  std::string name() const override { return "tf_auto_shard"; }
+  string name() const override { return "tf_auto_shard"; }
 
   bool UsesFunctionLibrary() const override { return true; }
 

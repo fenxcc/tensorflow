@@ -1,5 +1,4 @@
 load("@llvm-project//mlir:tblgen.bzl", "gentbl_cc_library", "td_library")
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//xla:xla.default.bzl", "xla_cc_test")
 load("//xla/tsl:tsl.bzl", "internal_visibility")
 load("//xla/tsl:tsl.default.bzl", "get_compatible_with_portable", "tsl_pybind_extension")
@@ -158,42 +157,6 @@ tf_proto_library(
     visibility = ["//xla/python/ifrt:users"],
 )
 
-tf_proto_library(
-    name = "ifrt_ir_executable_version_proto",
-    srcs = ["ifrt_ir_executable_version.proto"],
-    visibility = ["//xla/python/ifrt:users"],
-    deps = [
-    ],
-)
-
-cc_library(
-    name = "ifrt_ir_executable_version",
-    srcs = ["ifrt_ir_executable_version.cc"],
-    hdrs = ["ifrt_ir_executable_version.h"],
-    compatible_with = get_compatible_with_portable(),
-    visibility = ["//xla/python/ifrt:users"],
-    deps = [
-        ":ifrt_ir_executable_version_proto_cc",
-        ":version",
-        "//xla:util",
-        "//xla/python/ifrt",
-        "//xla/python/ifrt:device_proto_cc",
-        "//xla/python/ifrt:serdes",
-        "//xla/python/ifrt:serdes_version",
-        "//xla/python/ifrt:serdes_week_4_old_version_accessor",
-        "//xla/python/pjrt_ifrt:xla_executable_version",
-        "//xla/tsl/platform:statusor",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/log",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/types:span",
-        "@llvm-project//llvm:Support",
-        "@llvm-project//mlir:Support",
-    ],
-)
-
 cc_library(
     name = "ifrt_ir_program",
     srcs = ["ifrt_ir_program.cc"],
@@ -210,18 +173,15 @@ cc_library(
         "//xla/python/ifrt:serdes_default_version_accessor",
         "//xla/python/ifrt:serdes_version",
         "//xla/python/pjrt_ifrt:xla_ifrt",
-        "//xla/tsl/platform:errors",
         "//xla/tsl/platform:statusor",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log:check",
-        "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:string_view",
         "@llvm-project//llvm:Support",
         "@llvm-project//mlir:IR",
-        "@local_tsl//tsl/platform:human_readable_json",
     ],
 )
 
@@ -298,9 +258,9 @@ xla_cc_test(
         "//xla/python/ifrt:serdes_test_util",
         "//xla/python/ifrt:serdes_version",
         "//xla/python/ifrt/support:module_parsing",
+        "//xla/tsl/platform:status_matchers",
         "//xla/tsl/platform:statusor",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:status_matchers",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_googletest//:gtest_main",
         "@llvm-project//llvm:Support",
@@ -493,7 +453,8 @@ tsl_pybind_extension(
         "@llvm-project//mlir:CAPIIRHeaders",
         "@llvm-project//mlir:IR",
         "@llvm-project//mlir:MLIRBindingsPythonHeaders",
-        "@nanobind",
+        "@pybind11",
+        "@pybind11_abseil//pybind11_abseil:absl_casters",
     ],
 )
 
@@ -509,7 +470,6 @@ cc_library(
         ":ir",
         "//xla:status_macros",
         "//xla:xla_data_proto_cc",
-        "//xla/pjrt:pjrt_layout",
         "//xla/python/ifrt",
         "//xla/python/ifrt:attribute_map",
         "//xla/python/ifrt/ir/transforms:debug",
@@ -524,9 +484,7 @@ cc_library(
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:span",
-        "@llvm-project//llvm:Support",
         "@llvm-project//mlir:FuncDialect",
         "@llvm-project//mlir:IR",
         "@llvm-project//mlir:Pass",
@@ -548,7 +506,6 @@ cc_library(
         "//xla/python/ifrt",
         "//xla/python/ifrt:remap_plan_proto_cc",
         "//xla/python/ifrt/ir/transforms:utils",
-        "//xla/tsl/concurrency:future",
         "//xla/tsl/concurrency:ref_count",
         "//xla/tsl/platform:errors",
         "//xla/tsl/platform:statusor",

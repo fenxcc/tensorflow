@@ -110,7 +110,7 @@ void DistributedSaveOp::Compute(OpKernelContext* ctx) {
       grpc_util::Retry(
           [&]() { return client.Snapshot(dataset_def, directory, metadata); },
           /*description=*/
-          absl::StrCat("save with tf.data service dispatcher at ", address),
+          strings::StrCat("save with tf.data service dispatcher at ", address),
           deadline_micros));
   metrics::RecordTFDataServiceSnapshotOp(directory, kDistributedSave);
 }

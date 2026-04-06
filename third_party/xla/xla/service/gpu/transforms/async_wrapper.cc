@@ -28,13 +28,12 @@ limitations under the License.
 #include "xla/hlo/ir/hlo_module.h"
 #include "xla/hlo/ir/hlo_opcode.h"
 #include "xla/shape_util.h"
-#include "xla/tsl/platform/errors.h"
 #include "xla/util.h"
-#include "xla/xla_data.pb.h"
+#include "tsl/platform/errors.h"
 
 namespace xla::gpu {
 
-absl::StatusOr<bool> AsyncWrapper::RunImpl(
+absl::StatusOr<bool> AsyncWrapper::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   bool changed = false;

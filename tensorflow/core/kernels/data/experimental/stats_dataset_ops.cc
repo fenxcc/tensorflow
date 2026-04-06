@@ -15,12 +15,10 @@ limitations under the License.
 #include <cstddef>
 #include <cstdint>
 #include <memory>
-#include <string>
 #include <utility>
 #include <vector>
 
 #include "absl/status/status.h"
-#include "absl/strings/str_cat.h"
 #include "tensorflow/core/framework/dataset.h"
 #include "tensorflow/core/framework/dataset_options.pb.h"
 #include "tensorflow/core/framework/partial_tensor_shape.h"
@@ -60,8 +58,7 @@ class LatencyStatsDatasetOp : public UnaryDatasetOpKernel {
  private:
   class Dataset : public DatasetBase {
    public:
-    explicit Dataset(OpKernelContext* ctx, const DatasetBase* input,
-                     std::string tag)
+    explicit Dataset(OpKernelContext* ctx, const DatasetBase* input, string tag)
         : DatasetBase(DatasetContext(ctx)),
           input_(input),
           tag_(std::move(tag)) {
@@ -71,9 +68,9 @@ class LatencyStatsDatasetOp : public UnaryDatasetOpKernel {
     ~Dataset() override { input_->Unref(); }
 
     std::unique_ptr<IteratorBase> MakeIteratorInternal(
-        const std::string& prefix) const override {
+        const string& prefix) const override {
       return std::make_unique<Iterator>(
-          Iterator::Params{this, absl::StrCat(prefix, "::LatencyStats")});
+          Iterator::Params{this, strings::StrCat(prefix, "::LatencyStats")});
     }
 
     const DataTypeVector& output_dtypes() const override {
@@ -83,7 +80,7 @@ class LatencyStatsDatasetOp : public UnaryDatasetOpKernel {
       return input_->output_shapes();
     }
 
-    std::string DebugString() const override {
+    string DebugString() const override {
       return "LatencyStatsDatasetOp::Dataset";
     }
 
@@ -128,10 +125,10 @@ class LatencyStatsDatasetOp : public UnaryDatasetOpKernel {
                                    std::vector<Tensor>* out_tensors,
                                    bool* end_of_sequence) override {
         tf_shared_lock l(mu_);
-        uint64_t start = EnvTime::NowMicros();
+        uint64 start = EnvTime::NowMicros();
         absl::Status s =
             input_impl_->GetNext(ctx, out_tensors, end_of_sequence);
-        uint64_t end = EnvTime::NowMicros();
+        uint64 end = EnvTime::NowMicros();
         auto stats_aggregator = ctx->stats_aggregator();
         if (stats_aggregator && !*end_of_sequence) {
           int64_t steps = num_elements();
@@ -187,8 +184,7 @@ class BytesProducedStatsDatasetOp : public UnaryDatasetOpKernel {
  private:
   class Dataset : public DatasetBase {
    public:
-    explicit Dataset(OpKernelContext* ctx, const DatasetBase* input,
-                     std::string tag)
+    explicit Dataset(OpKernelContext* ctx, const DatasetBase* input, string tag)
         : DatasetBase(DatasetContext(ctx)),
           input_(input),
           tag_(std::move(tag)) {
@@ -198,9 +194,9 @@ class BytesProducedStatsDatasetOp : public UnaryDatasetOpKernel {
     ~Dataset() override { input_->Unref(); }
 
     std::unique_ptr<IteratorBase> MakeIteratorInternal(
-        const std::string& prefix) const override {
-      return std::make_unique<Iterator>(
-          Iterator::Params{this, absl::StrCat(prefix, "::BytesProducedStats")});
+        const string& prefix) const override {
+      return std::make_unique<Iterator>(Iterator::Params{
+          this, strings::StrCat(prefix, "::BytesProducedStats")});
     }
 
     const DataTypeVector& output_dtypes() const override {
@@ -210,7 +206,7 @@ class BytesProducedStatsDatasetOp : public UnaryDatasetOpKernel {
       return input_->output_shapes();
     }
 
-    std::string DebugString() const override {
+    string DebugString() const override {
       return "BytesProducedStatsDatasetOp::Dataset";
     }
 

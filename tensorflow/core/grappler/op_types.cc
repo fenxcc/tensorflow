@@ -15,7 +15,6 @@ limitations under the License.
 
 #include "tensorflow/core/grappler/op_types.h"
 
-#include "absl/strings/ascii.h"
 #include "tensorflow/core/framework/attr_value.pb.h"
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/types.h"
@@ -768,7 +767,9 @@ bool ModifiesInputsInPlace(const NodeDef& node) {
     return false;
   }
 
-  std::string lower_op_name = absl::AsciiStrToLower(op_name);
+  string lower_op_name = op_name;
+  std::transform(lower_op_name.begin(), lower_op_name.end(),
+                 lower_op_name.begin(), ::tolower);
   if (absl::StrContains(lower_op_name, "inplace")) {
     return true;
   }

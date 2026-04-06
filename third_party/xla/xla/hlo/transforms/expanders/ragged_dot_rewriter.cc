@@ -341,15 +341,9 @@ absl::StatusOr<std::unique_ptr<HloInstruction>> RaggedToGeneral(
 
 }  // namespace
 
-absl::StatusOr<bool> RaggedDotRewriter::RunImpl(
+absl::StatusOr<bool> RaggedDotRewriter::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
-  if (module->config()
-          .debug_options()
-          .xla_gpu_experimental_use_ragged_dot_fusion()) {
-    return false;
-  }
-
   // Gather all Ragged Dot operations.
   std::vector<HloRaggedDotInstruction*> ragged_dots;
   for (auto* computation :

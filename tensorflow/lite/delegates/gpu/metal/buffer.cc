@@ -24,11 +24,7 @@ namespace metal {
 Buffer::Buffer(id<MTLBuffer> buffer, size_t size_in_bytes)
     : buffer_(buffer), size_(size_in_bytes) {}
 
-Buffer::Buffer(id<MTLBuffer> buffer)
-    : buffer_(buffer), size_(0), owner_(false) {}
-
-Buffer::Buffer(Buffer&& buffer)
-    : buffer_(buffer.buffer_), size_(buffer.size_), owner_(buffer.owner_) {
+Buffer::Buffer(Buffer&& buffer) : buffer_(buffer.buffer_), size_(buffer.size_) {
   buffer.buffer_ = nullptr;
   buffer.size_ = 0;
 }
@@ -38,7 +34,6 @@ Buffer& Buffer::operator=(Buffer&& buffer) {
     Release();
     std::swap(size_, buffer.size_);
     std::swap(buffer_, buffer.buffer_);
-    std::swap(owner_, buffer.owner_);
   }
   return *this;
 }
@@ -46,10 +41,9 @@ Buffer& Buffer::operator=(Buffer&& buffer) {
 Buffer::~Buffer() { Release(); }
 
 void Buffer::Release() {
-  if (owner_ && buffer_) {
+  if (buffer_) {
     buffer_ = nullptr;
     size_ = 0;
-    owner_ = false;
   }
 }
 
@@ -77,8 +71,6 @@ absl::Status Buffer::CreateFromBufferDescriptor(const BufferDescriptor& desc,
   }
   return absl::OkStatus();
 }
-
-Buffer CreateBufferShared(id<MTLBuffer> buffer) { return Buffer(buffer); }
 
 absl::Status CreateBuffer(size_t size_in_bytes, const void* data,
                           id<MTLDevice> device, Buffer* result) {

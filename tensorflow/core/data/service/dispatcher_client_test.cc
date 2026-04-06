@@ -55,6 +55,7 @@ using ::tensorflow::data::testing::LocalTempFilename;
 using ::tensorflow::data::testing::RangeDataset;
 using ::tensorflow::testing::StatusIs;
 using ::testing::AllOf;
+using ::testing::ContainsRegex;
 using ::testing::HasSubstr;
 
 constexpr const char kProtocol[] = "grpc";
@@ -137,8 +138,7 @@ TEST_F(DispatcherClientTest, DatasetDoesNotExist) {
   EXPECT_THAT(
       dispatcher_client_->GetDataServiceMetadata(
           /*dataset_id=*/"not-found", metadata),
-      absl_testing::StatusIs(error::NOT_FOUND,
-                             HasSubstr("Dataset id not-found not found")));
+      StatusIs(error::NOT_FOUND, HasSubstr("Dataset id not-found not found")));
 }
 
 TEST_F(DispatcherClientTest, SnapshotAlreadyStarted) {
@@ -150,8 +150,7 @@ TEST_F(DispatcherClientTest, SnapshotAlreadyStarted) {
       dispatcher_client_->Snapshot(RangeDataset(10), directory, metadata));
   EXPECT_THAT(
       dispatcher_client_->Snapshot(RangeDataset(10), directory, metadata),
-      absl_testing::StatusIs(error::ALREADY_EXISTS,
-                             HasSubstr("already started")));
+      StatusIs(error::ALREADY_EXISTS, HasSubstr("already started")));
 }
 
 TEST_F(DispatcherClientTest, GetDataServiceConfig) {
@@ -300,7 +299,7 @@ TEST_F(DispatcherClientTest, DatasetsDoNotMatch) {
   EXPECT_THAT(
       RegisterDataset(InfiniteDataset(), metadata,
                       /*requested_dataset_id=*/"dataset_id"),
-      absl_testing::StatusIs(
+      StatusIs(
           error::INVALID_ARGUMENT,
           HasSubstr(
               "Datasets with the same ID should have the same structure")));
@@ -382,12 +381,11 @@ TEST_F(DispatcherClientTest, NamedJobsDoNotMatch) {
                                          /*num_consumers=*/std::nullopt,
                                          /*use_cross_trainer_cache=*/true,
                                          TARGET_WORKERS_AUTO, job_id),
-      absl_testing::StatusIs(
-          error::INVALID_ARGUMENT,
-          AllOf(HasSubstr("but found an existing job with different "
-                          "parameters: "),
-                HasSubstr("Existing processing mode: <"),
-                HasSubstr("Existing cross-trainer cache: <disabled>"))));
+      StatusIs(error::INVALID_ARGUMENT,
+               AllOf(HasSubstr("but found an existing job with different "
+                               "parameters: "),
+                     ContainsRegex("Existing processing mode: <\\w*/*\\w* *>"),
+                     HasSubstr("Existing cross-trainer cache: <disabled>"))));
 }
 
 class DispatcherClientTest_DatasetId

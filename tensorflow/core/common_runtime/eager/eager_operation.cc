@@ -517,17 +517,18 @@ string EagerOperation::DebugString() const {
   string out;
   VLOG(1) << "EagerOperation::DebugString() over " << this;
 
-  absl::StrAppend(&out, "Name: ", Name(), "\n");
-  absl::StrAppend(&out, "Device Name: [", device_name_, "]\n");
-  absl::StrAppend(&out, "Device: ", VariantDeviceDebugString(Device()), "\n");
+  strings::StrAppend(&out, "Name: ", Name(), "\n");
+  strings::StrAppend(&out, "Device Name: [", device_name_, "]\n");
+  strings::StrAppend(&out, "Device: ", VariantDeviceDebugString(Device()),
+                     "\n");
   for (const auto& input : inputs_) {
     VLOG(1) << "Input ptr: " << input;
-    absl::StrAppend(&out, "Input: ", input->DebugString(), "\n");
+    strings::StrAppend(&out, "Input: ", input->DebugString(), "\n");
   }
 
   NodeDef ndef;
   Attrs().FillAttrValueMap(ndef.mutable_attr());
-  absl::StrAppend(&out, "Attrs: ", ndef.DebugString(), "\n");
+  strings::StrAppend(&out, "Attrs: ", ndef.DebugString(), "\n");
   return out;
 }
 

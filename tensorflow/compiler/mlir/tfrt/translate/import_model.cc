@@ -57,7 +57,6 @@ limitations under the License.
 #include "tensorflow/compiler/mlir/tfrt/translate/tfrt_compile_options.h"
 #include "tensorflow/compiler/tf2xla/xla_op_registry.h"
 #include "xla/tsl/framework/device_type.h"
-#include "xla/tsl/platform/errors.h"
 #include "tensorflow/core/common_runtime/function_def_utils.h"
 #include "tensorflow/core/platform/env.h"
 #include "tensorflow/core/platform/status.h"
@@ -155,13 +154,19 @@ absl::Status ConvertTfMlirToRuntimeExecutable(
     tfrt_stub::FallbackState* fallback_state,
     std::vector<std::string>* added_xla_function_names) {
   mlir::StatusScopedDiagnosticHandler diag_handler(module.getContext());
+  absl::string_view checkpoint_path = model_context.checkpoint_path();
+  if (!checkpoint_path.empty()) {
+    TF_RETURN_IF_ERROR(
+        mlir::tf_saved_model::AddSessionInitializerAndInlineCheckpoint(
+            module, checkpoint_path));
+  }
   {
     mlir::PassManager pm(module.getContext());
     pm.addNestedPass<mlir::func::FuncOp>(
         mlir::tf_executor::CreateTFExecutorGraphPruningPass());
     pm.addNestedPass<mlir::func::FuncOp>(
         mlir::CreateExecutorDialectToFunctionalConversionPass());
-    if (!options.saved_model_dir.empty()) {
+    if (!options.saved_model_dir.empty() || !checkpoint_path.empty()) {
       pm.addPass(mlir::tf_saved_model::CreateAssetSinkingPass(
           options.saved_model_dir));
     }
@@ -204,18 +209,11 @@ absl::Status ConvertTfMlirToRuntimeExecutable(
         tensorflow::tf2xla::v2::RunFunctionTf2xlaClusteringBridge(
             module, /*is_supported_by_replicated_brige*/ true,
             /*is_in_fallback_enabled_mode=*/VLOG_IS_ON(1)));
-    if (VLOG_IS_ON(1)) {
-      tensorflow::DumpMlirOpToFile("after_tf2xla_clustering_bridge", module);
-    }
 
     TF_RETURN_IF_ERROR(
         tensorflow::tfrt_compiler::RunLowerClusterToRuntimeOpsPassPipeline(
             module, tsl::DeviceType(DEVICE_TPU_XLA_JIT)));
 
-    if (VLOG_IS_ON(1)) {
-      tensorflow::DumpMlirOpToFile("after_lower_cluster_to_runtime_ops",
-                                   module);
-    }
     TF_RETURN_IF_ERROR(
         tensorflow::tf2xla::v2::ExportFromTensorflowDialectToExecutor(module));
   } else if (options.device_target == TfrtDeviceInfraTarget::kTfFallback) {
@@ -287,7 +285,8 @@ absl::Status ConvertTfMlirToBef(
       [bef_buffer](mlir::PassManager& pm, mlir::ModuleOp module,
                    const tensorflow::TfrtPipelineOptions& options) {
         mlir::StatusScopedDiagnosticHandler diag_handler(module.getContext());
-        tensorflow::CreateTFInvariantOptimizationPipelineHelper(pm, options);
+        tensorflow::CreateTFExecutorToTFInvariantOptimizationPipelineHelper(
+            pm, options);
         tensorflow::CreateTfToTfrtPipeline(pm, options);
 
         if (mlir::failed(pm.run(module))) {

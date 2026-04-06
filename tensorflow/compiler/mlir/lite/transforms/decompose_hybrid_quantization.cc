@@ -49,7 +49,7 @@ class DecomposeHybridQuantizationPass
     : public impl::DecomposeHybridQuantizationPassBase<
           DecomposeHybridQuantizationPass> {
  public:
-  explicit DecomposeHybridQuantizationPass() = default;
+  explicit DecomposeHybridQuantizationPass() {}
   void runOnOperation() override;
 };
 

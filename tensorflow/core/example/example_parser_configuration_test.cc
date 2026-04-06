@@ -29,8 +29,7 @@ limitations under the License.
 namespace tensorflow {
 namespace {
 
-void ReadFileToStringOrDie(Env* env, const std::string& filename,
-                           std::string* output) {
+void ReadFileToStringOrDie(Env* env, const string& filename, string* output) {
   TF_CHECK_OK(ReadFileToString(env, filename, output));
 }
 
@@ -43,8 +42,8 @@ std::unique_ptr<Session> CreateSession() {
 class ExtractExampleParserConfigurationTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    std::string proto_string;
-    std::string filename =
+    string proto_string;
+    string filename =
         io::JoinPath(testing::TensorFlowSrcRoot(),
                      "core/example/testdata/parse_example_graph_def.pbtxt");
     ReadFileToStringOrDie(Env::Default(), filename, &proto_string);

@@ -18,10 +18,10 @@ limitations under the License.
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include "absl/status/status.h"
-#include "absl/status/status_matchers.h"
 #include "xla/stream_executor/cuda/cuda_platform_id.h"
 #include "xla/stream_executor/rocm/rocm_platform_id.h"
 #include "xla/tsl/platform/env.h"
+#include "xla/tsl/platform/status_matchers.h"
 #include "xla/tsl/platform/statusor.h"
 #include "xla/tsl/platform/threadpool.h"
 
@@ -40,29 +40,33 @@ struct StaticTestTrait {
   using Type = int;
 };
 
+using tsl::testing::IsOk;
+using tsl::testing::IsOkAndHolds;
+using tsl::testing::StatusIs;
+
 TEST(PlatformObjectRegistryTest, RegisterObject) {
   PlatformObjectRegistry registry;
 
   // Can register a simple kernel
   EXPECT_THAT(registry.RegisterObject<TestTrait>(
                   stream_executor::cuda::kCudaPlatformId, 42),
-              absl_testing::IsOk());
+              IsOk());
 
   // Can register another simple kernel - no clash
   EXPECT_THAT(registry.RegisterObject<OtherTestTrait>(
                   stream_executor::cuda::kCudaPlatformId, 42.0f),
-              absl_testing::IsOk());
+              IsOk());
 
   // Can register a different kernel under the same trait for a different
   // platform.
   EXPECT_THAT(registry.RegisterObject<TestTrait>(
                   stream_executor::rocm::kROCmPlatformId, 44),
-              absl_testing::IsOk());
+              IsOk());
 
   // Can't register a kernel if it already exists in the registry.
   EXPECT_THAT(registry.RegisterObject<TestTrait>(
                   stream_executor::cuda::kCudaPlatformId, 44),
-              absl_testing::StatusIs(absl::StatusCode::kAlreadyExists));
+              StatusIs(absl::StatusCode::kAlreadyExists));
 }
 
 TEST(PlatformObjectRegistryTest, RegisterObjectConcurrently) {
@@ -78,7 +82,7 @@ TEST(PlatformObjectRegistryTest, RegisterObjectConcurrently) {
     // Can register a simple kernel
     EXPECT_THAT(registry.RegisterObject<TestTrait>(
                     stream_executor::cuda::kCudaPlatformId, cuda_value),
-                absl_testing::IsOk());
+                IsOk());
   });
 
   pool.Schedule([&] {
@@ -86,7 +90,7 @@ TEST(PlatformObjectRegistryTest, RegisterObjectConcurrently) {
     // platform.
     EXPECT_THAT(registry.RegisterObject<TestTrait>(
                     stream_executor::rocm::kROCmPlatformId, 42),
-                absl_testing::IsOk());
+                IsOk());
   });
 }
 
@@ -95,21 +99,21 @@ TEST(PlatformObjectRegistryTest, FindObject) {
 
   ASSERT_THAT(registry.RegisterObject<TestTrait>(
                   stream_executor::cuda::kCudaPlatformId, 33),
-              absl_testing::IsOk());
+              IsOk());
 
   EXPECT_THAT(
       registry.FindObject<TestTrait>(stream_executor::cuda::kCudaPlatformId),
-      absl_testing::IsOkAndHolds(33));
+      IsOkAndHolds(33));
 
   // No registered kernel for ROCM.
   EXPECT_THAT(
       registry.FindObject<TestTrait>(stream_executor::rocm::kROCmPlatformId),
-      absl_testing::StatusIs(absl::StatusCode::kNotFound));
+      StatusIs(absl::StatusCode::kNotFound));
 
   // No registered kernel for the other trait.
   EXPECT_THAT(registry.FindObject<OtherTestTrait>(
                   stream_executor::cuda::kCudaPlatformId),
-              absl_testing::StatusIs(absl::StatusCode::kNotFound));
+              StatusIs(absl::StatusCode::kNotFound));
 }
 
 TEST(PlatformObjectRegistryTest, FindObjectConcurrently) {
@@ -120,20 +124,20 @@ TEST(PlatformObjectRegistryTest, FindObjectConcurrently) {
 
   ASSERT_THAT(registry.RegisterObject<TestTrait>(
                   stream_executor::cuda::kCudaPlatformId, 333),
-              absl_testing::IsOk());
+              IsOk());
 
   tsl::thread::ThreadPool pool(tsl::Env::Default(), "test_pool", 2);
 
   pool.Schedule([&] {
     EXPECT_THAT(
         registry.FindObject<TestTrait>(stream_executor::cuda::kCudaPlatformId),
-        absl_testing::IsOkAndHolds(333));
+        IsOkAndHolds(333));
   });
 
   pool.Schedule([&] {
     EXPECT_THAT(
         registry.FindObject<TestTrait>(stream_executor::cuda::kCudaPlatformId),
-        absl_testing::IsOkAndHolds(333));
+        IsOkAndHolds(333));
   });
 }
 
@@ -145,7 +149,7 @@ TEST(PlatformObjectRegistryTest, FindStaticallyRegisteredObject) {
   EXPECT_THAT(
       PlatformObjectRegistry::GetGlobalRegistry().FindObject<StaticTestTrait>(
           stream_executor::cuda::kCudaPlatformId),
-      absl_testing::IsOkAndHolds(142));
+      IsOkAndHolds(142));
 }
 
 TEST(PlatformObjectRegistryTest, FindObjectReturnsConstNonDanglingReference) {
@@ -153,7 +157,7 @@ TEST(PlatformObjectRegistryTest, FindObjectReturnsConstNonDanglingReference) {
 
   ASSERT_THAT(registry.RegisterObject<TestTrait>(
                   stream_executor::cuda::kCudaPlatformId, 33),
-              absl_testing::IsOk());
+              IsOk());
 
   TF_ASSERT_OK_AND_ASSIGN(
       const int& value,

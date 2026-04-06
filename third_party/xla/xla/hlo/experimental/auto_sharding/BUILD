@@ -1,8 +1,6 @@
 # Automatic sharding annotation
 
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("@rules_cc//cc:cc_test.bzl", "cc_test")
 load("//xla:py_strict.bzl", "py_strict_test")
 load("//xla:xla.default.bzl", "xla_cc_binary", "xla_cc_test", "xla_internal")
 load("//xla/tsl:tsl.bzl", "if_google")
@@ -39,7 +37,6 @@ cc_library(
         ":auto_sharding_device_mesh",
         ":auto_sharding_iopddl",
         ":auto_sharding_option",
-        ":auto_sharding_proto_cc",
         ":auto_sharding_solver",
         ":auto_sharding_strategy",
         ":auto_sharding_util",
@@ -87,7 +84,6 @@ cc_library(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
-        "@com_google_protobuf//:protobuf_lite",
         "@local_tsl//tsl/platform:errors",
         "@local_tsl//tsl/platform:status",
         "@local_tsl//tsl/platform:statusor",
@@ -145,7 +141,6 @@ cc_library(
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/time",
         "@com_google_ortools//ortools/linear_solver:linear_solver_cc_proto",
-        "@com_google_protobuf//:protobuf_lite",
         "@local_tsl//tsl/platform:fingerprint",
         "@local_tsl//tsl/platform:hash",
         "@local_tsl//tsl/platform:protobuf",
@@ -286,7 +281,6 @@ cc_library(
         "//xla/service/spmd:spmd_partitioner",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/log",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:span",
@@ -352,14 +346,9 @@ xla_cc_binary(
     compatible_with = get_compatible_with_libtpu_portable(),
     deps = [
         ":auto_sharding",
-        ":auto_sharding_option",
         "//xla/hlo/analysis:alias_info",
         "//xla/hlo/ir:hlo",
         "//xla/tools:hlo_module_loader",
-        "//xla/tsl/platform:env",
-        "//xla/tsl/platform:errors",
-        "//xla/tsl/platform:statusor",
-        "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@local_tsl//tsl/platform:platform_port",
     ],
@@ -465,7 +454,6 @@ xla_cc_test(
         "@com_google_absl//absl/status",
         "@com_google_googletest//:gtest",
         "@com_google_googletest//:gtest_main",
-        "@com_google_protobuf//:protobuf_lite",
         "@local_tsl//tsl/platform",
         "@local_tsl//tsl/platform:statusor",
     ] + if_google(["@com_google_ortools//ortools/linear_solver:linear_solver_scip"]),
@@ -484,7 +472,6 @@ cc_library(
     compatible_with = get_compatible_with_libtpu_portable(),
     deps = [
         "@com_google_absl//absl/numeric:int128",
-        "@com_google_absl//absl/random",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -498,8 +485,8 @@ cc_test(
     srcs = ["iopddl_test.cc"],
     deps = [
         ":iopddl_lib",
+        "//xla/tsl/platform:status_matchers",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:status_matchers",
         "@com_google_absl//absl/time",
         "@com_google_googletest//:gtest_main",
     ],
@@ -532,7 +519,6 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
-        "@llvm-project//llvm:Support",
         "@llvm-project//mlir:FuncDialect",
         "@llvm-project//mlir:IR",
         "@llvm-project//mlir:Pass",

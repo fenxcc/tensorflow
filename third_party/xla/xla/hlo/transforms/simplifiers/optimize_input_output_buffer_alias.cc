@@ -142,7 +142,7 @@ absl::StatusOr<bool> OptimizeInputOutputBufferAlias::Build(
   return changed;
 }
 
-absl::StatusOr<bool> OptimizeInputOutputBufferAlias::RunImpl(
+absl::StatusOr<bool> OptimizeInputOutputBufferAlias::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   // We exactly follow HloInputOutputAliasConfig::Verify to create input_shapes

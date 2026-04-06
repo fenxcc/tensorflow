@@ -112,7 +112,7 @@ absl::Status AllGatherDecomposer::DecomposeAllGather(
   return absl::OkStatus();
 }
 
-absl::StatusOr<bool> AllGatherDecomposer::RunImpl(
+absl::StatusOr<bool> AllGatherDecomposer::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   bool changed = false;

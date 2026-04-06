@@ -23,11 +23,12 @@ limitations under the License.
 #include <gtest/gtest.h>
 #include "absl/functional/any_invocable.h"
 #include "absl/status/status.h"
-#include "absl/status/status_matchers.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "xla/tsl/platform/env.h"
 #include "xla/tsl/platform/file_system.h"
+#include "xla/tsl/platform/status_matchers.h"
+#include "xla/tsl/platform/types.h"
 
 namespace stablehlo::quantization::io {
 namespace {
@@ -38,6 +39,8 @@ using ::testing::IsEmpty;
 using ::testing::Not;
 using ::testing::SizeIs;
 using ::testing::UnorderedElementsAre;
+using ::tsl::testing::IsOk;
+using ::tsl::testing::StatusIs;
 
 // A test-only derived class of `tsl::Env` which is broken. Used to cause
 // failure for the `CreateTmpDir` function. Each of the overridden member
@@ -47,23 +50,23 @@ class TestEnvBrokenFileSystem : public tsl::Env {
  public:
   TestEnvBrokenFileSystem() = default;
 
-  bool MatchPath(const std::string& path, const std::string& pattern) override {
+  bool MatchPath(const tsl::string& path, const tsl::string& pattern) override {
     return false;
   }
 
   void SleepForMicroseconds(int64_t micros) override {}
 
-  std::string GetRunfilesDir() override { return std::string("dummy_path"); }
+  tsl::string GetRunfilesDir() override { return tsl::string("dummy_path"); }
 
   int64_t GetCurrentThreadId() override { return 0; }
 
   tsl::Thread* StartThread(const tsl::ThreadOptions& thread_options,
-                           const std::string& name,
+                           const tsl::string& name,
                            absl::AnyInvocable<void()> fn) override {
     return nullptr;
   }
 
-  bool GetCurrentThreadName(std::string* name) override { return false; }
+  bool GetCurrentThreadName(tsl::string* name) override { return false; }
 
   void SchedClosure(absl::AnyInvocable<void()> closure) override {}
 
@@ -80,9 +83,9 @@ class TestEnvBrokenFileSystem : public tsl::Env {
     return absl::OkStatus();
   }
 
-  std::string FormatLibraryFileName(const std::string& name,
-                                    const std::string& version) override {
-    return std::string("dummy_path");
+  tsl::string FormatLibraryFileName(const tsl::string& name,
+                                    const tsl::string& version) override {
+    return tsl::string("dummy_path");
   }
 
   // This is the part that would break the `CreateTmpDir` function because it
@@ -93,7 +96,7 @@ class TestEnvBrokenFileSystem : public tsl::Env {
   }
 
  private:
-  void GetLocalTempDirectories(std::vector<std::string>* list) override {
+  void GetLocalTempDirectories(std::vector<tsl::string>* list) override {
     list->push_back("/tmp");
   }
 };
@@ -105,13 +108,13 @@ class TestEnvBrokenFileSystemAndNoLocalTempDirs
  private:
   // This is the part that essentially breaks the `GetLocalTmpFileName` function
   // because it doesn't provide any available temp dirs.
-  void GetLocalTempDirectories(std::vector<std::string>* list) override {}
+  void GetLocalTempDirectories(std::vector<tsl::string>* list) override {}
 };
 
 TEST(IoTest, GetLocalTmpFileNameGivesValidFileName) {
   absl::StatusOr<std::string> tmp_file_name = GetLocalTmpFileName();
 
-  ASSERT_THAT(tmp_file_name, absl_testing::IsOk());
+  ASSERT_THAT(tmp_file_name, IsOk());
   EXPECT_THAT(*tmp_file_name, Not(IsEmpty()));
 }
 
@@ -119,27 +122,26 @@ TEST(IoTest, GetLocalTmpFileNameWhenNoTempDirsReturnsInternalError) {
   TestEnvBrokenFileSystemAndNoLocalTempDirs broken_env;
   absl::StatusOr<std::string> tmp_file_name = GetLocalTmpFileName(&broken_env);
 
-  EXPECT_THAT(tmp_file_name, absl_testing::StatusIs(
-                                 absl::StatusCode::kInternal,
-                                 HasSubstr("Failed to create tmp file name")));
+  EXPECT_THAT(tmp_file_name,
+              StatusIs(absl::StatusCode::kInternal,
+                       HasSubstr("Failed to create tmp file name")));
 }
 
 TEST(IoTest, CreateTmpDirReturnsValidTmpPath) {
   absl::StatusOr<std::string> tmp_dir = CreateTmpDir();
 
-  ASSERT_THAT(tmp_dir, absl_testing::IsOk());
+  ASSERT_THAT(tmp_dir, IsOk());
 
   auto* const env = tsl::Env::Default();
-  EXPECT_THAT(env->FileExists(*tmp_dir), absl_testing::IsOk());
+  EXPECT_THAT(env->FileExists(*tmp_dir), IsOk());
 }
 
 TEST(IoTest, CreateTmpDirWhenInvalidPathReturnsInternalError) {
   TestEnvBrokenFileSystem test_env{};
   absl::StatusOr<std::string> tmp_dir = CreateTmpDir(&test_env);
 
-  EXPECT_THAT(tmp_dir,
-              absl_testing::StatusIs(absl::StatusCode::kInternal,
-                                     HasSubstr("Failed to create tmp dir")));
+  EXPECT_THAT(tmp_dir, StatusIs(absl::StatusCode::kInternal,
+                                HasSubstr("Failed to create tmp dir")));
 }
 
 TEST(IoTest, WriteStringToFile) {
@@ -148,14 +150,13 @@ TEST(IoTest, WriteStringToFile) {
 
   const absl::Status write_status =
       WriteStringToFile(dst_file_path, "test_string");
-  ASSERT_THAT(write_status, absl_testing::IsOk());
+  ASSERT_THAT(write_status, IsOk());
 
   auto* const env = tsl::Env::Default();
-  ASSERT_THAT(env->FileExists(dst_file_path), absl_testing::IsOk());
+  ASSERT_THAT(env->FileExists(dst_file_path), IsOk());
 
   std::string data{};
-  ASSERT_THAT(tsl::ReadFileToString(env, dst_file_path, &data),
-              absl_testing::IsOk());
+  ASSERT_THAT(tsl::ReadFileToString(env, dst_file_path, &data), IsOk());
 
   EXPECT_THAT(data, Eq("test_string"));
 }
@@ -173,29 +174,29 @@ TEST(IoTest, ReadFileToString) {
   // Test that the contents match.
   const absl::StatusOr<std::string> read_status =
       ReadFileToString(src_file_path);
-  ASSERT_THAT(read_status, absl_testing::IsOk());
+  ASSERT_THAT(read_status, IsOk());
   EXPECT_THAT(*read_status, Eq("test_string"));
 }
 
 TEST(IoTest, ListChildrenInDirectory) {
   absl::StatusOr<std::string> tmp_dir = CreateTmpDir();
 
-  ASSERT_THAT(tmp_dir, absl_testing::IsOk());
+  ASSERT_THAT(tmp_dir, IsOk());
 
   auto* const env = tsl::Env::Default();
-  EXPECT_THAT(env->FileExists(*tmp_dir), absl_testing::IsOk());
+  EXPECT_THAT(env->FileExists(*tmp_dir), IsOk());
 
   ASSERT_THAT(
       WriteStringToFile(absl::StrCat(*tmp_dir, "/tmp_file1"), "test_string"),
-      absl_testing::IsOk());
+      IsOk());
   ASSERT_THAT(
       WriteStringToFile(absl::StrCat(*tmp_dir, "/tmp_file2"), "test_string"),
-      absl_testing::IsOk());
+      IsOk());
   ASSERT_THAT(env->RecursivelyCreateDir(absl::StrCat(*tmp_dir, "/subdir")),
-              absl_testing::IsOk());
+              IsOk());
 
   absl::StatusOr<std::vector<std::string>> children = ListDirectory(*tmp_dir);
-  EXPECT_THAT(children, absl_testing::IsOk());
+  EXPECT_THAT(children, IsOk());
   EXPECT_THAT(children.value(), SizeIs(3));
   EXPECT_THAT(children.value(),
               UnorderedElementsAre("subdir", "tmp_file1", "tmp_file2"));

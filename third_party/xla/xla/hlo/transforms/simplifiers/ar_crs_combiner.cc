@@ -16,9 +16,7 @@ limitations under the License.
 #include "xla/hlo/transforms/simplifiers/ar_crs_combiner.h"
 
 #include <algorithm>
-#include <cstddef>
 #include <cstdint>
-#include <memory>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -31,6 +29,7 @@ limitations under the License.
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "xla/hlo/analysis/hlo_replication_analysis.h"
+#include "xla/hlo/ir/collective_op_group_mode.h"
 #include "xla/hlo/ir/hlo_casting_utils.h"
 #include "xla/hlo/ir/hlo_computation.h"
 #include "xla/hlo/ir/hlo_instruction.h"
@@ -44,9 +43,10 @@ limitations under the License.
 #include "xla/shape.h"
 #include "xla/shape_util.h"
 #include "xla/status_macros.h"
-#include "xla/tsl/platform/errors.h"
-#include "xla/tsl/platform/statusor.h"
 #include "xla/xla_data.pb.h"
+#include "tsl/platform/errors.h"
+#include "tsl/platform/status.h"
+#include "tsl/platform/statusor.h"
 
 namespace xla {
 namespace {
@@ -85,6 +85,8 @@ absl::StatusOr<bool> ReplaceReplicatedAllReduce(HloModule* module,
         if (replication_analysis->HloInstructionIsReplicatedAt(ar, {})) {
           VLOG(2) << "Replaced replicated all-reduce:" << ar->ToString();
           ar->set_channel_id(next_channel++);
+          ar->set_collective_op_group_mode(
+              CollectiveOpGroupMode::kCrossReplicaAndPartition);
           auto divisor =
               computation->AddInstruction(HloInstruction::CreateConstant(
                   LiteralUtil::CreateR0<float>(partition_count)));
@@ -107,51 +109,34 @@ absl::StatusOr<bool> ReplaceReplicatedAllReduce(HloModule* module,
 // belong to the same group.
 bool HasCombinableReplicaGroup(HloInstruction* hlo, int64_t num_partitions) {
   auto all_reduce = Cast<HloAllReduceInstruction>(hlo);
-  const std::vector<ReplicaGroup>& replica_groups =
-      all_reduce->replica_groups();
+  auto replica_groups = all_reduce->replica_groups();
   const int64_t replica_count = hlo->GetModule()->config().replica_count();
   CHECK(all_reduce->IsCrossModuleAllReduce());
 
-  const size_t num_replica_groups = replica_groups.size();
-  if (num_replica_groups != replica_count) {
-    return false;
-  }
-  if (all_reduce->use_global_device_ids() && num_replica_groups > 0) {
-    int marker = 0;
-    auto seen_partition_ids = std::make_unique<int[]>(num_partitions);
-    for (const ReplicaGroup& group : replica_groups) {
-      ++marker;
+  if (all_reduce->use_global_device_ids()) {
+    if (replica_groups.size() != replica_count) {
+      return false;
+    }
+    for (const auto& group : replica_groups) {
       if (group.replica_ids_size() != num_partitions) {
         return false;
       }
-      const int64_t group_replica_id0 = group.replica_ids(0);
-      const int64_t group_replica_id_start =
-          (group_replica_id0 / num_partitions) * num_partitions;
-      seen_partition_ids[group_replica_id0 - group_replica_id_start] = marker;
-      for (int64_t i = 1; i < num_partitions; ++i) {
-        const int64_t partition_id =
-            group.replica_ids(i) - group_replica_id_start;
-        if (partition_id < 0 || partition_id >= num_partitions ||
-            seen_partition_ids[partition_id] == marker) {
+      absl::flat_hash_set<int64_t> partition_ids;
+      int64_t replica_id = group.replica_ids(0) / num_partitions;
+      for (int64_t i = 0; i < num_partitions; ++i) {
+        if (group.replica_ids(i) / num_partitions != replica_id) {
           return false;
         }
-        seen_partition_ids[partition_id] = marker;
+        partition_ids.insert(group.replica_ids(i) % num_partitions);
       }
-      // If we come here then it is guaranteed that we have seen all replicas
-      // from 0 to num_partitions-1. This is because we mark a partition_id as
-      // seen iff we see a replica id in the range [0, num_partitions) for the
-      // first time. So, there is no need to check that all `seen_partition_ids`
-      // values are equal to `marker`.
-#ifndef NDEBUG
-      for (int64_t i = 0; i < num_partitions; ++i) {
-        CHECK_EQ(seen_partition_ids[i], marker)
-            << "Programming error: seen_partition_ids[" << i
-            << "] != " << marker;
+      if (partition_ids.size() != num_partitions) {
+        return false;
       }
-#endif  // NDEBUG
     }
+    return true;
   }
-  return true;
+
+  return replica_groups.size() == replica_count;
 }
 
 }  // namespace
@@ -577,8 +562,8 @@ absl::StatusOr<bool> ArCrsCombiner::RewriteGraph() {
       auto channel_id = all_reduce->channel_id();
       auto prev = all_reduce->mutable_operand(0);
       auto next = all_reduce->users()[0];
-      CHECK_OK(all_reduce->ReplaceUseWith(next, prev));
-      CHECK_OK(parent_computation->RemoveInstruction(all_reduce));
+      TF_CHECK_OK(all_reduce->ReplaceUseWith(next, prev));
+      TF_CHECK_OK(parent_computation->RemoveInstruction(all_reduce));
       while (!next->IsCrossReplicaAllReduce()) {
         switch (next->opcode()) {
           case HloOpcode::kBitcast:
@@ -597,7 +582,7 @@ absl::StatusOr<bool> ArCrsCombiner::RewriteGraph() {
             // other_operand is a cross-module AR, which can be eliminated.
             if (other_operand->IsCrossModuleAllReduce() &&
                 other_operand->user_count() == 1) {
-              CHECK_OK(other_operand->ReplaceAllUsesWith(
+              TF_CHECK_OK(other_operand->ReplaceAllUsesWith(
                   other_operand->mutable_operand(0)));
             } else {
               auto shape = other_operand->shape();
@@ -608,7 +593,7 @@ absl::StatusOr<bool> ArCrsCombiner::RewriteGraph() {
               auto division = parent_computation->AddInstruction(
                   HloInstruction::CreateBinary(shape, HloOpcode::kDivide,
                                                other_operand, divisor));
-              CHECK_OK(other_operand->ReplaceUseWith(next, division));
+              TF_CHECK_OK(other_operand->ReplaceUseWith(next, division));
             }
             break;
           }
@@ -626,12 +611,18 @@ absl::StatusOr<bool> ArCrsCombiner::RewriteGraph() {
       // combine ReplicaGroup configs using global ids here if we relax that
       // restriction.
       next->set_channel_id(channel_id);
+      HloAllReduceInstructionBase* next_ar =
+          Cast<HloAllReduceInstructionBase>(next);
+      next_ar->set_collective_op_group_mode(
+          next_ar->use_global_device_ids()
+              ? CollectiveOpGroupMode::kFlattenedID
+              : CollectiveOpGroupMode::kCrossReplicaAndPartition);
     }
   }
   return true;
 }
 
-absl::StatusOr<bool> ArCrsCombiner::RunImpl(
+absl::StatusOr<bool> ArCrsCombiner::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   call_graph_ = CallGraph::Build(module);

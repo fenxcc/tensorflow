@@ -627,14 +627,16 @@ class Delegate {
       if (!weight_cache_provider_->IsActive() &&
           (options_.weight_cache_file_path ||
            options_.weight_cache_file_descriptor > 0)) {
+        const char* const file_path = options_.weight_cache_file_path
+                                          ? options_.weight_cache_file_path
+                                          : "unknown path";
         // See TfLiteXNNPackDelegateOptions::weight_cache_file_descriptor
         // comment for > 0 check.
-        FileDescriptor fd;
-        if (options_.weight_cache_file_descriptor > 0) {
-          fd.Reset(options_.weight_cache_file_descriptor);
-        }
-        if (!weight_cache_provider_->LoadOrStartBuild(
-                options_.weight_cache_file_path, std::move(fd))) {
+        FileDescriptor fd(options_.weight_cache_file_descriptor > 0
+                              ? options_.weight_cache_file_descriptor
+                              : -1);
+        if (!weight_cache_provider_->LoadOrStartBuild(file_path,
+                                                      std::move(fd))) {
           TFLITE_LOG_PROD(tflite::TFLITE_LOG_ERROR,
                           "XNNPack weight cache could neither be loaded from "
                           "or saved to '%s'. Check that this location is "
@@ -691,12 +693,6 @@ class Delegate {
 #endif
   }
 
-  bool disable_dynamically_quantized_ops() const {
-    return (options_.flags &
-            TFLITE_XNNPACK_DELEGATE_FLAG_DISABLE_DYNAMICALLY_QUANTIZED_OPS) !=
-           0;
-  }
-
   bool enable_latest_operators() const {
 #ifdef XNNPACK_DELEGATE_USE_LATEST_OPS
     return true;
@@ -707,14 +703,6 @@ class Delegate {
   }
 
   bool enable_subgraph_reshaping() const {
-    if (options_.flags &
-        TFLITE_XNNPACK_DELEGATE_FLAG_ENABLE_SUBGRAPH_RESHAPING) {
-      TFLITE_LOG_PROD_ONCE(
-          tflite::TFLITE_LOG_ERROR,
-          "Subgraph reshaping is enabled by default, "
-          "TFLITE_XNNPACK_DELEGATE_FLAG_ENABLE_SUBGRAPH_RESHAPING is "
-          "deprecated and will be removed in the future.");
-    }
     return (options_.flags &
             TFLITE_XNNPACK_DELEGATE_FLAG_DISABLE_SUBGRAPH_RESHAPING) == 0;
   }
@@ -1148,7 +1136,7 @@ class Subgraph {
     }
 
     xnn_runtime_t runtime_ptr = nullptr;
-    uint32_t flags = XNN_FLAG_DONT_SPIN_WORKERS;
+    uint32_t flags = XNN_FLAG_YIELD_WORKERS;
     if (has_sparse_weights) {
       flags |= XNN_FLAG_HINT_SPARSE_INFERENCE;
     }
@@ -3246,10 +3234,8 @@ class Subgraph {
       const std::unordered_map<int, uint32_t>& input_output_tensors) {
     // Check the input tensor types.
     const TfLiteTensor& input_a = tensors[node->inputs->data[0]];
-    TF_LITE_ENSURE_STATUS(CheckTensorFloat32OrQUInt8Type(
-        delegate, logging_context, input_a, node->inputs->data[0], node_index));
-    const xnn_datatype input_a_datatype =
-        GetXNNPackDatatype(logging_context, input_a, node->inputs->data[0]);
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32Type(
+        logging_context, input_a, node->inputs->data[0], node_index));
     const TfLiteTensor& input_b = tensors[node->inputs->data[1]];
     TF_LITE_ENSURE_STATUS(CheckTensorFloat32OrQCInt8Type(
         delegate, logging_context, input_b,
@@ -3257,8 +3243,6 @@ class Subgraph {
             ? NumDimensions(&input_b) - 2
             : NumDimensions(&input_b) - 1,
         node->inputs->data[1], node_index));
-    const xnn_datatype input_b_datatype =
-        GetXNNPackDatatype(logging_context, input_b, node->inputs->data[1]);
 
     // Check whether input_a will be quantized dynamically.
     const bool dynamically_quantized =
@@ -3266,16 +3250,8 @@ class Subgraph {
 
     // Check the output tensor type.
     const TfLiteTensor& output_tensor = tensors[node->outputs->data[0]];
-    TF_LITE_ENSURE_STATUS(
-        CheckTensorFloat32OrQUInt8Type(delegate, logging_context, output_tensor,
-                                       node->outputs->data[0], node_index));
-
-    if ((input_a_datatype != input_b_datatype) && !dynamically_quantized) {
-      TF_LITE_MAYBE_KERNEL_LOG(
-          logging_context,
-          "unsupported mixed types in BATCH_MATMUL operator #%d", node_index);
-      return kTfLiteError;
-    }
+    TF_LITE_ENSURE_STATUS(CheckTensorFloat32Type(
+        logging_context, output_tensor, node->outputs->data[0], node_index));
 
     // Check whether the dimensions are compatible.
     const int num_dims_a = NumDimensions(&input_a);
@@ -3310,23 +3286,9 @@ class Subgraph {
         for (int i = 0; i < num_dims_a; ++i) {
           dims[i] = input_a.dims->data[i];
         }
-        xnn_status status = xnn_status_invalid_state;
-        if (input_a.type == kTfLiteInt8) {
-          const TfLiteAffineQuantization* quantization_params =
-              static_cast<const TfLiteAffineQuantization*>(
-                  input_a.quantization.params);
-          int32_t zero_point = quantization_params->zero_point->data[0];
-          status = xnn_define_quantized_tensor_value(
-              subgraph, xnn_datatype_qint8, zero_point,
-              quantization_params->scale->data[0], num_dims_a, dims.data(),
-              /*data=*/nullptr, XNN_INVALID_VALUE_ID,
-              /*flags=*/0, &new_id);
-        } else {
-          status = xnn_define_tensor_value(
-              subgraph, xnn_datatype_fp32, num_dims_a, dims.data(),
-              /*data=*/nullptr, XNN_INVALID_VALUE_ID, /*flags=*/0, &new_id);
-        }
-
+        xnn_status status = xnn_define_tensor_value(
+            subgraph, xnn_datatype_fp32, num_dims_a, dims.data(),
+            /*data=*/nullptr, XNN_INVALID_VALUE_ID, /*flags=*/0, &new_id);
         if (status != xnn_status_success) {
           return kTfLiteError;
         }
@@ -3617,10 +3579,9 @@ class Subgraph {
         logging_context, output_tensor, 4, node->outputs->data[0],
         BuiltinOperator_CONV_2D, node_index));
 
-    bool dynamically_quantized =
-        (!delegate.disable_dynamically_quantized_ops() &&
-         (input_tensor.type == kTfLiteFloat32 &&
-          filter_tensor.type == kTfLiteInt8));
+    bool dynamically_quantized = (delegate.enable_latest_operators() &&
+                                  (input_tensor.type == kTfLiteFloat32 &&
+                                   filter_tensor.type == kTfLiteInt8));
     if (input_tensor.type != output_tensor.type ||
         ((input_tensor.type != filter_tensor.type) && !dynamically_quantized)) {
       TF_LITE_MAYBE_KERNEL_LOG(
@@ -4540,11 +4501,10 @@ class Subgraph {
         CheckTensorFloat32OrQUInt8Type(delegate, logging_context, output_tensor,
                                        node->outputs->data[0], node_index));
 
-    bool dynamically_quantized =
-        (!delegate.disable_dynamically_quantized_ops() &&
-         (input_tensor.type == kTfLiteFloat32 &&
-          (filter_tensor.type == kTfLiteInt4 ||
-           filter_tensor.type == kTfLiteInt8)));
+    bool dynamically_quantized = (delegate.enable_latest_operators() &&
+                                  (input_tensor.type == kTfLiteFloat32 &&
+                                   (filter_tensor.type == kTfLiteInt4 ||
+                                    filter_tensor.type == kTfLiteInt8)));
     bool supported_srq = (input_tensor.type == kTfLiteInt8 &&
                           (filter_tensor.type == kTfLiteInt4 ||
                            filter_tensor.type == kTfLiteInt8));

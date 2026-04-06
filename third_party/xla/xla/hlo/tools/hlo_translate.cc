@@ -40,7 +40,6 @@ limitations under the License.
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/parser/hlo_parser.h"
 #include "xla/hlo/translate/hlo_to_mhlo/hlo_to_mlir_hlo.h"
-#include "xla/hlo/translate/register.h"
 #include "xla/hlo/translate/stablehlo.h"
 #include "xla/mlir_hlo/mhlo/transforms/passes.h"
 #include "xla/service/hlo.pb.h"
@@ -121,18 +120,15 @@ absl::StatusOr<mlir::OwningOpRef<mlir::ModuleOp>> GetModuleFromHLOText(
   auto status = ConvertHloToMlirHlo(*module, hlo_module.get(),
                                     /*import_all_computations=*/true,
                                     /*flatten_computation_args_result*/ true);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
   return module;
 }
 
 absl::StatusOr<mlir::OwningOpRef<mlir::ModuleOp>> GetModuleFromHLOProto(
     const std::string& content, mlir::MLIRContext* context, bool emit_mhlo) {
   xla::HloProto hlo_proto;
-  if (!LoadHloProto(content, &hlo_proto)) {
+  if (!LoadHloProto(content, &hlo_proto))
     return absl::InvalidArgumentError(kLoadHloError);
-  }
 
   // For emitting StableHLO, use new APIs by defualt.
   if (!emit_mhlo) {
@@ -146,9 +142,7 @@ absl::StatusOr<mlir::OwningOpRef<mlir::ModuleOp>> GetModuleFromHLOProto(
       ConvertHloToMlirHlo(module.get(), hlo_proto.mutable_hlo_module(),
                           /*import_all_computations=*/true,
                           /*flatten_computation_args_result=*/true);
-  if (!status.ok()) {
-    return status;
-  }
+  if (!status.ok()) return status;
   return module;
 }
 
@@ -169,9 +163,7 @@ mlir::OwningOpRef<mlir::ModuleOp> GetModuleFromHloInput(
 
   // Try HLO Text
   auto module_from_text = GetModuleFromHLOText(content, context, emit_mhlo);
-  if (module_from_text.ok()) {
-    return std::move(module_from_text).value();
-  }
+  if (module_from_text.ok()) return std::move(module_from_text).value();
   if (module_from_text.status().message().rfind(kLoadHloError, 0) != 0) {
     emitError() << "Failed to convert HLO to MLIR: "
                 << module_from_text.status().message();
@@ -181,9 +173,7 @@ mlir::OwningOpRef<mlir::ModuleOp> GetModuleFromHloInput(
   // Try HLO Proto
   auto module_from_proto =
       GetModuleFromHLOProto(std::string(content), context, emit_mhlo);
-  if (module_from_proto.ok()) {
-    return std::move(module_from_proto).value();
-  }
+  if (module_from_proto.ok()) return std::move(module_from_proto).value();
   if (module_from_text.status().message().rfind(kLoadHloError, 0) != 0) {
     emitError() << "Failed to convert HLO to MLIR: "
                 << module_from_proto.status().message();
@@ -204,9 +194,7 @@ static mlir::OwningOpRef<mlir::ModuleOp> HloToMlirTranslate(
   mlir::OwningOpRef<mlir::ModuleOp> module =
       GetModuleFromHloInput(sourceMgr, context, emit_mhlo);
 
-  if (!module) {
-    return nullptr;
-  }
+  if (!module) return nullptr;
 
   return module;
 }

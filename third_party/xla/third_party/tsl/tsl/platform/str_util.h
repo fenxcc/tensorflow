@@ -26,11 +26,15 @@ limitations under the License.
 #include "absl/strings/match.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
-#include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
 #include "xla/tsl/platform/macros.h"
 #include "xla/tsl/platform/types.h"
 #include "tsl/platform/stringpiece.h"
+
+// TODO: b/323943471 - This macro should eventually be provided by Abseil.
+#ifndef ABSL_DEPRECATE_AND_INLINE
+#define ABSL_DEPRECATE_AND_INLINE()
+#endif
 
 // Basic string utility routines
 namespace tsl {
@@ -40,6 +44,19 @@ namespace str_util {
 // escaped using C-style escape sequences.
 ABSL_DEPRECATE_AND_INLINE() inline std::string CEscape(absl::string_view src) {
   return absl::CEscape(src);
+}
+
+// Copies "source" to "dest", rewriting C-style escape sequences --
+// '\n', '\r', '\\', '\ooo', etc -- to their ASCII equivalents.
+//
+// Errors: Sets the description of the first encountered error in
+// 'error'. To disable error reporting, set 'error' to NULL.
+//
+// NOTE: Does not support \u or \U!
+ABSL_DEPRECATE_AND_INLINE()
+inline bool CUnescape(absl::string_view source, std::string* dest,
+                      std::string* error) {
+  return absl::CUnescape(source, dest, error);
 }
 
 // Removes any trailing whitespace from "*s".
@@ -197,6 +214,11 @@ ABSL_DEPRECATE_AND_INLINE()
 inline bool StrContains(absl::string_view haystack, absl::string_view needle) {
   return absl::StrContains(haystack, needle);
 }
+
+// Returns the length of the given null-terminated byte string 'str'.
+// Returns 'string_max_len' if the null character was not found in the first
+// 'string_max_len' bytes of 'str'.
+size_t Strnlen(const char* str, const size_t string_max_len);
 
 //   ----- NON STANDARD, TF SPECIFIC METHOD -----
 // Converts "^2ILoveYou!" to "i_love_you_". More specifically:

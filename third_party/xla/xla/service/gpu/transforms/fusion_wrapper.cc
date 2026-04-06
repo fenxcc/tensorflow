@@ -21,18 +21,12 @@ limitations under the License.
 namespace xla {
 namespace gpu {
 
-bool FusionWrapper::MustWrapInstruction(const HloInstruction& instruction) {
-  const HloOpcode opcode = instruction.opcode();
+bool FusionWrapper::MustWrapInstruction(HloOpcode opcode) {
   switch (opcode) {
     case HloOpcode::kAbs:
-    case HloOpcode::kAcos:
-    case HloOpcode::kAcosh:
-    case HloOpcode::kAsin:
-    case HloOpcode::kAsinh:
     case HloOpcode::kAdd:
     case HloOpcode::kAnd:
     case HloOpcode::kAtan2:
-    case HloOpcode::kAtanh:
     case HloOpcode::kBitcastConvert:
     case HloOpcode::kBroadcast:
     case HloOpcode::kCeil:
@@ -45,7 +39,6 @@ bool FusionWrapper::MustWrapInstruction(const HloInstruction& instruction) {
     case HloOpcode::kConvolution:
     case HloOpcode::kConvert:
     case HloOpcode::kCos:
-    case HloOpcode::kCosh:
     case HloOpcode::kDivide:
     case HloOpcode::kDot:
     case HloOpcode::kDynamicSlice:
@@ -87,7 +80,6 @@ bool FusionWrapper::MustWrapInstruction(const HloInstruction& instruction) {
     case HloOpcode::kShiftRightArithmetic:
     case HloOpcode::kSign:
     case HloOpcode::kSin:
-    case HloOpcode::kSinh:
     case HloOpcode::kSlice:
     case HloOpcode::kSqrt:
     case HloOpcode::kSubtract:

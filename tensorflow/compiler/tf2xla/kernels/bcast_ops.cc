@@ -66,11 +66,9 @@ class BCastArgsOp : public XlaOpKernel {
     Tensor output(val_type, TensorShape({len}));
     for (int64_t i = 0; i < len; ++i) {
       if (val_type == DT_INT32) {
-        output.flat<int32_t>()(i) =
-            static_cast<int32_t>(bcast.output_shape()[i]);
+        output.flat<int32>()(i) = static_cast<int32>(bcast.output_shape()[i]);
       } else {
-        output.flat<int64_t>()(i) =
-            static_cast<int64_t>(bcast.output_shape()[i]);
+        output.flat<int64>()(i) = static_cast<int64>(bcast.output_shape()[i]);
       }
     }
     ctx->SetConstantOutput(0, output);
@@ -131,9 +129,9 @@ class BCastGradArgsOp : public XlaOpKernel {
     Tensor constant(val_type, TensorShape({len}));
     for (int64_t i = 0; i < len; ++i) {
       if (val_type == DT_INT32) {
-        constant.flat<int32_t>()(i) = static_cast<int32_t>(v[i]);
+        constant.flat<int32>()(i) = static_cast<int32>(v[i]);
       } else {
-        constant.flat<int64_t>()(i) = static_cast<int64_t>(v[i]);
+        constant.flat<int64>()(i) = static_cast<int64>(v[i]);
       }
     }
     ctx->SetConstantOutput(idx, constant);

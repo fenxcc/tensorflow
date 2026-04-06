@@ -102,7 +102,7 @@ class SlidingWindowDatasetOp : public UnaryDatasetOpKernel {
     std::unique_ptr<IteratorBase> MakeIteratorInternal(
         const string& prefix) const override {
       return std::make_unique<Iterator>(
-          Iterator::Params{this, absl::StrCat(prefix, "::Slide")});
+          Iterator::Params{this, strings::StrCat(prefix, "::Slide")});
     }
 
     const DataTypeVector& output_dtypes() const override {
@@ -277,10 +277,11 @@ class SlidingWindowDatasetOp : public UnaryDatasetOpKernel {
           TF_RETURN_IF_ERROR(SaveInput(ctx, writer, input_impl_));
         }
         // Save buffer.
-        TF_RETURN_IF_ERROR(writer->WriteScalar("buffer_size", buffer_.size()));
+        TF_RETURN_IF_ERROR(writer->WriteScalar(strings::StrCat("buffer_size"),
+                                               buffer_.size()));
         for (int64_t i = 0; i < buffer_.size(); i++) {
           TF_RETURN_IF_ERROR(writer->WriteScalar(
-              absl::StrCat("buffer[", i, "]_size"), buffer_[i].size()));
+              strings::StrCat("buffer[", i, "]_size"), buffer_[i].size()));
           for (int64_t j = 0; j < buffer_[i].size(); j++) {
             TF_RETURN_IF_ERROR(writer->WriteTensor(
                 strings::StrCat("buffer[", i, "][", j, "]"), buffer_[i][j]));
@@ -299,12 +300,13 @@ class SlidingWindowDatasetOp : public UnaryDatasetOpKernel {
         }
         // Restore buffer.
         int64_t buffer_size = 0;
-        TF_RETURN_IF_ERROR(reader->ReadScalar("buffer_size", &buffer_size));
+        TF_RETURN_IF_ERROR(
+            reader->ReadScalar(strings::StrCat("buffer_size"), &buffer_size));
         buffer_.resize(buffer_size);
         for (int64_t i = 0; i < buffer_size; i++) {
           int64_t vector_size;
           TF_RETURN_IF_ERROR(reader->ReadScalar(
-              absl::StrCat("buffer[", i, "]_size"), &vector_size));
+              strings::StrCat("buffer[", i, "]_size"), &vector_size));
           buffer_[i].resize(vector_size);
           for (int64_t j = 0; j < vector_size; j++) {
             TF_RETURN_IF_ERROR(reader->ReadTensor(

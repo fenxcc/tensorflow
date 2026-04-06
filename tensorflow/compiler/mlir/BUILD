@@ -41,18 +41,6 @@ cc_library(
     ],
 )
 
-tf_cc_test(
-    name = "op_or_arg_name_mapper_test",
-    srcs = ["op_or_arg_name_mapper_test.cc"],
-    deps = [
-        ":op_or_arg_name_mapper",
-        "@com_google_absl//absl/strings",
-        "@com_google_googletest//:gtest_main",
-        "@llvm-project//mlir:IR",
-        "@llvm-project//mlir:Support",
-    ],
-)
-
 cc_library(
     name = "tf_mlir_opt_main",
     testonly = True,
@@ -77,8 +65,6 @@ cc_library(
         "//tensorflow/compiler/mlir/tf2xla/transforms:xla_legalize_tf",
         "@llvm-project//mlir:AllPassesAndDialects",
         "@llvm-project//mlir:MlirOptLib",
-        "@llvm-project//mlir:RegisterAllDialects",
-        "@llvm-project//mlir:RegisterAllPasses",
         "@llvm-project//mlir:Support",
         "@llvm-project//mlir:Transforms",
         "@local_xla//xla/mlir/framework/transforms:passes",
@@ -88,7 +74,10 @@ cc_library(
 
 cc_library(
     name = "passes",
-    visibility = ["//visibility:public"],
+    visibility = [
+        ":__subpackages__",
+        "//tensorflow/python:__subpackages__",
+    ],
     deps = [
         "@llvm-project//mlir:AffineDialect",
         "@llvm-project//mlir:QuantOps",
@@ -200,9 +189,6 @@ cc_library(
         "@llvm-project//mlir:IR",
         "@llvm-project//mlir:MlirOptLib",
         "@llvm-project//mlir:QuantOps",
-        "@llvm-project//mlir:RegisterAllDialects",
-        "@llvm-project//mlir:RegisterAllExtensions",
-        "@llvm-project//mlir:RegisterAllPasses",
         "@llvm-project//mlir:ShapeDialect",
         "@llvm-project//mlir:TensorDialect",
         "@llvm-project//mlir:TosaDialect",

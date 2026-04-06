@@ -16,15 +16,12 @@ limitations under the License.
 #include "tensorflow/core/common_runtime/graph_view.h"
 
 #include <atomic>
-#include <cstdint>
 #include <deque>
-#include <limits>
 #include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
-#include "absl/log/check.h"
 #include "tensorflow/core/common_runtime/device.h"
 #include "tensorflow/core/framework/node_def_util.h"
 #include "tensorflow/core/framework/op_kernel.h"
@@ -70,7 +67,7 @@ namespace {
 typedef std::tuple<int32, int32> OutputAndControlEdges;
 
 OutputAndControlEdges CountOutputEdges(const Node* n) {
-  DCHECK_LE(n->out_edges().size(), std::numeric_limits<int32_t>::max());
+  DCHECK_LE(n->out_edges().size(), kint32max);
   int32_t num_output_edges = 0;
   int32_t num_output_control_edges = 0;
   for (auto e : n->out_edges()) {
@@ -126,8 +123,7 @@ size_t GraphView::NodeItemBytes(const Node* n) {
 
 char* GraphView::InitializeNode(char* ptr, const Node* n) {
   const int id = n->id();
-  CHECK(node_offsets_[id] ==
-        std::numeric_limits<uint32_t>::max());  // Initial value in constructor
+  CHECK(node_offsets_[id] == kuint32max);  // Initial value in constructor
 
   const size_t bytes = NodeItemBytes(n);
   constexpr size_t kItemAlignment = sizeof(NodeItem*);
@@ -139,8 +135,7 @@ char* GraphView::InitializeNode(char* ptr, const Node* n) {
   // (versus 64 bits on most machines if we just stored an array of NodeItem*
   // pointers). Casting to int64 is needed on 32bit CPU to avoid comparing
   // values as "int" vs "size_t" in CHECK_LE.
-  CHECK_LE(static_cast<int64_t>(ptr - space_),
-           std::numeric_limits<uint32_t>::max());
+  CHECK_LE(static_cast<int64_t>(ptr - space_), kuint32max);
   const uint32 offset = static_cast<uint32>(ptr - space_);
   node_offsets_[id] = offset;
   ptr += bytes;
@@ -255,18 +250,18 @@ absl::Status GraphView::Initialize(const Graph* g) {
   num_nodes_ = num_nodes;
   size_t total_bytes = 0;
   for (const Node* n : g->nodes()) {
-    if (n->out_edges().size() > std::numeric_limits<int32_t>::max()) {
+    if (n->out_edges().size() > kint32max) {
       return errors::InvalidArgument(
-          "The executor cannot handle nodes with more than ",
-          std::numeric_limits<int32_t>::max(), " output edges. Node ",
-          n->name(), " had ", n->out_edges().size(), " output edges.");
+          "The executor cannot handle nodes with more than ", kint32max,
+          " output edges. Node ", n->name(), " had ", n->out_edges().size(),
+          " output edges.");
     }
     total_bytes += NodeItemBytes(n);
   }
 
   node_offsets_ = new uint32[num_nodes];
   for (int i = 0; i < num_nodes; i++) {
-    node_offsets_[i] = std::numeric_limits<uint32_t>::max();
+    node_offsets_[i] = kuint32max;
   }
 
   space_ = new char[total_bytes];  // NodeItem objects are allocated here

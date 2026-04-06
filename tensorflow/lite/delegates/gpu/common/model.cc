@@ -20,7 +20,6 @@ limitations under the License.
 #include <algorithm>
 #include <map>
 #include <memory>
-#include <string>
 #include <utility>
 #include <vector>
 
@@ -531,26 +530,16 @@ absl::Status ConnectTwoNodes(GraphFloat32* graph, const Node* from_node,
 }
 
 absl::Status CheckBatchSizeForAllValues(const GraphFloat32& model) {
-  std::vector<Value*> values = model.values();
-  if (values.empty()) return absl::OkStatus();
-  std::vector<Value*> offending_values;
-  const int32_t b = values[0]->tensor.shape.b;
-  for (auto value : values) {
+  if (model.values().empty()) return absl::OkStatus();
+  const int32_t b = model.values()[0]->tensor.shape.b;
+  for (auto value : model.values()) {
     if (value->tensor.shape.b != b) {
-      offending_values.push_back(value);
+      return absl::InvalidArgumentError(
+          absl::StrCat("Batch size mismatch, expected ", b, " but got ",
+                       value->tensor.shape.b));
     }
   }
-  if (offending_values.empty()) return absl::OkStatus();
-
-  std::string error_message = absl::StrCat(
-      "Batch size mismatch, expected ", b, " but got ", offending_values.size(),
-      " values with divergent batch sizes: ");
-  for (const Value* value : offending_values) {
-    absl::StrAppend(&error_message, "\n  id:", value->id, " shape:[",
-                    value->tensor.shape.b, ", ", value->tensor.shape.h, ", ",
-                    value->tensor.shape.w, ", ", value->tensor.shape.c, "]");
-  }
-  return absl::InvalidArgumentError(error_message);
+  return absl::OkStatus();
 }
 
 }  // namespace gpu

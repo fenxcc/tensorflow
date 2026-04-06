@@ -18,9 +18,6 @@
 #define XLA_HLO_TOOLS_HLO_DIFF_HLO_GUMGRAPH_DIFF_H_
 
 #include <memory>
-#include <string>
-#include <utility>
-#include <vector>
 
 #include "absl/status/statusor.h"
 #include "xla/hlo/ir/hlo_instruction.h"
@@ -37,9 +34,6 @@ namespace hlo_diff {
 struct DiffOptions {
   HloGumgraphFingerprintOptions fingerprint_options;
   MatchOptions match_options;
-  bool run_eval = false;
-  std::vector<std::pair<std::string, std::string>> manual_mappings;
-  bool precompute_instruction_dependencies = true;
 };
 
 struct HloGumgraphDiffResults {
@@ -51,7 +45,7 @@ struct HloGumgraphDiffResults {
 // Compares two HLO modules, computes and returns differences.
 absl::StatusOr<HloGumgraphDiffResults> ComputeDiff(
     const HloModule& left, const HloModule& right,
-    const DiffOptions& options = {});
+    const DiffOptions& options = {}, bool run_eval = false);
 
 }  // namespace hlo_diff
 }  // namespace xla

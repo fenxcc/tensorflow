@@ -18,18 +18,11 @@ limitations under the License.
 #include "xla/python/ifrt/test_util.h"
 
 int main(int argc, char** argv) {
+  // CpuBuffer::ToLiteral() currently does not respect the layout of the
+  // destination literal.
   static constexpr absl::string_view kFilter =
-      // CpuBuffer::ToLiteral() currently does not respect the layout of the
-      // destination literal.
       "-ArrayImplTest."
-      "MakeArrayFromHostBufferAndCopyToHostBufferWithByteStrides:"
-      // Arrays created using `MakeArraysFromHostBufferShards()` do not indicate
-      // correct custom layouts even if the given layout is a concrete default
-      // layout. PjRt-IFRT uses `ClientMakeArraysFromHostBufferShards()`
-      // internally, which lowers `MakeArraysFromHostBufferShards()` call into
-      // legacy API calls that do not yet support custom layouts, and thus the
-      // output arrays only can have default layouts.
-      "ArrayImplTest.MakeArraysFromHostBufferShardsWithLayout";
+      "MakeArrayFromHostBufferAndCopyToHostBufferWithByteStrides";
   xla::ifrt::test_util::SetTestFilterIfNotUserSpecified(kFilter);
 
   testing::InitGoogleTest(&argc, argv);

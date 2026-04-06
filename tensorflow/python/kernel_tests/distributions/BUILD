@@ -27,6 +27,7 @@ cuda_py_strict_test(
     size = "medium",
     srcs = ["util_test.py"],
     shard_count = 3,
+    xla_enable_strict_auto_jit = False,  # TODO(b/144920376)
     deps = [
         "//tensorflow/python/eager:context",
         "//tensorflow/python/framework:constant_op",

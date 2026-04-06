@@ -20,7 +20,6 @@ lit_test_suite(
             "simple.mlir",
             "stablehlo.mlir",
             "stablehlo_invalid.mlir",
-            "stablehlo_prepare_for_export.mlir",
             "stablehlo_unary_elementwise.mlir",
             "stablehlo_while.mlir",
             "stablehlo_while_free_vars.mlir",

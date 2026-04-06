@@ -3725,10 +3725,8 @@ def batch_set_value(tuples):
         get_session().run(assign_ops, feed_dict=feed_dict)
 
 
-if get_value.__doc__ is not None:
-  get_value.__doc__ = get_value.__doc__.format(snippet=_VALUE_SET_CODE_STRING)
-if set_value.__doc__ is not None:
-  set_value.__doc__ = set_value.__doc__.format(snippet=_VALUE_SET_CODE_STRING)
+get_value.__doc__ = get_value.__doc__.format(snippet=_VALUE_SET_CODE_STRING)
+set_value.__doc__ = set_value.__doc__.format(snippet=_VALUE_SET_CODE_STRING)
 
 
 @dispatch.add_dispatch_support

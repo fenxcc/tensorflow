@@ -20,7 +20,6 @@ limitations under the License.
 #include "absl/log/check.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "xla/hlo/analysis/alias_info.h"
 #include "xla/hlo/ir/hlo_module.h"
 #include "xla/hlo/pass/hlo_pass_interface.h"
 #include "xla/service/float_support.h"
@@ -39,25 +38,23 @@ namespace xla {
 // changed made by this pass.
 class BFloat16ConversionFolding : public HloModulePass {
  public:
-  BFloat16ConversionFolding(const FloatSupport* bfloat16_support,
-                            const AliasInfo* alias_info)
-      : bfloat16_support_(bfloat16_support), alias_info_(alias_info) {
+  explicit BFloat16ConversionFolding(const FloatSupport* bfloat16_support)
+      : bfloat16_support_(bfloat16_support) {
     DCHECK(bfloat16_support->LowPrecisionType() == BF16);
   }
 
   ~BFloat16ConversionFolding() override = default;
   absl::string_view name() const override { return "bfloat16-fold"; }
 
- protected:
   // Run BF16 conversion folding on the given computation. Returns whether the
   // computation was changed.
-  absl::StatusOr<bool> RunImpl(
+  using HloPassInterface::Run;
+  absl::StatusOr<bool> Run(
       HloModule* module,
       const absl::flat_hash_set<absl::string_view>& execution_threads) override;
 
  private:
   const FloatSupport* bfloat16_support_;
-  const AliasInfo* alias_info_;
 };
 
 }  // namespace xla

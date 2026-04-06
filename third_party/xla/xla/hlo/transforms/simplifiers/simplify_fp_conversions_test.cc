@@ -19,14 +19,14 @@ limitations under the License.
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include "absl/status/status_matchers.h"
 #include "absl/strings/string_view.h"
 #include "xla/hlo/ir/hlo_computation.h"
 #include "xla/hlo/ir/hlo_instruction.h"
 #include "xla/hlo/ir/hlo_module.h"
 #include "xla/hlo/testlib/hlo_hardware_independent_test_base.h"
 #include "xla/hlo/utils/hlo_matchers.h"
-#include "xla/tsl/platform/statusor.h"
+#include "tsl/platform/status_matchers.h"
+#include "tsl/platform/statusor.h"
 
 namespace xla {
 namespace {
@@ -34,6 +34,7 @@ namespace {
 namespace op = xla::testing::opcode_matchers;
 
 using ::testing::AllOf;
+using ::tsl::testing::IsOkAndHolds;
 
 using SimplifyFPConversionsTest = HloHardwareIndependentTestBase;
 
@@ -51,7 +52,7 @@ TEST_F(SimplifyFPConversionsTest, DoesNotChangeSingleConvert) {
                           ParseAndReturnVerifiedModule(kModuleStr));
 
   SimplifyFPConversions simplifier;
-  EXPECT_THAT(simplifier.Run(module.get()), absl_testing::IsOkAndHolds(false));
+  EXPECT_THAT(simplifier.Run(module.get()), IsOkAndHolds(false));
 }
 
 TEST_F(SimplifyFPConversionsTest, SimplifiesF32ToBF16ToF32) {
@@ -69,7 +70,7 @@ TEST_F(SimplifyFPConversionsTest, SimplifiesF32ToBF16ToF32) {
                           ParseAndReturnVerifiedModule(kModuleStr));
 
   SimplifyFPConversions simplifier;
-  EXPECT_THAT(simplifier.Run(module.get()), absl_testing::IsOkAndHolds(true));
+  EXPECT_THAT(simplifier.Run(module.get()), IsOkAndHolds(true));
   EXPECT_THAT(module->entry_computation()->root_instruction(),
               op::Tuple(op::Parameter(0)));
 }
@@ -90,7 +91,7 @@ TEST_F(SimplifyFPConversionsTest, SimplifiesF64ToF16ToF32ToBF16) {
                           ParseAndReturnVerifiedModule(kModuleStr));
 
   SimplifyFPConversions simplifier;
-  EXPECT_THAT(simplifier.Run(module.get()), absl_testing::IsOkAndHolds(true));
+  EXPECT_THAT(simplifier.Run(module.get()), IsOkAndHolds(true));
   EXPECT_THAT(
       module->entry_computation()->root_instruction(),
       op::Tuple(AllOf(op::Shape("bf16[2,3]"), op::Convert(op::Parameter(0)))));

@@ -16,7 +16,6 @@ limitations under the License.
 #ifndef XLA_PYTHON_IFRT_PROXY_CLIENT_GLOBAL_FLAGS_H_
 #define XLA_PYTHON_IFRT_PROXY_CLIENT_GLOBAL_FLAGS_H_
 
-#include <cstdint>
 #include <ostream>
 
 namespace xla {
@@ -37,12 +36,6 @@ struct GlobalClientFlags {
 
   // TODO(b/393445969): Implement faster is_delete without needing a hack.
   bool array_is_deleted_hack;
-
-  // Zero or negative values are interpreted as no maximum.
-  int grpc_max_ongoing_host_buffer_stores;
-  int grpc_max_ongoing_host_buffer_lookups;
-
-  int64_t grpc_large_transfer_optimization_threshold_bytes;
 };
 
 GlobalClientFlags* GetGlobalClientFlags();
@@ -51,13 +44,7 @@ inline std::ostream& operator<<(std::ostream& os, GlobalClientFlags flags) {
   return os << "xla::ifrt::proxy::GlobalClientFlags{"
             << "synchronous_host_buffer_store="
             << flags.synchronous_host_buffer_store << ","
-            << "array_is_deleted_hack=" << flags.array_is_deleted_hack << ","
-            << "grpc_max_ongoing_host_buffer_stores="
-            << flags.grpc_max_ongoing_host_buffer_stores << ","
-            << "grpc_max_ongoing_host_buffer_lookups="
-            << flags.grpc_max_ongoing_host_buffer_lookups << ","
-            << "grpc_large_transfer_optimization_threshold_bytes="
-            << flags.grpc_large_transfer_optimization_threshold_bytes << "}";
+            << "array_is_deleted_hack=" << flags.array_is_deleted_hack << "}";
 }
 
 }  // namespace proxy

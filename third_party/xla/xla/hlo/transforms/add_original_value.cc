@@ -15,6 +15,8 @@ limitations under the License.
 
 #include "xla/hlo/transforms/add_original_value.h"
 
+#include <memory>
+
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
@@ -26,7 +28,7 @@ limitations under the License.
 
 namespace xla {
 
-absl::StatusOr<bool> AddOriginalValue::RunImpl(
+absl::StatusOr<bool> AddOriginalValue::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   bool changed = false;

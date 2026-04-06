@@ -221,7 +221,7 @@ class GraphView {
     DCHECK_GE(id, 0);
     DCHECK_LT(id, num_nodes_);
     uint32 offset = node_offsets_[id];
-    return ((offset == std::numeric_limits<uint32_t>::max())
+    return ((offset == kuint32max)
                 ? nullptr
                 : reinterpret_cast<NodeItem*>(space_ + node_offsets_[id]));
   }
@@ -233,7 +233,7 @@ class GraphView {
     DCHECK_GE(id, 0);
     DCHECK_LT(id, num_nodes_);
     uint32 offset = node_offsets_[id];
-    DCHECK_NE(offset, std::numeric_limits<uint32_t>::max());
+    DCHECK_NE(offset, kuint32max);
     return *reinterpret_cast<NodeItem*>(space_ + node_offsets_[id]);
   }
 

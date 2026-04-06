@@ -21,10 +21,8 @@ limitations under the License.
 #include <string>
 #include <unordered_map>
 
-#include "absl/status/status.h"
 #include "absl/strings/escaping.h"
 #include "absl/strings/match.h"
-#include "absl/strings/str_cat.h"
 #include "absl/strings/str_split.h"
 #include "absl/synchronization/mutex.h"
 #include "grpcpp/create_channel.h"
@@ -60,8 +58,8 @@ absl::Status ValidateHostPortPair(const string& host_port) {
   auto colon_index = host_port.find_last_of(':');
   if (!absl::SimpleAtoi(host_port.substr(colon_index + 1), &port) ||
       host_port.substr(0, colon_index).find('/') != string::npos) {
-    return absl::InvalidArgumentError(absl::StrCat(
-        "Could not interpret \"", host_port, "\" as a host-port pair."));
+    return errors::InvalidArgument("Could not interpret \"", host_port,
+                                   "\" as a host-port pair.");
   }
   return absl::OkStatus();
 }
@@ -172,8 +170,8 @@ ChannelCreationFunction ConvertToChannelCreationFunction(
 absl::Status GrpcChannelSpec::AddHostPortsJob(
     const string& job_id, const std::map<int, string>& host_ports) {
   if (!job_ids_.insert(job_id).second) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Duplicate job ID in cluster specification: ", job_id));
+    return errors::InvalidArgument(
+        "Duplicate job ID in cluster specification: ", job_id);
   }
   for (const auto& id_host_port : host_ports) {
     TF_RETURN_IF_ERROR(ValidateHostPortPair(id_host_port.second));
@@ -215,7 +213,7 @@ class MultiGrpcChannelCache : public CachingGrpcChannelCache {
   }
 
   string TranslateTask(const string& target) override {
-    absl::MutexLock l(mu_);  // could use reader lock
+    absl::MutexLock l(&mu_);  // could use reader lock
     GrpcChannelCache* cache = gtl::FindPtrOrNull(target_caches_, target);
     if (cache == nullptr) {
       for (GrpcChannelCache* c : caches_) {
@@ -237,7 +235,7 @@ class MultiGrpcChannelCache : public CachingGrpcChannelCache {
     for (GrpcChannelCache* cache : caches_) {
       SharedGrpcChannelPtr ch(cache->FindWorkerChannel(target));
       if (ch) {
-        absl::MutexLock l(mu_);
+        absl::MutexLock l(&mu_);
         target_caches_.insert({target, cache});
         return ch;
       }

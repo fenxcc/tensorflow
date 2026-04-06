@@ -67,6 +67,7 @@ for the directory layout:
                 *   bufferize_tiled_loop.cc
                 *   bufferize_tiled_loop.h
             *   ...
+    *   lhlo_gpu/
     *   mhlo/
         *   mhlo-opt.cc
         *   analysis/

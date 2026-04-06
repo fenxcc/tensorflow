@@ -242,7 +242,7 @@ void CollectiveParamResolverLocal::CompleteGroupLocal(
           if (VLOG_IS_ON(1)) {
             string dev_buf;
             for (const auto& m : gr->group.members) {
-              absl::StrAppend(&dev_buf, ",", m.device.name());
+              strings::StrAppend(&dev_buf, ",", m.device.name());
             }
             VLOG(1) << "CompleteGroupLocal group_key=" << gr->group.group_key
                     << " group_size=" << gr->group.group_size << " (current"
@@ -578,7 +578,7 @@ void CollectiveParamResolverLocal::CompleteDefaultRanking(CollGroupParams* gp) {
   if (VLOG_IS_ON(2)) {
     string buf;
     for (const auto& m : new_members)
-      absl::StrAppend(&buf, "\n", m.device.name());
+      strings::StrAppend(&buf, "\n", m.device.name());
     VLOG(2) << "Optimized device order for group " << gp->group_key << ": "
             << buf;
   }

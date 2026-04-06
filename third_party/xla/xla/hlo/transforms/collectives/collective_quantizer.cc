@@ -318,10 +318,8 @@ absl::StatusOr<bool> MatchDequantization(HloInstruction* instr) {
     // partitions, not replicas.
     TF_ASSIGN_OR_RETURN(CollectiveOpGroupMode group_mode,
                         GetCollectiveOpGroupMode(instr));
-    if (group_mode !=
-            CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_CROSS_PARTITION &&
-        group_mode !=
-            CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_FLATTENED_ID) {
+    if (group_mode != CollectiveOpGroupMode::kCrossPartition &&
+        group_mode != CollectiveOpGroupMode::kFlattenedID) {
       return false;
     }
     TF_ASSIGN_OR_RETURN(
@@ -389,10 +387,8 @@ absl::StatusOr<bool> MatchQuantization(HloInstruction* instr) {
     // partitions, not replicas.
     TF_ASSIGN_OR_RETURN(CollectiveOpGroupMode group_mode,
                         GetCollectiveOpGroupMode(instr));
-    if (group_mode !=
-            CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_CROSS_PARTITION &&
-        group_mode !=
-            CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_FLATTENED_ID) {
+    if (group_mode != CollectiveOpGroupMode::kCrossPartition &&
+        group_mode != CollectiveOpGroupMode::kFlattenedID) {
       return false;
     }
     TF_ASSIGN_OR_RETURN(
@@ -446,7 +442,7 @@ absl::StatusOr<bool> MatchQuantization(HloInstruction* instr) {
 
 }  // namespace
 
-absl::StatusOr<bool> CollectiveQuantizer::RunImpl(
+absl::StatusOr<bool> CollectiveQuantizer::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   bool changed = false;

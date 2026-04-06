@@ -49,6 +49,10 @@ func.func @caller(%a: f32, %b: f32) -> f32 {
 // CHECK: %[[D:.*]] = xla.pure_call @add
 // CHECK: arith.addf %[[C]], %[[D]]
 
+// CHECK-CSE: @caller
+// CHECK-CSE: %[[C:.*]] = xla.pure_call @add
+// CHECK-CSE: arith.addf %[[C]], %[[C]]
+
 // -----
 
 #map0 = #xla.indexing_map<"(d0, d1)[s0] -> (d0, d1 + s0),"
@@ -167,12 +171,3 @@ func.func @workgroup_id_op() -> (index, index, index) {
 // CHECK: [[WORKGROUP_ID_X:.*]] = xla.workgroup_id x {xla.range = [0 : index, 1023 : index]}
 // CHECK: [[WORKGROUP_ID_Y:.*]] = xla.workgroup_id y
 // CHECK: [[WORKGROUP_ID_Z:.*]] = xla.workgroup_id z
-
-// -----
-
-func.func @get_dynamic_dim_size(%in: tensor<16x8x4xf32>) -> (i32) {
-  %out = xla.get_dynamic_dim_size %in 1 : tensor<16x8x4xf32>
-  func.return %out : i32
-}
-// CHECK-LABEL: @get_dynamic_dim_size
-// CHECK: xla.get_dynamic_dim_size

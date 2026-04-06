@@ -15,9 +15,7 @@ limitations under the License.
 
 #include "xla/stream_executor/cuda/composite_compilation_provider.h"
 
-#include <algorithm>
 #include <memory>
-#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -31,8 +29,7 @@ limitations under the License.
 #include "absl/types/span.h"
 #include "xla/stream_executor/cuda/compilation_options.h"
 #include "xla/stream_executor/cuda/compilation_provider.h"
-#include "xla/stream_executor/cuda/cuda_compute_capability.h"
-#include "xla/tsl/platform/statusor.h"
+#include "xla/stream_executor/device_description.h"
 
 namespace stream_executor::cuda {
 
@@ -108,30 +105,6 @@ absl::StatusOr<Assembly> CompositeCompilationProvider::CompileAndLink(
   }
   return compile_and_link_compilation_provider_->CompileAndLink(cc, inputs,
                                                                 options);
-}
-
-absl::StatusOr<int> CompositeCompilationProvider::GetLatestPtxIsaVersion()
-    const {
-  std::optional<int> latest_supported_version;
-  for (const auto& provider : providers_) {
-    TF_ASSIGN_OR_RETURN(int provider_version,
-                        provider->GetLatestPtxIsaVersion());
-    if (!latest_supported_version.has_value()) {
-      latest_supported_version = provider_version;
-      continue;
-    }
-
-    // For a composite compilation provider, the latest supported version is
-    // the minimum of the latest supported versions of all the providers.
-    latest_supported_version =
-        std::min(*latest_supported_version, provider_version);
-  }
-
-  if (!latest_supported_version.has_value()) {
-    return absl::UnavailableError("No providers registered for " + name());
-  }
-
-  return *latest_supported_version;
 }
 
 }  // namespace stream_executor::cuda

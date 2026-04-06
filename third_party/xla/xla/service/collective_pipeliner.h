@@ -108,10 +108,7 @@ class CollectivePipeliner : public HloModulePass {
     bool should_add_loop_invariant_op_in_chain = false;
     // Postprocessing hook which runs for every successfully pipelined op.
     HloPostprocessor postprocess_pipelined_ops;
-    int64_t collective_size_threshold_to_delay_sinking = INT64_MAX;
-    bool delay_sinking_large_collectives = true;
-    // When cloning collectives, use a unique channel id for each clone.
-    bool unique_channel_id = true;
+    int64_t collective_size_threshold_to_stop_sinking = INT64_MAX;
   };
   static const char* const kInsertedByPreviousStep;
   static const char* const kSunkByPreviousStep;
@@ -152,13 +149,13 @@ class CollectivePipeliner : public HloModulePass {
       HloModule* module,
       const absl::flat_hash_set<absl::string_view>& execution_threads);
 
- protected:
-  absl::StatusOr<bool> RunImpl(
+  using HloPassInterface::Run;
+  absl::StatusOr<bool> Run(
       HloModule* module,
       const absl::flat_hash_set<absl::string_view>& execution_threads) override;
 
  private:
-  Config config_;
+  const Config config_;
 };
 
 }  // namespace xla

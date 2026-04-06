@@ -21,7 +21,7 @@ limitations under the License.
 
 #include "xla/tsl/platform/logging.h"
 
-#if !defined(_WIN32)
+#if !defined(PLATFORM_WINDOWS)
 #include <dlfcn.h>
 #endif
 

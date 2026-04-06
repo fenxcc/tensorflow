@@ -39,23 +39,21 @@ limitations under the License.
 
 namespace xla::cpu {
 
-absl::StatusOr<bool> LlvmKernelAutotuner::RunImpl(
+absl::StatusOr<bool> LlvmKernelAutotuner::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   TF_ASSIGN_OR_RETURN(auto compiler,
                       CpuCodegenBackend::CreateBackendCompiler());
   TF_ASSIGN_OR_RETURN(auto backend, LlvmKernelBackend::Create(compiler.get()));
+
   std::unique_ptr<Profiler> profiler = CpuProfiler::Create(ProfileOptions());
 
   std::vector<std::unique_ptr<CodegenBackend>> codegen_backends;
   codegen_backends.push_back(std::move(backend));
 
-  AutotuneConfig autotune_config;
-  autotune_config.check_buffers = false;
   TF_ASSIGN_OR_RETURN(std::unique_ptr<Autotuner> autotuner,
                       Autotuner::Create(std::move(codegen_backends),
-                                        std::move(profiler), autotune_config,
-                                        /*cache=*/nullptr));
+                                        std::move(profiler), AutotuneConfig()));
 
   bool hlo_changed = false;
   for (HloComputation* computation : module->computations()) {

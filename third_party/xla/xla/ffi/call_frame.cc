@@ -34,7 +34,6 @@ limitations under the License.
 #include "xla/ffi/api/api.h"
 #include "xla/ffi/api/c_api.h"
 #include "xla/ffi/api/c_api_internal.h"  // IWYU pragma: keep
-#include "xla/ffi/attribute_map.h"
 #include "xla/stream_executor/device_memory.h"
 #include "xla/tsl/platform/errors.h"
 #include "xla/util.h"
@@ -52,7 +51,7 @@ struct CallFrameBuilder::Buffer {
   absl::InlinedVector<int64_t, 4> dims;
 };
 
-AttributesMap CallFrameBuilder::AttributesBuilder::Build() {
+CallFrameBuilder::AttributesMap CallFrameBuilder::AttributesBuilder::Build() {
   return std::move(attrs_);
 }
 
@@ -66,9 +65,8 @@ void CallFrameBuilder::AttributesBuilder::Insert(std::string name,
 
 void CallFrameBuilder::AttributesBuilder::Insert(std::string name,
                                                  AttributesMap attrs) {
-  attrs_.try_emplace(
-      std::move(name),
-      AttributesDictionary{std::make_shared<AttributesMap>(attrs)});
+  attrs_.try_emplace(std::move(name),
+                     Dictionary{std::make_shared<AttributesMap>(attrs)});
 }
 
 void CallFrameBuilder::AttributesBuilder::Append(AttributesMap attrs) {
@@ -162,13 +160,13 @@ struct CallFrame::Dictionary {
 };
 
 struct CallFrame::Array {
-  xla::ffi::Array value;  // XLA_FFI_Array::data
+  CallFrameBuilder::Array value;  // XLA_FFI_Array::data
 
   XLA_FFI_Array array = {};
 };
 
 struct CallFrame::Scalar {
-  xla::ffi::Scalar value;  // XLA_FFI_Scalar::value
+  CallFrameBuilder::Scalar value;  // XLA_FFI_Scalar::value
 
   XLA_FFI_Scalar scalar = {};
 };
@@ -415,11 +413,11 @@ std::unique_ptr<CallFrame::Results> CallFrame::FixUpRets(
 // An std::visit overload set for converting CallFrameBuilder::Attribute to
 // CallFrame::Attribute.
 struct CallFrame::ConvertAttribute {
-  CallFrame::Attribute operator()(const xla::ffi::Array& array) {
+  CallFrame::Attribute operator()(const CallFrameBuilder::Array& array) {
     return CallFrame::Array{array};
   }
 
-  CallFrame::Attribute operator()(const xla::ffi::Scalar& scalar) {
+  CallFrame::Attribute operator()(const CallFrameBuilder::Scalar& scalar) {
     return CallFrame::Scalar{scalar};
   }
 
@@ -427,8 +425,8 @@ struct CallFrame::ConvertAttribute {
     return CallFrame::String{str};
   }
 
-  CallFrame::Attribute operator()(const xla::ffi::AttributesDictionary& dict) {
-    return Dictionary{CreateAttrs(*dict.attrs)};
+  CallFrame::Attribute operator()(const CallFrameBuilder::Dictionary& dict) {
+    return CallFrame::Dictionary{CreateAttrs(*dict.attrs)};
   }
 };
 
@@ -442,7 +440,7 @@ struct CallFrame::FixUpAttribute {
       array.array.size = value.size();
       array.array.data = value.data();
     };
-    std::visit(visitor, array.value.AsVariant());
+    std::visit(visitor, array.value);
   }
 
   void operator()(CallFrame::Scalar& scalar) {
@@ -451,7 +449,7 @@ struct CallFrame::FixUpAttribute {
       scalar.scalar.dtype = internal::NativeTypeToCApiDataType<T>();
       scalar.scalar.value = &value;
     };
-    std::visit(visitor, scalar.value.AsVariant());
+    std::visit(visitor, scalar.value);
   }
 
   void operator()(CallFrame::String& str) {
@@ -500,14 +498,13 @@ struct CallFrame::AttributeStorage {
 };
 
 std::unique_ptr<CallFrame::Attributes> CallFrame::CreateAttrs(
-    const xla::ffi::AttributesMap& battrs) {
+    const CallFrameBuilder::AttributesMap& battrs) {
   auto attrs = std::make_unique<Attributes>();
 
   // Convert call frame builder attributes to a collection of named attributes.
   attrs->attributes.reserve(battrs.size());
   for (auto& [name, battr] : battrs) {
-    NamedAttribute attr = {String{name},
-                           std::visit(ConvertAttribute(), battr.AsVariant())};
+    NamedAttribute attr = {String{name}, std::visit(ConvertAttribute(), battr)};
     attrs->attributes.push_back(std::move(attr));
   }
 

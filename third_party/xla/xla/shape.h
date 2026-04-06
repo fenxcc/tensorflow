@@ -30,7 +30,6 @@ limitations under the License.
 
 #include "absl/base/attributes.h"
 #include "absl/base/macros.h"
-#include "absl/base/optimization.h"
 #include "absl/container/inlined_vector.h"
 #include "absl/log/check.h"
 #include "absl/types/span.h"
@@ -77,6 +76,12 @@ class Shape {
   Shape& operator=(const Shape&);
   Shape& operator=(Shape&&) noexcept;
 
+  // Constructs a shape from a ShapeProto. Results in an invalid shape (as
+  // opposed to crashing) if the proto has logically invalid fields.
+  ABSL_DEPRECATE_AND_INLINE()
+  explicit Shape(const ShapeProto& shape_proto)
+      : Shape(FromProto(shape_proto).value_or(Shape())) {}
+
   // Creates a token, opaque or buffer shape.
   // Precondition:
   //  - `element_type` must be TOKEN, OPAQUE_TYPE or BUFFER.
@@ -101,9 +106,6 @@ class Shape {
   // opposed to crashing) if the proto has logically invalid fields.
   static absl::StatusOr<Shape> FromProto(const ShapeProto& shape_proto);
 
-  // Converts the Shape to a ShapeProto. Clears `proto` first.
-  void ToProto(ShapeProto& proto) const;
-
   // Returns a ShapeProto representation of the Shape.
   ShapeProto ToProto() const;
 
@@ -115,59 +117,48 @@ class Shape {
   // without layout. e.g. "F32[42,12] {0, 1}" or "F32[64]".
   std::string ToString(bool print_layout = false) const;
 
-  // Returns whether the shape is an array primitive type, that is, whether the
-  // state of the shape is an ArrayState.
-  bool IsArrayExcludingBuffer() const {
-    const bool result =
-        primitive_util::IsArrayType(element_type_including_buffer());
+  // Returns whether the shape is of the specified category (array, tuple, etc).
+  bool IsArray() const {
+    const bool result = primitive_util::IsArrayType(element_type());
     // We do this check in debug mode only to avoid performance regressions.
     DCHECK_EQ(result, if_array_state() != nullptr)
         << "Shape " << ToString()
         << " has inconsistent element_type and state.";
     return result;
   }
-  // Returns whether the shape is a tuple primitive type, that is, whether the
-  // state of the shape is a TupleState.
   bool IsTuple() const {
-    const bool result = element_type_including_buffer() == TUPLE;
+    const bool result = element_type() == TUPLE;
     // We do this check in debug mode only to avoid performance regressions.
     DCHECK_EQ(result, if_tuple_state() != nullptr)
         << "Shape " << ToString()
         << " has inconsistent element_type and state.";
     return result;
   }
-  // Returns whether the shape is a buffer primitive type, that is, whether the
-  // state of the shape is a BufferState.
   bool IsBuffer() const {
-    const bool result = element_type_including_buffer() == BUFFER;
+    const bool result = element_type() == BUFFER;
     // We do this check in debug mode only to avoid performance regressions.
     DCHECK_EQ(result, if_buffer_state() != nullptr)
         << "Shape " << ToString()
         << " has inconsistent element_type and state.";
     return result;
   }
-  // Returns whether the shape is a token primitive type, that is, whether the
-  // state of the shape is a TokenState.
   bool IsToken() const {
-    const bool result = element_type_including_buffer() == TOKEN;
+    const bool result = element_type() == TOKEN;
     // We do this check in debug mode only to avoid performance regressions.
     DCHECK_EQ(result, if_token_state() != nullptr)
         << "Shape " << ToString()
         << " has inconsistent element_type and state.";
     return result;
   }
-  // Returns whether the shape is an opaque primitive type, that is, whether the
-  // state of the shape is an OpaqueState.
   bool IsOpaque() const {
-    const bool result = element_type_including_buffer() == OPAQUE_TYPE;
+    const bool result = element_type() == OPAQUE_TYPE;
     // We do this check in debug mode only to avoid performance regressions.
     DCHECK_EQ(result, if_opaque_state() != nullptr)
         << "Shape " << ToString()
         << " has inconsistent element_type and state.";
     return result;
   }
-  // Returns true if the shape is an array or a buffer.
-  bool IsArray() const { return IsArrayExcludingBuffer() || IsBuffer(); }
+  bool IsArrayOrBuffer() const { return IsArray() || IsBuffer(); }
 
   // Returns whether all elements in the shape are integers.
   // Tuple shapes are traversed recursively.
@@ -260,11 +251,12 @@ class Shape {
   void DeleteDimensions(absl::Span<const int64_t> dims_to_delete);
 
   // Returns the primitive type of the shape.
-  PrimitiveType element_type_including_buffer() const { return element_type_; }
+  PrimitiveType element_type() const { return element_type_; }
 
   // Returns the primitive type of the array or buffer shape.
   // Precondition: this is an array shape or a buffer shape.
-  PrimitiveType element_type() const {
+  PrimitiveType array_or_buffer_element_type() const {
+    CHECK(IsArrayOrBuffer());
     if (const auto* const state = if_buffer_state()) {
       return state->buffer_shape->element_type();
     }
@@ -359,7 +351,9 @@ class Shape {
   // Precondition: this is a tuple shape and `index` is a valid tuple component
   // index.
   const Shape& tuple_shapes(int index) const;
-  Shape* mutable_tuple_shapes(int index);
+  Shape* mutable_tuple_shapes(int index) {
+    return &tuple_state().tuple_shapes[index];
+  }
 
   // Appends a new invalid shape to the tuple and returns a pointer to it.
   // Precondition: this is a tuple shape.
@@ -649,29 +643,32 @@ class Shape {
   }
   BufferState* if_buffer_state() { return std::get_if<BufferState>(&state_); }
 
-  const InvalidState& invalid_state() const;
-  const TokenState& token_state() const;
-  const OpaqueState& opaque_state() const;
-
-  // Returns the array state of the array state of the buffer shape, assuming
-  // that the shape is an array or a buffer shape.
+  const InvalidState& invalid_state() const {
+    const auto* const state = if_invalid_state();
+    CHECK(state) << "Expected an invalid shape. Got " << ToString();
+    return *state;
+  }
+  const TokenState& token_state() const {
+    const auto* const state = if_token_state();
+    CHECK(state) << "Expected a token shape. Got " << ToString();
+    return *state;
+  }
+  const OpaqueState& opaque_state() const {
+    const auto* const state = if_opaque_state();
+    CHECK(state) << "Expected an opaque shape. Got " << ToString();
+    return *state;
+  }
   const ArrayState& array_state_maybe_underneath_buffer() const;
   ArrayState& array_state_maybe_underneath_buffer();
-
   const ArrayState& array_state() const;
   ArrayState& array_state();
-
   const TupleState& tuple_state() const;
   TupleState& tuple_state();
-
   const BufferState& buffer_state() const;
   BufferState& buffer_state();
 
   // CHECK-fails if this shape's state is not empty.
   void CheckStateIsEmpty() const;
-
-  // Converts this shape to a proto. `proto` must be an empty message.
-  void SaveToEmptyProto(ShapeProto& proto) const;
 
   // The element type of this shape (tuple, array, etc).
   PrimitiveType element_type_ = PRIMITIVE_TYPE_INVALID;
@@ -694,6 +691,12 @@ class ProgramShape {
   ProgramShape(ProgramShape&&);
   ProgramShape& operator=(const ProgramShape&);
   ProgramShape& operator=(ProgramShape&&);
+
+  // Constructs a ProgramShape from a ProgramShapeProto protobuf. If the
+  // ProgramShapeProto is invalid, an empty ProgramShape is constructed.
+  ABSL_DEPRECATE_AND_INLINE()
+  explicit ProgramShape(const ProgramShapeProto& program_shape_proto)
+      : ProgramShape(FromProto(program_shape_proto).value_or(ProgramShape())) {}
 
   // Creates a ProgramShape from a ProgramShapeProto protobuf.
   static absl::StatusOr<ProgramShape> FromProto(
@@ -756,120 +759,6 @@ class ProgramShape {
 
 std::ostream& operator<<(std::ostream& out, const Shape& shape);
 std::ostream& operator<<(std::ostream& out, const ProgramShape& program_shape);
-
-// We prefer to keep small functions that are on a hot path of various ShapeUtil
-// traversal functions in the header file, to avoid the overhead of function
-// call indirection. We do it only for small functions, to avoid the code bloat.
-
-inline const Shape::InvalidState& Shape::invalid_state() const {
-  const auto* const state = if_invalid_state();
-  CHECK(state) << "Expected an invalid shape. Got " << ToString();
-  return *state;
-}
-
-inline const Shape::TokenState& Shape::token_state() const {
-  const auto* const state = if_token_state();
-  CHECK(state) << "Expected a token shape. Got " << ToString();
-  return *state;
-}
-
-inline const Shape::OpaqueState& Shape::opaque_state() const {
-  const auto* const state = if_opaque_state();
-  CHECK(state) << "Expected an opaque shape. Got " << ToString();
-  return *state;
-}
-
-inline const Shape::ArrayState& Shape::array_state() const {
-  const auto* const state = if_array_state();
-  CHECK(state) << "Expected an array shape. Got " << ToString()
-               << "\nThis is a programmer error. Please read "
-                  "the Shape object's array properties (e.g. dimensions) "
-                  "only when it's an array shape.";
-  return *state;
-}
-
-inline Shape::ArrayState& Shape::array_state() {
-  auto* const state = if_array_state();
-  CHECK(state) << "Expected an array shape. Got " << ToString()
-               << "\nThis is a programmer error. Please mutate "
-                  "the Shape object's array properties (e.g. dimensions) "
-                  "only when it's an array shape.";
-  return *state;
-}
-
-inline const Shape::TupleState& Shape::tuple_state() const {
-  const auto* const state = if_tuple_state();
-  CHECK(state) << "Expected a tuple shape. Got " << ToString()
-               << "\nThis is a programmer error. Please read "
-                  "the Shape object's tuple properties (e.g. tuple_shapes) "
-                  "only when it's a tuple shape.";
-  return *state;
-}
-
-inline Shape::TupleState& Shape::tuple_state() {
-  auto* const state = if_tuple_state();
-  CHECK(state) << "Expected a tuple shape. Got " << ToString()
-               << "\nThis is a programmer error. Please mutate "
-                  "the Shape object's tuple properties (e.g. tuple_shapes) "
-                  "only when it's a tuple shape.";
-  return *state;
-}
-
-inline const Shape::BufferState& Shape::buffer_state() const {
-  const auto* const state = if_buffer_state();
-  CHECK(state) << "Expected a buffer shape. Got " << ToString()
-               << "\nThis is a programmer error. Please read "
-                  "the Shape object's buffer properties (e.g. buffer_shape) "
-                  "only when it's a buffer shape.";
-  return *state;
-}
-
-inline Shape::BufferState& Shape::buffer_state() {
-  auto* const state = if_buffer_state();
-  CHECK(state) << "Expected a buffer shape. Got " << ToString()
-               << "\nThis is a programmer error. Please mutate "
-                  "the Shape object's buffer properties (e.g. buffer_shape) "
-                  "only when it's a buffer shape.";
-  return *state;
-}
-
-inline const Shape::ArrayState& Shape::array_state_maybe_underneath_buffer()
-    const {
-  if (const ArrayState* array = if_array_state(); ABSL_PREDICT_TRUE(array)) {
-    return *array;
-  }
-  const BufferState* buffer = if_buffer_state();
-  CHECK_NE(buffer, nullptr);
-  return *buffer->buffer_shape->if_array_state();
-}
-
-inline Shape::ArrayState& Shape::array_state_maybe_underneath_buffer() {
-  if (ArrayState* array = if_array_state(); ABSL_PREDICT_TRUE(array)) {
-    return *array;
-  }
-  BufferState* buffer = if_buffer_state();
-  CHECK_NE(buffer, nullptr);
-  return *buffer->buffer_shape->if_array_state();
-}
-
-inline ABSL_ATTRIBUTE_ALWAYS_INLINE const Shape& Shape::tuple_shapes(
-    int index) const {
-  return tuple_state().tuple_shapes[index];
-}
-
-inline ABSL_ATTRIBUTE_ALWAYS_INLINE Shape* Shape::mutable_tuple_shapes(
-    int index) {
-  return &tuple_state().tuple_shapes[index];
-}
-
-inline ABSL_ATTRIBUTE_ALWAYS_INLINE const std::vector<Shape>&
-Shape::tuple_shapes() const {
-  return tuple_state().tuple_shapes;
-}
-
-inline ABSL_ATTRIBUTE_ALWAYS_INLINE const Shape& Shape::buffer_shape() const {
-  return *buffer_state().buffer_shape;
-}
 
 }  // namespace xla
 

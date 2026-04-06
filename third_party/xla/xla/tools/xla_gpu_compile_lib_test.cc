@@ -20,7 +20,6 @@ limitations under the License.
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include "absl/status/status_matchers.h"
 #include "xla/hlo/ir/hlo_module.h"
 #include "xla/service/gpu/autotuning/autotuner_util.h"
 #include "xla/service/gpu/gpu_symbol_repository.h"
@@ -31,20 +30,22 @@ limitations under the License.
 #include "xla/tests/hlo_test_base.h"
 #include "xla/tools/xla_compile_lib.h"
 #include "xla/tsl/lib/core/status_test_util.h"
-#include "xla/tsl/platform/env.h"
-#include "xla/tsl/platform/statusor.h"
-#include "xla/tsl/platform/test.h"
 #include "xla/tsl/protobuf/error_codes.pb.h"
 #include "xla/tsl/protobuf/status.pb.h"
 #include "xla/util.h"
 #include "xla/xla.pb.h"
+#include "tsl/platform/env.h"
 #include "tsl/platform/path.h"
+#include "tsl/platform/status_matchers.h"
+#include "tsl/platform/statusor.h"
+#include "tsl/platform/test.h"
 
 namespace xla {
 namespace {
 
 using ::testing::IsEmpty;
 using ::testing::Not;
+using ::tsl::testing::IsOkAndHolds;
 
 class XlaCompileLibTest : public HloTestBase {
  protected:
@@ -66,20 +67,21 @@ TEST_F(XlaCompileLibTest, CompilesForGpuWithDevice) {
   CompilationResult result;
   EXPECT_THAT(CompileExecutable(std::move(module_), BackendType::kGpu,
                                 std::nullopt, result),
-              absl_testing::IsOkAndHolds(Not(IsEmpty())));
+              IsOkAndHolds(Not(IsEmpty())));
   EXPECT_TRUE(result.has_hlo_module()) << result.DebugString();
 }
 
 TEST_F(XlaCompileLibTest, CompilesForGpuWithoutDevice) {
-  const std::string target_config_path = tsl::io::JoinPath(
-      tsl::testing::XlaSrcRoot(), "tools/hlo_opt/gpu_specs", "h100_sxm.txtpb");
+  const std::string target_config_path =
+      tsl::io::JoinPath(tsl::testing::XlaSrcRoot(), "service",
+                        "xla_aot_compile_test_gpu_target_config.txtpb");
   stream_executor::GpuTargetConfigProto target_config;
   TF_ASSERT_OK(tsl::ReadTextProto(tsl::Env::Default(), target_config_path,
                                   &target_config));
   CompilationResult result;
   EXPECT_THAT(CompileExecutable(std::move(module_), BackendType::kGpu,
                                 std::nullopt, result),
-              absl_testing::IsOkAndHolds(Not(IsEmpty())));
+              IsOkAndHolds(Not(IsEmpty())));
   EXPECT_TRUE(result.has_hlo_module()) << result.DebugString();
 }
 
@@ -129,7 +131,7 @@ TEST_F(XlaCompileLibTest, LoadAutotuneDataGpuDataPresentAndAutotuningEnabled) {
   mod.hlo_module->mutable_config().set_debug_options(opts);
 
   EXPECT_THAT(internal::LoadAutotuneDataFromModule(&mod, BackendType::kGpu),
-              absl_testing::IsOkAndHolds(true));
+              IsOkAndHolds(true));
   EXPECT_FALSE(gpu::AutotunerUtil::ResultCacheIsEmpty());
 }
 
@@ -154,7 +156,7 @@ TEST_F(XlaCompileLibTest, LoadAutotuneDataGpuDataPresentAndAutotuningDisabled) {
   mod.hlo_module->mutable_config().set_debug_options(opts);
 
   EXPECT_THAT(internal::LoadAutotuneDataFromModule(&mod, BackendType::kGpu),
-              absl_testing::IsOkAndHolds(false));
+              IsOkAndHolds(false));
   EXPECT_TRUE(gpu::AutotunerUtil::ResultCacheIsEmpty());
 }
 
@@ -170,7 +172,7 @@ TEST_F(XlaCompileLibTest,
   mod.hlo_module->mutable_config().set_debug_options(opts);
 
   EXPECT_THAT(internal::LoadAutotuneDataFromModule(&mod, BackendType::kGpu),
-              absl_testing::IsOkAndHolds(false));
+              IsOkAndHolds(false));
   EXPECT_TRUE(gpu::AutotunerUtil::ResultCacheIsEmpty());
 }
 
@@ -186,7 +188,7 @@ TEST_F(XlaCompileLibTest,
   mod.hlo_module->mutable_config().set_debug_options(opts);
 
   EXPECT_THAT(internal::LoadAutotuneDataFromModule(&mod, BackendType::kGpu),
-              absl_testing::IsOkAndHolds(false));
+              IsOkAndHolds(false));
   EXPECT_TRUE(gpu::AutotunerUtil::ResultCacheIsEmpty());
 }
 

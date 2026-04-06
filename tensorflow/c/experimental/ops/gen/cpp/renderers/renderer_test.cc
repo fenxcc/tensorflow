@@ -57,7 +57,7 @@ TEST(Renderer, typical_usage) {
   SourceCode code;
   TestRenderer(code).Render();
 
-  std::string expected = R"(// File level comment.
+  string expected = R"(// File level comment.
 #include "header.h"
 
 void TestFunction() {

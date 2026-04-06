@@ -23,7 +23,6 @@ limitations under the License.
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "tensorflow/c/eager/c_api.h"
 #include "tensorflow/c/eager/immediate_execution_tensor_handle.h"
@@ -83,7 +82,7 @@ std::string PyObject_ToString(PyObject* o, int length = -1) {
     return str;
   }
   absl::string_view str_piece(str);
-  return absl::StrCat(str_piece.substr(length), "...");
+  return tensorflow::strings::StrCat(str_piece.substr(length), "...");
 }
 
 // Assume inputs are name, inputs, outputs

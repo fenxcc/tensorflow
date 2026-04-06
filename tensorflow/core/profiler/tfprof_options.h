@@ -102,10 +102,9 @@ static const char* const kPprofRequiredOpts[] = {
 
 struct Options {
  public:
-  static absl::Status FromProtoStr(const std::string& opts_proto_str,
-                                   Options* opts);
+  static absl::Status FromProtoStr(const string& opts_proto_str, Options* opts);
 
-  virtual ~Options() = default;
+  virtual ~Options() {}
   Options()
       : Options(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "", {}, {}, {}, {}, {},
                 false, {}, "", {}) {}
@@ -114,16 +113,15 @@ struct Options {
           int64_t min_residual_bytes, int64_t min_output_bytes,
           int64_t min_micros, int64_t min_accelerator_micros,
           int64_t min_cpu_micros, int64_t min_params, int64_t min_float_ops,
-          int64_t min_occurrence, int64_t step, const std::string& order_by,
-          const std::vector<std::string>& account_type_regexes,
-          const std::vector<std::string>& start_name_regexes,
-          const std::vector<std::string>& trim_name_regexes,
-          const std::vector<std::string>& show_name_regexes,
-          const std::vector<std::string>& hide_name_regexes,
-          bool account_displayed_op_only,
-          const std::vector<std::string>& select,
-          const std::string& output_type,
-          const std::map<std::string, std::string>& output_options)
+          int64_t min_occurrence, int64_t step, const string& order_by,
+          const std::vector<string>& account_type_regexes,
+          const std::vector<string>& start_name_regexes,
+          const std::vector<string>& trim_name_regexes,
+          const std::vector<string>& show_name_regexes,
+          const std::vector<string>& hide_name_regexes,
+          bool account_displayed_op_only, const std::vector<string>& select,
+          const string& output_type,
+          const std::map<string, string>& output_options)
       : max_depth(max_depth),
         min_bytes(min_bytes),
         min_peak_bytes(min_peak_bytes),
@@ -147,7 +145,7 @@ struct Options {
         output_type(output_type),
         output_options(output_options) {}
 
-  std::string ToString() const;
+  string ToString() const;
 
   int max_depth;
   int64_t min_bytes;
@@ -161,27 +159,26 @@ struct Options {
   int64_t min_float_ops;
   int64_t min_occurrence;
   int64_t step;
-  std::string order_by;
+  string order_by;
 
-  std::vector<std::string> account_type_regexes;
-  std::vector<std::string> start_name_regexes;
-  std::vector<std::string> trim_name_regexes;
-  std::vector<std::string> show_name_regexes;
-  std::vector<std::string> hide_name_regexes;
+  std::vector<string> account_type_regexes;
+  std::vector<string> start_name_regexes;
+  std::vector<string> trim_name_regexes;
+  std::vector<string> show_name_regexes;
+  std::vector<string> hide_name_regexes;
   bool account_displayed_op_only;
 
-  std::set<std::string> select;
+  std::set<string> select;
 
-  std::string output_type;
-  std::map<std::string, std::string> output_options;
+  string output_type;
+  std::map<string, string> output_options;
 };
 
 // Parse the -output option.
 // 'output_opt': User input string with format: output_type:key=value,key=value.
 // 'output_type' and 'output_options' are extracted from 'output_opt'.
-absl::Status ParseOutput(const std::string& output_opt,
-                         std::string* output_type,
-                         std::map<std::string, std::string>* output_options);
+absl::Status ParseOutput(const string& output_opt, string* output_type,
+                         std::map<string, string>* output_options);
 
 }  // namespace tfprof
 }  // namespace tensorflow

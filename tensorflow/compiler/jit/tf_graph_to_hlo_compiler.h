@@ -16,13 +16,12 @@ limitations under the License.
 #ifndef TENSORFLOW_COMPILER_JIT_TF_GRAPH_TO_HLO_COMPILER_H_
 #define TENSORFLOW_COMPILER_JIT_TF_GRAPH_TO_HLO_COMPILER_H_
 
-#include "absl/status/status.h"
-#include "absl/types/span.h"
+#include <memory>
+#include <vector>
+
 #include "tensorflow/compiler/jit/tf_to_hlo_compiler.h"
-#include "tensorflow/compiler/tf2xla/xla_argument.h"
 #include "tensorflow/compiler/tf2xla/xla_compiler.h"
 #include "tensorflow/compiler/tf2xla/xla_helpers.h"
-#include "tensorflow/core/framework/op_kernel.h"
 
 namespace tensorflow {
 
@@ -30,7 +29,8 @@ class TfGraphToHloCompiler : public TfToHloCompiler {
  public:
   TfGraphToHloCompiler() = delete;
 
-  explicit TfGraphToHloCompiler(const XlaCompiler::Options& options);
+  explicit TfGraphToHloCompiler(const XlaCompiler::Options& options)
+      : xla_compiler_(options) {}
 
   // Compiles a Tensorflow `function` into an HloModuleProto stored in the
   // XlaCompilationResult pointed to by `result` by calling
@@ -50,7 +50,6 @@ class TfGraphToHloCompiler : public TfToHloCompiler {
 
  private:
   XlaCompiler xla_compiler_;
-  std::string dump_dir_;
 
   TfGraphToHloCompiler(const TfGraphToHloCompiler&) = delete;
   void operator=(const TfGraphToHloCompiler&) = delete;

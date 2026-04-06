@@ -41,6 +41,11 @@ class AllGatherCombiner : public HloModulePass {
 
   absl::string_view name() const override { return "all-gather-combiner"; }
 
+  using HloPassInterface::Run;
+  absl::StatusOr<bool> Run(
+      HloModule* module,
+      const absl::flat_hash_set<absl::string_view>& execution_threads) override;
+
   // The group key encapsulates all of the properties which must match for it to
   // be possible to combine the instructions.
   // The field of the key corresponds to the following:
@@ -64,10 +69,6 @@ class AllGatherCombiner : public HloModulePass {
       bool combine_by_dim, bool combine_different_dtypes = true);
 
  protected:
-  absl::StatusOr<bool> RunImpl(
-      HloModule* module,
-      const absl::flat_hash_set<absl::string_view>& execution_threads) override;
-
   absl::StatusOr<bool> RunWithKeyCombiner(
       HloModule* module,
       const absl::flat_hash_set<absl::string_view>& execution_threads,
@@ -75,6 +76,7 @@ class AllGatherCombiner : public HloModulePass {
           const HloInstruction*, const HloDomainMap&, bool, bool)>
           combine_key);
 
+ protected:
   // Combine all gather ops up to this threshold.
   int64_t combine_threshold_in_bytes_;
 

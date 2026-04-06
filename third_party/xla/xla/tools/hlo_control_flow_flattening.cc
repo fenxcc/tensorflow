@@ -460,31 +460,7 @@ absl::Status HloControlFlowFlattening::SetConditionalValue(
   return absl::OkStatus();
 }
 
-absl::Status HloControlFlowFlattening::RemoveEntryComputationLayoutDynamism(
-    HloModule* module) const {
-  if (module->config().has_entry_computation_layout()) {
-    for (int32_t idx = 0; idx < module->entry_computation()->num_parameters();
-         ++idx) {
-      Shape parameter_shape =
-          module->config().entry_computation_layout().parameter_shape(idx);
-      TF_RETURN_IF_ERROR(module->mutable_config()
-                             .mutable_entry_computation_layout()
-                             ->mutable_parameter_layout(idx)
-                             ->CopyLayoutFromShape(
-                                 ShapeUtil::MakeStaticShape(parameter_shape)));
-    }
-    Shape result_shape =
-        module->config().entry_computation_layout().result_shape();
-    TF_RETURN_IF_ERROR(
-        module->mutable_config()
-            .mutable_entry_computation_layout()
-            ->mutable_result_layout()
-            ->CopyLayoutFromShape(ShapeUtil::MakeStaticShape(result_shape)));
-  }
-  return absl::OkStatus();
-}
-
-absl::StatusOr<bool> HloControlFlowFlattening::RunImpl(
+absl::StatusOr<bool> HloControlFlowFlattening::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   auto call_graph = CallGraph::Build(module);
@@ -501,11 +477,6 @@ absl::StatusOr<bool> HloControlFlowFlattening::RunImpl(
       if (removed.contains(instruction)) {
         // Skip the instruction if it is already removed.
         continue;
-      }
-      if (remove_dynamic_shapes_) {
-        *instruction->mutable_shape() =
-            ShapeUtil::MakeStaticShape(instruction->shape());
-        changed = true;
       }
       if (flatten_while_loop_ && instruction->opcode() == HloOpcode::kWhile) {
         VLOG(1) << "Remove " << instruction->name();
@@ -583,10 +554,6 @@ absl::StatusOr<bool> HloControlFlowFlattening::RunImpl(
         changed = true;
       }
     }
-  }
-
-  if (remove_dynamic_shapes_) {
-    TF_RETURN_IF_ERROR(RemoveEntryComputationLayoutDynamism(module));
   }
 
   HloDCE hlo_dce;

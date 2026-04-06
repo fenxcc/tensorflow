@@ -34,15 +34,14 @@ limitations under the License.
 namespace tensorflow {
 class PluggableDeviceFactory : public DeviceFactory {
  public:
-  PluggableDeviceFactory(const std::string& device_type,
-                         const std::string& platform_name);
-  absl::Status ListPhysicalDevices(std::vector<std::string>* devices) override;
+  PluggableDeviceFactory(const string& device_type,
+                         const string& platform_name);
+  absl::Status ListPhysicalDevices(std::vector<string>* devices) override;
   absl::Status CreateDevices(
       const SessionOptions& options, const std::string& name_prefix,
       std::vector<std::unique_ptr<Device>>* devices) override;
   absl::Status GetDeviceDetails(
-      int device_index,
-      std::unordered_map<std::string, std::string>* details) override;
+      int device_index, std::unordered_map<string, string>* details) override;
 
  private:
   // Populates *device_localities with the DeviceLocality descriptor for
@@ -58,8 +57,8 @@ class PluggableDeviceFactory : public DeviceFactory {
       const DeviceLocality& dev_locality,
       std::vector<std::unique_ptr<Device>>* devices);
 
-  const std::string device_type_;
-  const std::string platform_name_;
+  const string device_type_;
+  const string platform_name_;
 };
 
 }  // namespace tensorflow

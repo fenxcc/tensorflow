@@ -26,7 +26,6 @@ limitations under the License.
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/Visitors.h"
 #include "mlir/Support/LLVM.h"
-#include "xla/hlo/translate/hlo_to_mhlo/hlo_utils.h"
 #include "xla/hlo/translate/mhlo_to_hlo/stack_frame_index_builder.h"
 #include "xla/xla_data.pb.h"
 
@@ -100,9 +99,6 @@ static void SetSourceFileAndLine(Location loc, xla::OpMetadata& metadata) {
   if (auto file_line_col_loc = mlir::dyn_cast<mlir::FileLineColLoc>(loc)) {
     metadata.set_source_file(file_line_col_loc.getFilename().str());
     metadata.set_source_line(file_line_col_loc.getLine());
-    metadata.set_source_end_line(file_line_col_loc.getEndLine());
-    metadata.set_source_column(file_line_col_loc.getColumn());
-    metadata.set_source_end_column(file_line_col_loc.getEndColumn());
   } else if (auto fused_loc = mlir::dyn_cast<FusedLoc>(loc)) {
     for (Location it : fused_loc.getLocations()) {
       SetSourceFileAndLine(it, metadata);
@@ -143,6 +139,9 @@ xla::OpMetadata CreateOpMetadataFromLocation(
     auto result = frame_index_builder->AddCallStackAndGetFirstFrameId(loc);
     if (result.last_frame_id != mlir::StackFrameIndexBuilder::kInvalidIndex) {
       metadata.set_stack_frame_id(result.last_frame_id);
+      // TODO(b/311155137): Remove when profiler will support stack traces.
+      metadata.set_source_file(result.last_frame_file);
+      metadata.set_source_line(result.last_frame_line);
       return metadata;
     }
   }

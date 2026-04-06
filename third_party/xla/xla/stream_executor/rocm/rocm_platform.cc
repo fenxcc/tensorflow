@@ -19,7 +19,6 @@ limitations under the License.
 #include <string>
 #include <utility>
 
-#include "absl/log/check.h"
 #include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
@@ -28,11 +27,13 @@ limitations under the License.
 #include "xla/stream_executor/platform.h"
 #include "xla/stream_executor/platform/initialize.h"
 #include "xla/stream_executor/platform_manager.h"
+#include "xla/stream_executor/rocm/rocm_diagnostics.h"
 #include "xla/stream_executor/rocm/rocm_driver_wrapper.h"
 #include "xla/stream_executor/rocm/rocm_executor.h"
 #include "xla/stream_executor/rocm/rocm_platform_id.h"
 #include "xla/stream_executor/rocm/rocm_status.h"
 #include "xla/tsl/platform/errors.h"
+#include "xla/tsl/platform/status.h"
 
 namespace stream_executor {
 namespace gpu {
@@ -48,6 +49,7 @@ static absl::Status InternalInitialize() {
   }
 
   LOG(ERROR) << "failed call to hipInit: " << ToString(res);
+  rocm::Diagnostician::LogDiagnosticInformation();
   return absl::AbortedError(
       absl::StrCat("failed call to hipInit: ", ToString(res)));
 }
@@ -114,7 +116,7 @@ ROCmPlatform::GetUncachedExecutor(int ordinal) {
 static void InitializeROCmPlatform() {
   auto status = PlatformManager::PlatformWithName("ROCM");
   if (!status.ok()) {
-    CHECK_OK(PlatformManager::RegisterPlatform(
+    TF_CHECK_OK(PlatformManager::RegisterPlatform(
         std::make_unique<gpu::ROCmPlatform>()));
   }
 }

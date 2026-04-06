@@ -15,14 +15,9 @@ limitations under the License.
 
 // See docs in ../ops/state_ops.cc.
 
-#include <limits>
-
-#include "absl/status/status.h"
-#include "absl/strings/str_cat.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/register_types.h"
 #include "tensorflow/core/framework/tensor.h"
-#include "tensorflow/core/framework/types.h"
 #include "tensorflow/core/kernels/scatter_functor.h"
 #include "tensorflow/core/platform/mutex.h"
 #include "tensorflow/core/platform/types.h"
@@ -55,18 +50,17 @@ static bool ValidShapes(const Tensor& params, const Tensor& updates,
 static void DoValidationChecking(OpKernelContext* c, const Tensor& params,
                                  const Tensor& indices, const Tensor& updates) {
   OP_REQUIRES(c, params.IsInitialized(),
-              absl::FailedPreconditionError("Null ref for params"));
+              errors::FailedPrecondition("Null ref for params"));
   OP_REQUIRES(c, TensorShapeUtils::IsVectorOrHigher(params.shape()),
-              absl::InvalidArgumentError(
-                  absl::StrCat("params must be at least 1-D, got shape ",
-                               params.shape().DebugString())));
-  OP_REQUIRES(c, ValidShapes(params, updates, indices),
-              absl::InvalidArgumentError(absl::StrCat(
-                  "Must have updates.shape = indices.shape + "
-                  "params.shape[1:] or updates.shape = [], got ",
-                  "updates.shape ", updates.shape().DebugString(),
-                  ", indices.shape ", indices.shape().DebugString(),
-                  ", params.shape ", params.shape().DebugString())));
+              errors::InvalidArgument("params must be at least 1-D, got shape ",
+                                      params.shape().DebugString()));
+  OP_REQUIRES(
+      c, ValidShapes(params, updates, indices),
+      errors::InvalidArgument("Must have updates.shape = indices.shape + "
+                              "params.shape[1:] or updates.shape = [], got ",
+                              "updates.shape ", updates.shape().DebugString(),
+                              ", indices.shape ", indices.shape().DebugString(),
+                              ", params.shape ", params.shape().DebugString()));
 }
 
 template <typename Device, typename T, typename Index, scatter_op::UpdateOp op>
@@ -82,7 +76,7 @@ class ScatterUpdateOp : public OpKernel {
     if (std::is_same<Device, GPUDevice>::value) {
       OP_REQUIRES(
           c, !OpDeterminismRequired(),
-          absl::UnimplementedError(
+          errors::Unimplemented(
               "Determinism is not yet supported in GPU implementation of "
               "Scatter ops with ref inputs. Consider using resource variables "
               "instead if you want to run Scatter when op determinism is "
@@ -112,18 +106,19 @@ class ScatterUpdateOp : public OpKernel {
 
     // Check that we have enough index space
     const int64_t N_big = indices.NumElements();
-    OP_REQUIRES(c, N_big <= std::numeric_limits<Index>::max(),
-                absl::InvalidArgumentError(absl::StrCat(
-                    "indices has too many elements for ",
-                    DataTypeString(DataTypeToEnum<Index>::v()), " indexing: ",
-                    N_big, " > ", std::numeric_limits<Index>::max())));
+    OP_REQUIRES(
+        c, N_big <= std::numeric_limits<Index>::max(),
+        errors::InvalidArgument("indices has too many elements for ",
+                                DataTypeString(DataTypeToEnum<Index>::v()),
+                                " indexing: ", N_big, " > ",
+                                std::numeric_limits<Index>::max()));
     const Index N = static_cast<Index>(indices.NumElements());
-    OP_REQUIRES(c, params.dim_size(0) <= std::numeric_limits<Index>::max(),
-                absl::InvalidArgumentError(
-                    absl::StrCat("params.shape[0] too large for ",
-                                 DataTypeString(DataTypeToEnum<Index>::v()),
-                                 " indexing: ", params.dim_size(0), " > ",
-                                 std::numeric_limits<Index>::max())));
+    OP_REQUIRES(
+        c, params.dim_size(0) <= std::numeric_limits<Index>::max(),
+        errors::InvalidArgument("params.shape[0] too large for ",
+                                DataTypeString(DataTypeToEnum<Index>::v()),
+                                " indexing: ", params.dim_size(0), " > ",
+                                std::numeric_limits<Index>::max()));
 
     // We always return the input ref.
     c->forward_ref_input_to_ref_output(0, 0);
@@ -138,10 +133,10 @@ class ScatterUpdateOp : public OpKernel {
         const Index bad_i = functor(c, c->template eigen_device<Device>(),
                                     params_flat, update, indices_flat);
         OP_REQUIRES(c, bad_i < 0,
-                    absl::InvalidArgumentError(absl::StrCat(
+                    errors::InvalidArgument(
                         "indices", SliceDebugString(indices.shape(), bad_i),
                         " = ", indices_flat(bad_i), " is not in [0, ",
-                        params.dim_size(0), ")")));
+                        params.dim_size(0), ")"));
       } else {
         auto updates_flat =
             updates.shaped<T, 2>({N, updates.NumElements() / N});
@@ -150,10 +145,10 @@ class ScatterUpdateOp : public OpKernel {
         const Index bad_i = functor(c, c->template eigen_device<Device>(),
                                     params_flat, updates_flat, indices_flat);
         OP_REQUIRES(c, bad_i < 0,
-                    absl::InvalidArgumentError(absl::StrCat(
+                    errors::InvalidArgument(
                         "indices", SliceDebugString(indices.shape(), bad_i),
                         " = ", indices_flat(bad_i), " is not in [0, ",
-                        params.dim_size(0), ")")));
+                        params.dim_size(0), ")"));
       }
     }
   }

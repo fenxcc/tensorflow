@@ -43,19 +43,18 @@ class XlaResource {
   static absl::string_view KindToString(Kind kind);
 
   // Creates a new Stack resource.
-  static std::unique_ptr<XlaResource> CreateStack(std::string name,
-                                                  DataType type,
+  static std::unique_ptr<XlaResource> CreateStack(string name, DataType type,
                                                   int64_t max_size);
 
   // Creates a new TensorArray resource.
   static std::unique_ptr<XlaResource> CreateTensorArray(
-      std::string name, DataType type, TensorShape shape,
-      xla::XlaOp initial_value, int64_t max_array_size);
+      string name, DataType type, TensorShape shape, xla::XlaOp initial_value,
+      int64_t max_array_size);
 
-  XlaResource(Kind kind, int arg_num, std::string name, DataType type,
+  XlaResource(Kind kind, int arg_num, string name, DataType type,
               TensorShape shape, xla::XlaOp initial_value,
               int64_t max_array_size,
-              const std::set<std::string>& tensor_array_gradients,
+              const std::set<string>& tensor_array_gradients,
               bool tensor_array_multiple_writes_aggregate,
               const std::optional<ManagedStackTrace>& definition_stack_trace =
                   std::nullopt);
@@ -73,7 +72,7 @@ class XlaResource {
   int arg_num() const { return arg_num_; }
 
   // A descriptive name for the resource, used in error messages.
-  const std::string& name() const { return name_; }
+  const string& name() const { return name_; }
 
   // Current type and value of the resource. Uninitialized resources are
   // represented by a default (zero) handle and type DT_INVALID.
@@ -122,7 +121,7 @@ class XlaResource {
   // exist. The call target must be an initialized TensorArray resource. A
   // TensorArray can have multiple named gradients; see the operator
   // documentation for TensorArrayGradV3 for details.
-  absl::Status GetOrCreateTensorArrayGradient(const std::string& source,
+  absl::Status GetOrCreateTensorArrayGradient(const string& source,
                                               xla::XlaBuilder* builder,
                                               XlaResource** gradient_out);
 
@@ -139,7 +138,7 @@ class XlaResource {
   // If `reset_initial_values` is true, sets the initial_values as well as the
   // values.
   // Opposite of Pack().
-  absl::Status SetFromPack(const std::set<std::string>& gradient_sources,
+  absl::Status SetFromPack(const std::set<string>& gradient_sources,
                            xla::XlaOp pack, xla::XlaBuilder* builder);
 
   bool IsOverwritten() { return is_overwritten_; }
@@ -165,15 +164,15 @@ class XlaResource {
   // string, irrespective of the number of calls to TensorArrayGrad. The map
   // is ordered since values are packed into tuples by Pack() sorted by name
   // order.
-  const std::map<std::string, std::unique_ptr<XlaResource>>&
-  tensor_array_gradients() const {
+  const std::map<string, std::unique_ptr<XlaResource>>& tensor_array_gradients()
+      const {
     return tensor_array_gradients_;
   }
 
  private:
   const Kind kind_;
   const int arg_num_;
-  const std::string name_;
+  const string name_;
 
   DataType type_;
   TensorShape shape_;
@@ -187,7 +186,7 @@ class XlaResource {
   int64_t max_array_size_ = -1;
   bool tensor_array_multiple_writes_aggregate_ = false;
 
-  std::map<std::string, std::unique_ptr<XlaResource>> tensor_array_gradients_;
+  std::map<string, std::unique_ptr<XlaResource>> tensor_array_gradients_;
   bool is_overwritten_ = false;
 
   std::optional<ManagedStackTrace> definition_stack_trace_;

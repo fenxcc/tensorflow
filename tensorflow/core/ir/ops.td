@@ -864,7 +864,7 @@ class TFGraph_WhileLikeRegionOp<string mnemonic> : TFGraph_RegionOp<
     }
 
     OperandRange $cppClass::getEntrySuccessorOperands(
-         ::mlir::RegionSuccessor successor) {
+         ::mlir::RegionBranchPoint point) {
       return getInit();
     }
     void $cppClass::getSuccessorRegions(

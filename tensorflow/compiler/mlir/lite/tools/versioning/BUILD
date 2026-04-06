@@ -1,4 +1,3 @@
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load(
     "//tensorflow:tensorflow.bzl",
     "tf_cc_test",
@@ -36,7 +35,7 @@ cc_library(
 )
 
 tf_cc_test(
-    name = "op_version_test",
+    name = "versioning_test",
     srcs = [
         "op_version_test.cc",
     ],
@@ -46,17 +45,6 @@ tf_cc_test(
         "//tensorflow/compiler/mlir/lite/core/c:tflite_common",
         "//tensorflow/compiler/mlir/lite/schema:schema_fbs",
         "//tensorflow/compiler/mlir/lite/schema:schema_fbs_with_mutable",
-        "@com_google_googletest//:gtest_main",
-    ],
-)
-
-tf_cc_test(
-    name = "runtime_version_test",
-    srcs = [
-        "runtime_version_test.cc",
-    ],
-    deps = [
-        ":versioning",
         "@com_google_googletest//:gtest_main",
     ],
 )

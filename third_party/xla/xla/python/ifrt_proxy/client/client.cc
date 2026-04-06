@@ -45,10 +45,12 @@
 #include "xla/python/ifrt/device.h"
 #include "xla/python/ifrt/device_list.h"
 #include "xla/python/ifrt/dtype.h"
+#include "xla/python/ifrt/future.h"
 #include "xla/python/ifrt/memory.h"
 #include "xla/python/ifrt/remap_plan.h"
 #include "xla/python/ifrt/shape.h"
 #include "xla/python/ifrt/sharding.h"
+#include "xla/python/ifrt/user_context.h"
 #include "xla/python/ifrt/value.h"
 #include "xla/python/ifrt_proxy/client/array.h"
 #include "xla/python/ifrt_proxy/client/device.h"
@@ -58,7 +60,6 @@
 #include "xla/python/ifrt_proxy/common/types.h"
 #include "xla/python/ifrt_proxy/common/versions.h"
 #include "xla/python/pjrt_ifrt/pjrt_attribute_map_util.h"
-#include "xla/tsl/concurrency/future.h"
 #include "xla/tsl/concurrency/ref_count.h"
 #include "xla/tsl/platform/statusor.h"
 #include "xla/xla_data.pb.h"
@@ -72,11 +73,12 @@ namespace proxy {
 namespace {
 
 std::string device_summary(Device* device) {
-  int64_t slice_index = 0;
-  auto slice_index_attr = device->Attributes().Get<int64_t>("slice_index");
-  if (slice_index_attr.ok()) {
-    slice_index = *slice_index_attr;
-  }
+  auto it = device->Attributes().map().find("slice_index");
+  int slice_index =
+      (it != device->Attributes().map().end() &&
+       std::holds_alternative<AttributeMap::Int64Value>(it->second))
+          ? std::get<AttributeMap::Int64Value>(it->second).value
+          : 0;
   return absl::StrCat(device->Kind(), "s", slice_index);
 }
 
@@ -252,7 +254,9 @@ absl::StatusOr<xla::ifrt::ArrayRef> Client::MakeArrayFromHostBuffer(
     const void* data, DType dtype, Shape shape,
     std::optional<absl::Span<const int64_t>> byte_strides, ShardingRef sharding,
     xla::ifrt::Client::HostBufferSemantics semantics,
-    std::function<void()> on_done_with_host_buffer) {
+    std::function<void()> on_done_with_host_buffer,
+    tsl::RCReference<xla::ifrt::UserContext> user_context) {
+  // TODO(b/407104769): Handle `user_context`.
   return Array::MakeArrayFromHostBuffer(
       this, rpc_helper_, data, dtype, std::move(shape), std::move(byte_strides),
       std::move(sharding), semantics, std::move(on_done_with_host_buffer));
@@ -261,15 +265,18 @@ absl::StatusOr<xla::ifrt::ArrayRef> Client::MakeArrayFromHostBuffer(
 absl::StatusOr<std::vector<xla::ifrt::ArrayRef>>
 Client::MakeArraysFromHostBufferShards(
     absl::Span<MakeArraysFromHostBufferShardsSpec> specs,
-    xla::ifrt::Client::HostBufferSemantics semantics) {
-  return Array::MakeArraysFromHostBufferShards(this, rpc_helper_, specs,
-                                               semantics);
+    xla::ifrt::Client::HostBufferSemantics semantics,
+    tsl::RCReference<UserContext> user_context) {
+  return Array::MakeArraysFromHostBufferShards(
+      this, rpc_helper_, specs, semantics, std::move(user_context));
 }
 
 absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> Client::MakeErrorArrays(
     const absl::Status& error,
-    absl::Span<const xla::ifrt::ArraySpec> array_specs) {
-  return Array::MakeErrorArrays(this, rpc_helper_, error, array_specs);
+    absl::Span<const xla::ifrt::ArraySpec> array_specs,
+    tsl::RCReference<xla::ifrt::UserContext> user_context) {
+  return Array::MakeErrorArrays(this, rpc_helper_, error, array_specs,
+                                std::move(user_context));
 }
 
 absl::StatusOr<xla::ifrt::ArrayRef> Client::AssembleArrayFromSingleDeviceArrays(
@@ -323,8 +330,6 @@ absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> Client::CopyArrays(
   }
   if (memory_kind.has_value()) {
     // Use an empty string to indicate the default memory kind.
-    // OSS requires explicit string conversion
-    // NOLINTNEXTLINE(*-redundant-string-conversions)
     req->set_memory_kind(std::string(memory_kind->memory_kind().value_or("")));
   }
   req->set_copy_semantics(ToArrayCopySemanticsProto(semantics));
@@ -360,12 +365,10 @@ absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> Client::CopyArrays(
         arrays[i]->sharding().WithDeviceAssignment(devices, memory_kind));
     auto* proxy_array = llvm::cast<xla::ifrt::proxy::Array>(arrays[i].get());
     CHECK(proxy_array != nullptr);
-    TF_ASSIGN_OR_RETURN(std::shared_ptr<const xla::PjRtLayout> layout,
-                        proxy_array->pjrt_layout());
-    new_arrays.push_back(
-        tsl::MakeRef<Array>(this, rpc_helper_, arrays[i]->dtype(),
-                            arrays[i]->shape(), std::move(new_sharding),
-                            ArrayHandle{result_handles[i]}, std::move(layout)));
+    new_arrays.push_back(tsl::MakeRef<Array>(
+        this, rpc_helper_, arrays[i]->dtype(), arrays[i]->shape(),
+        std::move(new_sharding), ArrayHandle{result_handles[i]},
+        /*layout=*/proxy_array->custom_layout()));
   }
   return new_arrays;
 }
@@ -376,13 +379,13 @@ absl::StatusOr<std::vector<xla::ifrt::ArrayRef>> Client::RemapArrays(
   return Array::RemapArrays(this, rpc_helper_, plan, arrays, semantics);
 }
 
-tsl::Future<> Client::GetReadyFuture(
+xla::ifrt::Future<> Client::GetReadyFuture(
     absl::Span<const xla::ifrt::ValueRef> values) {
   tsl::profiler::TraceMe traceme_ifrt_entrypoint([n_values = values.size()]() {
     return tsl::profiler::TraceMeEncode("IfrtProxyEntrypointGetReadyFuture",
                                         {{"n_values", n_values}});
   });
-  absl::InlinedVector<tsl::Future<>, 1> futures;
+  absl::InlinedVector<Future<>, 1> futures;
 
   auto req = std::make_unique<CheckValueReadyRequest>();
   for (const auto& value : values) {
@@ -393,7 +396,7 @@ tsl::Future<> Client::GetReadyFuture(
       absl::StatusOr<ArrayHandle> handle =
           proxy_array->GetHandle(ArrayCopySemantics::kAlwaysCopy);
       if (!handle.ok()) {
-        futures.push_back(tsl::Future<>(handle.status()));
+        futures.push_back(Future<>(handle.status()));
       } else {
         req->add_value_handles(handle->handle);
       }
@@ -402,12 +405,12 @@ tsl::Future<> Client::GetReadyFuture(
     }
   }
 
-  auto [promise, future] = tsl::Future<>::MakePromise();
+  auto promise = Future<>::CreatePromise();
   rpc_helper_->CheckValueReady(std::move(req))
-      .OnReady([promise = std::move(promise)](
-                   absl::StatusOr<std::shared_ptr<CheckValueReadyResponse>>
-                       resp) mutable { promise.Set(resp.status()); });
-  futures.push_back(std::move(future));
+      .OnReady(
+          [promise](absl::StatusOr<std::shared_ptr<CheckValueReadyResponse>>
+                        resp) mutable { promise.Set(resp.status()); });
+  futures.push_back(Future<>(std::move(promise)));
 
   return JoinFutures(futures);
 }
@@ -434,7 +437,7 @@ absl::StatusOr<DeviceAssignment> Client::GetDefaultDeviceAssignment(
   return *std::move(assignment_to_return);
 }
 
-absl::StatusOr<xla::ifrt::DeviceListRef> Client::MakeDeviceList(
+xla::ifrt::DeviceListRef Client::MakeDeviceList(
     absl::Span<xla::ifrt::Device* const> devices) const {
   return xla::ifrt::BasicDeviceList::Create(devices);
 }
@@ -455,20 +458,18 @@ Client::GetDefaultPjRtLayout(xla::ifrt::DType dtype,
       /*device_summary=*/device_summary(llvm::dyn_cast<Device>(device))};
 
   {
-    absl::MutexLock l(mu_);
+    absl::MutexLock l(&mu_);
     if (auto it = layout_cache_.find(key); it != layout_cache_.end()) {
       return it->second;
     }
   }
 
-  dtype.ToProto(*req->mutable_dtype(), rpc_helper_->ifrt_serdes_version());
+  *req->mutable_dtype() = dtype.ToProto(rpc_helper_->ifrt_serdes_version());
   req->mutable_dims()->Reserve(dims.size());
   for (int64_t dim : dims) {
     req->add_dims(dim);
   }
   req->set_device_id(device->Id().value());
-  // OSS requires explicit string conversion
-  // NOLINTNEXTLINE(*-redundant-string-conversions)
   req->set_memory_kind(std::string(memory_kind.memory_kind().value_or("")));
 
   auto future = rpc_helper_->GetDefaultLayout(std::move(req));
@@ -477,7 +478,7 @@ Client::GetDefaultPjRtLayout(xla::ifrt::DType dtype,
   TF_ASSIGN_OR_RETURN(auto layout, xla::PjRtLayout::Deserialize(
                                        response->serialized_pjrt_layout()));
   {
-    absl::MutexLock l(mu_);
+    absl::MutexLock l(&mu_);
     layout_cache_.insert({key, layout});
   }
   return layout;

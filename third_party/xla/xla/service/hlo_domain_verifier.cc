@@ -85,7 +85,7 @@ absl::Status HloDomainVerifier::RunContext::Run(
   return absl::OkStatus();
 }
 
-absl::StatusOr<bool> HloDomainVerifier::RunImpl(
+absl::StatusOr<bool> HloDomainVerifier::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   RunContext run_context(module, this);

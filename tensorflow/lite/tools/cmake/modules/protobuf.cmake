@@ -37,14 +37,9 @@ if(NOT protobuf_POPULATED)
   OverridableFetchContent_Populate(protobuf)
 endif()
 
-# Export basic variables expected by consumers
 set(Protobuf_INCLUDE_DIR "${protobuf_SOURCE_DIR}/src" CACHE INTERNAL "")
 set(Protobuf_LIBRARIES protobuf::libprotobuf CACHE INTERNAL "")
 
-# Avoid adding the same subdirectory twice when multiple find_package calls
-# occur in a single configure (e.g., from different subprojects).
-if(NOT TARGET protobuf::libprotobuf)
-  add_subdirectory(${protobuf_SOURCE_DIR} ${protobuf_BINARY_DIR})
-endif()
+add_subdirectory(${protobuf_SOURCE_DIR} ${protobuf_BINARY_DIR})
 
 set(Protobuf_PROTOC_EXECUTABLE protoc CACHE INTERNAL "")

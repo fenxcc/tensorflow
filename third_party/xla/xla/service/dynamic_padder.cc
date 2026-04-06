@@ -2079,7 +2079,7 @@ absl::Status DynamicShapeRemovingVisitor::HandleSetDimensionSize(
 
 }  // namespace
 
-absl::StatusOr<bool> DynamicPadder::RunImpl(
+absl::StatusOr<bool> DynamicPadder::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   VLOG(2) << "Pre DynamicPadder HLO:";

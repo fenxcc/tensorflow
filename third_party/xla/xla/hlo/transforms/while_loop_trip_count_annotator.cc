@@ -30,7 +30,7 @@ limitations under the License.
 
 namespace xla {
 
-absl::StatusOr<bool> WhileLoopTripCountAnnotator::RunImpl(
+absl::StatusOr<bool> WhileLoopTripCountAnnotator::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   bool changed = false;

@@ -19,14 +19,16 @@ limitations under the License.
 
 #include "xla/tsl/platform/env.h"
 #include "xla/tsl/platform/threadpool.h"
+#include "xla/tsl/platform/threadpool_async_executor.h"
 
 namespace xla::gpu {
 
 SingleThreadedExecutor::SingleThreadedExecutor(tsl::Env& env)
-    : thread_pool_(&env, "SingleThreadedExecutor", 1) {}
+    : thread_pool_(&env, "SingleThreadedExecutor", 1),
+      executor_(&thread_pool_) {}
 
 void SingleThreadedExecutor::Execute(SingleThreadedExecutor::Task task) {
-  thread_pool_.AsExecutor()->Execute(std::move(task));
+  executor_.Execute(std::move(task));
 }
 
 }  // namespace xla::gpu

@@ -15,11 +15,8 @@ limitations under the License.
 
 #include "xla/python/ifrt/executable.h"
 
-#include <string>
-
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include "absl/status/status_matchers.h"
 #include "xla/python/ifrt/attribute_map.h"
 #include "xla/python/ifrt/execute_options.pb.h"
 #include "xla/python/ifrt/serdes_test_util.h"
@@ -30,7 +27,6 @@ limitations under the License.
 namespace xla {
 namespace ifrt {
 
-using ::absl_testing::IsOkAndHolds;
 using ::testing::Pair;
 using ::testing::UnorderedElementsAre;
 
@@ -62,8 +58,9 @@ TEST_P(ExecuteOptionsSerDesTest, RoundTrip) {
               UnorderedElementsAre(0, 3));
   EXPECT_TRUE(deserialized.fill_status);
   ASSERT_TRUE(deserialized.custom_options.has_value());
-  EXPECT_THAT(deserialized.custom_options->Get<std::string>("foo"),
-              IsOkAndHolds("bar"));
+  EXPECT_THAT(
+      deserialized.custom_options->map(),
+      UnorderedElementsAre(Pair("foo", AttributeMap::StringValue("bar"))));
 }
 
 INSTANTIATE_TEST_SUITE_P(

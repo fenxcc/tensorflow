@@ -18,8 +18,10 @@ limitations under the License.
 #include <cstdint>
 #include <iostream>
 #include <string>
+#include <utility>
 
 #include <gtest/gtest.h>
+#include "absl/status/statusor.h"
 #include "llvm/ADT/SmallVector.h"
 #include "mlir/IR/Builders.h"
 #include "mlir/IR/BuiltinTypeInterfaces.h"
@@ -91,6 +93,30 @@ TEST(TypeToShapeTest, ConvertBasicTypesToTypes) {
       EqualsProto(Shape().ToProto()));
 }
 
+TEST(TypeToShapeTest, ConvertMemRefTypeToTypes) {
+  MLIRContext context;
+  Builder b(&context);
+
+  // Memref without any affine map. Note: memory space is ignored for shape.
+  EXPECT_THAT(
+      TypeToShape(MemRefType::get({8, 128}, b.getF32Type())).ToProto(),
+      EqualsProto(
+          ShapeUtil::MakeShape(PrimitiveType::F32, {8, 128}).ToProto()));
+  EXPECT_THAT(
+      TypeToShape(MemRefType::get({100, 13, 210}, b.getF32Type())).ToProto(),
+      EqualsProto(
+          ShapeUtil::MakeShape(PrimitiveType::F32, {100, 13, 210}).ToProto()));
+
+  // Vector types are "flattened" into the end of the shape.
+  EXPECT_THAT(
+      TypeToShape(MemRefType::get({100, 13, 210},
+                                  VectorType::get({8, 128}, b.getF32Type())))
+          .ToProto(),
+      EqualsProto(
+          ShapeUtil::MakeShape(PrimitiveType::F32, {100, 13, 210, 8, 128})
+              .ToProto()));
+}
+
 TEST(TypeToShapeTest, ConvertTensorTypeToTypes) {
   mlir::MLIRContext context;
   context.loadDialect<mlir::mhlo::MhloDialect>();
@@ -142,27 +168,38 @@ TEST(TypeToShapeTest, ConvertTensorTypeToTypes) {
       EqualsProto(Shape().ToProto()));
 }
 
-TEST(TypeToShapeTest, ConvertBufferTypeToTypes) {
+TEST(TypeToShapeTest, ConvertMemRefToShape) {
+  Shape shape = ShapeUtil::MakeShapeWithDenseLayout(PrimitiveType::F32,
+                                                    {10, 20, 30}, {2, 0, 1});
   MLIRContext context;
-  Builder builder(&context);
+  mlir::Builder builder(&context);
 
-  Shape shape1 = ShapeUtil::MakeShapeWithDenseLayout(PrimitiveType::F32,
-                                                     {10, 20, 30}, {1, 0, 2});
+  absl::StatusOr<mlir::Type> mlir_type =
+      ConvertShapeToType<MemRefType>(shape, builder);
+  ASSERT_TRUE(mlir_type.ok());
+  mlir::Type type = std::move(mlir_type).value();
+  Shape converted = TypeToShape(type);
+  EXPECT_TRUE(ShapeUtil::Equal(
+      converted, ShapeUtil::MakeShapeWithDenseLayout(PrimitiveType::F32,
+                                                     {10, 20, 30}, {2, 0, 1})));
+  EXPECT_TRUE(ShapeUtil::Equal(converted, shape));
+}
 
-  EXPECT_THAT(
-      TypeToShape(ConvertShapeToType<MemRefType>(shape1, builder).value())
-          .ToProto(),
-      EqualsProto(
-          ShapeUtil::MakeValidatedBufferShape(shape1).value().ToProto()));
+TEST(TypeToShapeTest, ConvertMemRefToShape2) {
+  Shape shape = ShapeUtil::MakeShapeWithDenseLayout(PrimitiveType::C64,
+                                                    {2, 4, 3, 3}, {2, 3, 1, 0});
+  MLIRContext context;
+  mlir::Builder builder(&context);
 
-  Shape shape2 = ShapeUtil::MakeShapeWithDenseLayout(PrimitiveType::F32,
-                                                     {10, 20, 30}, {2, 1, 0});
-
-  EXPECT_THAT(
-      TypeToShape(ConvertShapeToType<MemRefType>(shape2, builder).value())
-          .ToProto(),
-      EqualsProto(
-          ShapeUtil::MakeValidatedBufferShape(shape2).value().ToProto()));
+  absl::StatusOr<mlir::Type> mlir_type =
+      ConvertShapeToType<MemRefType>(shape, builder);
+  ASSERT_TRUE(mlir_type.ok());
+  mlir::Type type = std::move(mlir_type).value();
+  Shape converted = TypeToShape(type);
+  EXPECT_TRUE(ShapeUtil::Equal(
+      converted, ShapeUtil::MakeShapeWithDenseLayout(
+                     PrimitiveType::C64, {2, 4, 3, 3}, {2, 3, 1, 0})));
+  EXPECT_TRUE(ShapeUtil::Equal(converted, shape));
 }
 
 }  // namespace

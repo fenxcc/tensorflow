@@ -61,9 +61,7 @@ limitations under the License.
 #include "mlir/Target/LLVMIR/Dialect/ROCDL/ROCDLToLLVMIRTranslation.h"  // from @llvm-project
 #include "mlir/Transforms/DialectConversion.h"  // from @llvm-project
 #include "mlir/Transforms/Passes.h"  // from @llvm-project
-#include "stablehlo/conversions/linalg/transforms/Passes.h"  // from @stablehlo
 #include "stablehlo/dialect/ChloOps.h"  // from @stablehlo
-#include "stablehlo/transforms/Passes.h"  // from @stablehlo
 #include "tensorflow/compiler/mlir/tensorflow/utils/dump_mlir_util.h"
 #include "tensorflow/compiler/mlir/tools/kernel_gen/transforms/passes.h"
 #include "tensorflow/compiler/mlir/tools/kernel_gen/transforms/rewriters.h"
@@ -167,9 +165,7 @@ absl::Status LowerHlotoLoops(mlir::ModuleOp module,
             /*jit_i64_indexed_for_large_tensors=*/true));
   }
 
-  pm.addNestedPass<mlir::func::FuncOp>(
-      mlir::stablehlo::createChloLegalizeToStablehloPass());
-  pm.addPass(mlir::mhlo::createStablehloLegalizeToHloPass());
+  pm.addNestedPass<FuncOp>(mlir::mhlo::createChloLegalizeToHloPass());
 
   pm.addNestedPass<FuncOp>(mlir::createCanonicalizerPass());
   pm.addNestedPass<FuncOp>(mlir::createCSEPass());
@@ -180,29 +176,13 @@ absl::Status LowerHlotoLoops(mlir::ModuleOp module,
   pm.addNestedPass<FuncOp>(mlir::createCanonicalizerPass());
   pm.addNestedPass<FuncOp>(mlir::createCSEPass());
 
-  // Transform HLO operations to Linalg and standard.
-  mlir::mhlo::HloLegalizeToStablehloPassOptions options;
-  options.allow_xla_features_ = true;  // MinimumBroadcastOp
-  pm.addPass(mlir::mhlo::createHloLegalizeToStablehloPass(options));
-
-  // Allowing implicit captures of scalar inputs causes crashes in kernelgen
-  // JIT kernels.
-  mlir::stablehlo::StablehloLegalizeToLinalgPassOptions linalg_options;
-  linalg_options.captureScalarInputs = false;
-  pm.addNestedPass<FuncOp>(
-      mlir::stablehlo::createStablehloLegalizeToLinalgPass(linalg_options));
-  pm.addPass(mlir::mhlo::createStablehloLegalizeToHloPass());
-
-  // Convert tensor.reshape to MHLO before running any bufferization passes.
-  // We'll need to teach this pipeline how to properly handle tensor.reshape
-  // in order to fully deprecate MHLO but in the meantime this ublocks lots of
-  // cleanup.
-  pm.addNestedPass<FuncOp>(
-      ::mlir::kernel_gen::createLegalizeTensorReshapePass());
+  // Transform HLO operations to LinAlg and standard.
+  pm.addNestedPass<FuncOp>(::mlir::mhlo::createLegalizeHloToLinalgPass());
+  pm.addPass(::mlir::mhlo::createLegalizeToArithmeticPass());
 
   // Remove the remaining references to unsigned types after all HLO compute
   // operations were converted.
-  pm.addPass(mlir::stablehlo::createStablehloConvertToSignlessPass());
+  pm.addPass(mlir::mhlo::createConvertToSignlessPass());
 
   pm.addPass(mlir::createCanonicalizerPass());
   pm.addNestedPass<FuncOp>(mlir::createCSEPass());

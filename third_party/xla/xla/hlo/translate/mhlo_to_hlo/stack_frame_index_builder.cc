@@ -44,9 +44,7 @@ int StackFrameIndexBuilder::AddStackFrameLocation(
       cast<mlir::FileLineColLoc>(name_location.getChildLoc());
 
   int line = file_line_location.getLine();
-  int end_line = file_line_location.getEndLine();
   int column = file_line_location.getColumn();
-  int end_column = file_line_location.getEndColumn();
   std::string filename = file_line_location.getFilename().str();
   std::string function_name = name_location.getName().str();
 
@@ -74,9 +72,7 @@ int StackFrameIndexBuilder::AddStackFrameLocation(
     file_location->set_file_name_id(filename_id);
     file_location->set_function_name_id(function_name_id);
     file_location->set_line(line);
-    file_location->set_end_line(end_line);
     file_location->set_column(column);
-    file_location->set_end_column(end_column);
 
     file_location_id = indexes_.file_locations_size();
     file_location_to_id_[location_tuple] = file_location_id;
@@ -145,10 +141,7 @@ StackFrameIndexBuilder::AddCallStackAndGetFirstFrameId(
       indexes_.file_locations(stack_frame.file_location_id() - 1);
   return {parent_frame_id,
           indexes_.file_names(file_location.file_name_id() - 1),
-          file_location.line(),
-          file_location.end_line(),
-          file_location.column(),
-          file_location.end_column()};
+          file_location.line()};
 }
 
 xla::StackFrameIndexProto StackFrameIndexBuilder::Build() const {

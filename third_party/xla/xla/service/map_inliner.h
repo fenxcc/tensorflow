@@ -32,10 +32,10 @@ class MapInliner : public HloModulePass {
   ~MapInliner() override = default;
   absl::string_view name() const override { return "map-inline"; }
 
- protected:
   // Run map inlining on the given computation. Returns whether the computation
   // was changed.
-  absl::StatusOr<bool> RunImpl(
+  using HloPassInterface::Run;
+  absl::StatusOr<bool> Run(
       HloModule* module,
       const absl::flat_hash_set<absl::string_view>& execution_threads) override;
 };

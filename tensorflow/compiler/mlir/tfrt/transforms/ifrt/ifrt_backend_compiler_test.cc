@@ -22,7 +22,6 @@ limitations under the License.
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include "absl/status/status.h"
-#include "absl/status/status_matchers.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
@@ -39,6 +38,7 @@ limitations under the License.
 #include "xla/tsl/framework/test_util/mock_serving_device_selector.h"
 #include "xla/tsl/lib/core/status_test_util.h"
 #include "xla/tsl/platform/env.h"
+#include "xla/tsl/platform/status_matchers.h"
 #include "xla/tsl/platform/statusor.h"
 #include "xla/tsl/platform/threadpool.h"
 #include "tensorflow/core/platform/resource_loader.h"
@@ -81,10 +81,10 @@ class IfrtBackendCompilerTest : public ::testing::Test {
   }
 
   void verifyModules() {
-    absl::MutexLock l(ServingExecutableRegistry::mu_);
+    absl::MutexLock l(&ServingExecutableRegistry::mu_);
     for (const auto& [_, executable] :
          *ServingExecutableRegistry::executables_) {
-      absl::MutexLock l(executable->mutex_);
+      absl::MutexLock l(&executable->mutex_);
       executable->module_->walk([](mlir::func::FuncOp func) {
         ASSERT_FALSE(func->hasAttr("tfrt_ifrt_serving.program_id"));
       });
@@ -111,6 +111,7 @@ class IfrtBackendCompilerTest : public ::testing::Test {
 
 namespace {
 using ::testing::HasSubstr;
+using ::tsl::testing::StatusIs;
 
 struct IfrtBackendCompilerTestParams {
   std::string mlir_file_name;
@@ -171,7 +172,7 @@ TEST_F(IfrtBackendCompilerTest, CompileShallFailAfterModelIsFrozen) {
 
   EXPECT_THAT(
       compiler_.CompileTensorflow(runtime_context_, another_mlir_module.get()),
-      absl_testing::StatusIs(
+      StatusIs(
           absl::StatusCode::kFailedPrecondition,
           HasSubstr("Cannot compile IFRT programs after the model is frozen")));
 }

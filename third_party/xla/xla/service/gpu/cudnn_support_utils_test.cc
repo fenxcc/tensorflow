@@ -15,6 +15,7 @@ limitations under the License.
 
 #include "xla/service/gpu/cudnn_support_utils.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -23,11 +24,6 @@ limitations under the License.
 #include <vector>
 
 #include <gtest/gtest.h>
-#include "absl/algorithm/container.h"
-#include "absl/log/log.h"
-#include "absl/status/status.h"
-#include "absl/status/status_matchers.h"
-#include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "xla/hlo/ir/hlo_casting_utils.h"
@@ -39,12 +35,18 @@ limitations under the License.
 #include "xla/hlo/testlib/verified_hlo_module.h"
 #include "xla/shape.h"
 #include "xla/shape_util.h"
-#include "xla/tsl/platform/statusor.h"
+#include "xla/stream_executor/device_description.h"
 #include "xla/util.h"
+#include "tsl/platform/errors.h"
+#include "tsl/platform/logging.h"
+#include "tsl/platform/status_matchers.h"
+#include "tsl/platform/statusor.h"
 
 namespace xla {
 namespace gpu {
 namespace {
+
+using ::tsl::testing::IsOkAndHolds;
 
 class CudnnSupportUtilsTest : public HloHardwareIndependentTestBase {
  public:
@@ -58,7 +60,7 @@ class CudnnSupportUtilsTest : public HloHardwareIndependentTestBase {
         if (inst->IsCustomCall(target)) {
           VLOG(1) << inst->ToString();
           if (call != nullptr) {
-            return absl::FailedPreconditionError(
+            return tsl::errors::FailedPrecondition(
                 "Found more than one custom call.");
           }
           call = Cast<HloCustomCallInstruction>(inst);
@@ -66,7 +68,7 @@ class CudnnSupportUtilsTest : public HloHardwareIndependentTestBase {
       }
     }
     if (call == nullptr) {
-      return absl::FailedPreconditionError(
+      return tsl::errors::FailedPrecondition(
           "Did not find any matching custom call.");
     }
     return call;
@@ -92,14 +94,13 @@ TEST_F(CudnnSupportUtilsTest,
                           GetCustomCall(module.get(), "__cudnn$convForward"));
 
   EXPECT_THAT(CudnnSupportsOptimizedIntegerConvolution({7, 5}, *conv, 4),
-              absl_testing::IsOkAndHolds(true));
+              IsOkAndHolds(true));
   EXPECT_THAT(CudnnSupportsOptimizedIntegerConvolution({7, 5}, *conv, 32),
-              absl_testing::IsOkAndHolds(true));
+              IsOkAndHolds(true));
   EXPECT_THAT(CudnnSupportsOptimizedIntegerConvolution({7, 5}, *conv, 7),
-              absl_testing::IsOkAndHolds(false));
-  EXPECT_THAT(
-      CudnnSupportsOptimizedIntegerConvolution({7, 5}, *conv, 1),
-      absl_testing::IsOkAndHolds(false));  // 1 is not considered a vector size
+              IsOkAndHolds(false));
+  EXPECT_THAT(CudnnSupportsOptimizedIntegerConvolution({7, 5}, *conv, 1),
+              IsOkAndHolds(false));  // 1 is not considered a vector size
 }
 
 TEST_F(CudnnSupportUtilsTest,
@@ -122,15 +123,15 @@ TEST_F(CudnnSupportUtilsTest,
 
   // cc6.1 allows for int8x4
   EXPECT_THAT(CudnnSupportsOptimizedIntegerConvolution({6, 0}, *conv, 4),
-              absl_testing::IsOkAndHolds(false));
+              IsOkAndHolds(false));
   EXPECT_THAT(CudnnSupportsOptimizedIntegerConvolution({6, 1}, *conv, 4),
-              absl_testing::IsOkAndHolds(true));
+              IsOkAndHolds(true));
 
   // cc7.5+ allows for int8x32
   EXPECT_THAT(CudnnSupportsOptimizedIntegerConvolution({7, 4}, *conv, 32),
-              absl_testing::IsOkAndHolds(false));
+              IsOkAndHolds(false));
   EXPECT_THAT(CudnnSupportsOptimizedIntegerConvolution({7, 5}, *conv, 32),
-              absl_testing::IsOkAndHolds(true));
+              IsOkAndHolds(true));
 }
 
 TEST_F(CudnnSupportUtilsTest,
@@ -151,7 +152,7 @@ TEST_F(CudnnSupportUtilsTest,
   TF_ASSERT_OK_AND_ASSIGN(
       conv, GetCustomCall(moduleFwd.get(), "__cudnn$convForward"));
   EXPECT_THAT(CudnnSupportsOptimizedIntegerConvolution({7, 5}, *conv, 32),
-              absl_testing::IsOkAndHolds(true));
+              IsOkAndHolds(true));
 
   auto moduleBwdFilter = ParseAndReturnVerifiedModule(R"(
   HloModule TestModule
@@ -169,7 +170,7 @@ TEST_F(CudnnSupportUtilsTest,
   TF_ASSERT_OK_AND_ASSIGN(
       conv, GetCustomCall(moduleBwdFilter.get(), "__cudnn$convBackwardFilter"));
   EXPECT_THAT(CudnnSupportsOptimizedIntegerConvolution({7, 5}, *conv, 32),
-              absl_testing::IsOkAndHolds(false));
+              IsOkAndHolds(false));
 
   auto moduleBwdInput = ParseAndReturnVerifiedModule(R"(
   HloModule TestModule
@@ -187,7 +188,7 @@ TEST_F(CudnnSupportUtilsTest,
   TF_ASSERT_OK_AND_ASSIGN(
       conv, GetCustomCall(moduleBwdInput.get(), "__cudnn$convBackwardInput"));
   EXPECT_THAT(CudnnSupportsOptimizedIntegerConvolution({7, 5}, *conv, 32),
-              absl_testing::IsOkAndHolds(false));
+              IsOkAndHolds(false));
 }
 
 TEST_F(CudnnSupportUtilsTest,
@@ -207,9 +208,9 @@ TEST_F(CudnnSupportUtilsTest,
   TF_ASSERT_OK_AND_ASSIGN(
       conv, GetCustomCall(moduleS8InOut.get(), "__cudnn$convForward"));
   EXPECT_THAT(CudnnSupportsOptimizedIntegerConvolution({7, 5}, *conv, 4),
-              absl_testing::IsOkAndHolds(true));
+              IsOkAndHolds(true));
   EXPECT_THAT(CudnnSupportsOptimizedIntegerConvolution({7, 5}, *conv, 32),
-              absl_testing::IsOkAndHolds(true));
+              IsOkAndHolds(true));
 
   auto moduleS8InF32Out = ParseAndReturnVerifiedModule(R"(
   HloModule TestModule
@@ -225,10 +226,9 @@ TEST_F(CudnnSupportUtilsTest,
   TF_ASSERT_OK_AND_ASSIGN(
       conv, GetCustomCall(moduleS8InF32Out.get(), "__cudnn$convForward"));
   EXPECT_THAT(CudnnSupportsOptimizedIntegerConvolution({7, 5}, *conv, 4),
-              absl_testing::IsOkAndHolds(true));
-  EXPECT_THAT(
-      CudnnSupportsOptimizedIntegerConvolution({7, 5}, *conv, 32),
-      absl_testing::IsOkAndHolds(false));  // imma output must also be int8_t
+              IsOkAndHolds(true));
+  EXPECT_THAT(CudnnSupportsOptimizedIntegerConvolution({7, 5}, *conv, 32),
+              IsOkAndHolds(false));  // imma output must also be int8_t
 
   auto moduleF32InF32Out = ParseAndReturnVerifiedModule(R"(
   HloModule TestModule
@@ -244,9 +244,9 @@ TEST_F(CudnnSupportUtilsTest,
   TF_ASSERT_OK_AND_ASSIGN(
       conv, GetCustomCall(moduleF32InF32Out.get(), "__cudnn$convForward"));
   EXPECT_THAT(CudnnSupportsOptimizedIntegerConvolution({7, 5}, *conv, 4),
-              absl_testing::IsOkAndHolds(false));
+              IsOkAndHolds(false));
   EXPECT_THAT(CudnnSupportsOptimizedIntegerConvolution({7, 5}, *conv, 32),
-              absl_testing::IsOkAndHolds(false));
+              IsOkAndHolds(false));
 }
 
 TEST_F(CudnnSupportUtilsTest,
@@ -268,9 +268,9 @@ TEST_F(CudnnSupportUtilsTest,
                           GetCustomCall(module.get(), "__cudnn$convForward"));
 
   EXPECT_THAT(CudnnSupportsOptimizedIntegerConvolution({7, 5}, *conv, 4),
-              absl_testing::IsOkAndHolds(false));
+              IsOkAndHolds(false));
   EXPECT_THAT(CudnnSupportsOptimizedIntegerConvolution({7, 5}, *conv, 32),
-              absl_testing::IsOkAndHolds(false));
+              IsOkAndHolds(false));
 }
 
 TEST_F(CudnnSupportUtilsTest,
@@ -290,9 +290,9 @@ TEST_F(CudnnSupportUtilsTest,
   TF_ASSERT_OK_AND_ASSIGN(conv,
                           GetCustomCall(module.get(), "__cudnn$convForward"));
   EXPECT_THAT(CudnnSupportsOptimizedIntegerConvolution({7, 5}, *conv, 4),
-              absl_testing::IsOkAndHolds(false));
+              IsOkAndHolds(false));
   EXPECT_THAT(CudnnSupportsOptimizedIntegerConvolution({7, 5}, *conv, 32),
-              absl_testing::IsOkAndHolds(false));
+              IsOkAndHolds(false));
 }
 
 TEST_F(CudnnSupportUtilsTest,
@@ -312,9 +312,9 @@ TEST_F(CudnnSupportUtilsTest,
   TF_ASSERT_OK_AND_ASSIGN(conv, GetCustomCall(moduleFilterCoversInput.get(),
                                               "__cudnn$convForward"));
   EXPECT_THAT(CudnnSupportsOptimizedIntegerConvolution({7, 5}, *conv, 4),
-              absl_testing::IsOkAndHolds(true));
+              IsOkAndHolds(true));
   EXPECT_THAT(CudnnSupportsOptimizedIntegerConvolution({7, 5}, *conv, 32),
-              absl_testing::IsOkAndHolds(false));
+              IsOkAndHolds(false));
 
   auto moduleFilterAlmostCoversInput = ParseAndReturnVerifiedModule(R"(
   HloModule TestModule
@@ -331,9 +331,9 @@ TEST_F(CudnnSupportUtilsTest,
                           GetCustomCall(moduleFilterAlmostCoversInput.get(),
                                         "__cudnn$convForward"));
   EXPECT_THAT(CudnnSupportsOptimizedIntegerConvolution({7, 5}, *conv, 4),
-              absl_testing::IsOkAndHolds(true));
+              IsOkAndHolds(true));
   EXPECT_THAT(CudnnSupportsOptimizedIntegerConvolution({7, 5}, *conv, 32),
-              absl_testing::IsOkAndHolds(true));
+              IsOkAndHolds(true));
 }
 
 // Verify that convolutions with any filter dimension configuration are
@@ -386,11 +386,11 @@ TEST_P(ReorderFilterRank4Test, InferTransposeRank4) {
 }
 
 std::vector<std::string> GeneratePermutations(std::string input_dims) {
-  absl::c_sort(input_dims);
+  std::sort(input_dims.begin(), input_dims.end());
   std::vector<std::string> permutations;
   do {
     permutations.push_back(input_dims);
-  } while (absl::c_next_permutation(input_dims));
+  } while (std::next_permutation(input_dims.begin(), input_dims.end()));
   return permutations;
 }
 

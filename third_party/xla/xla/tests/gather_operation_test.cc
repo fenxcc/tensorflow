@@ -20,7 +20,6 @@ limitations under the License.
 #include <utility>
 #include <vector>
 
-#include "xla/tests/xla_test_backend_predicates.h"
 #include "absl/types/span.h"
 #include "xla/array.h"
 #include "xla/error_spec.h"
@@ -329,10 +328,10 @@ ENTRY main {
 
 // The next 2 tests uses data types that require extra steps on some backends so
 // only run them on known good backends.
+#if defined(XLA_TEST_BACKEND_GPU) || defined(XLA_TEST_BACKEND_CPU) || \
+    defined(XLA_TEST_BACKEND_INTERPRETER)
+
 TEST_F(GatherOperationTest, OutOfBoundsIndex64Bit) {
-  if (!test::DeviceTypeIsOneOf({test::kCpu, test::kGpu, test::kInterpreter})) {
-    GTEST_SKIP();
-  }
   // Out of bounds indices must not crash, even when the value is of a type
   // larger than needed to access all values in the input, and the indices
   // produce the same values across all backends.
@@ -360,9 +359,6 @@ ENTRY main {
 }
 
 TEST_F(GatherOperationTest, TooSmallIndex8Bit) {
-  if (!test::DeviceTypeIsOneOf({test::kCpu, test::kGpu, test::kInterpreter})) {
-    GTEST_SKIP();
-  }
   // Indices of a type too small to index all locations in gather should not
   // fail.
 
@@ -390,6 +386,7 @@ ENTRY main {
   RunTest(hlo_text, &operand, &start_indices);
 }
 
+#endif
 
 TEST_F(GatherOperationTest, OutOfBoundsUnsignedIndex) {
   // Out of bounds indices must not crash, and the indices in range should

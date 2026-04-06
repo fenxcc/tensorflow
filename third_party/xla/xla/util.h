@@ -69,8 +69,7 @@ namespace xla {
 //
 // and FromMixedRadix(digits) == n. The mixed radix representation is unique
 // modulo the product of the entries of bounds.
-template <typename Container = std::vector<int64_t>>
-Container ToMixedRadix(int64_t n, absl::Span<const int64_t> bounds);
+std::vector<int64_t> ToMixedRadix(int64_t n, absl::Span<const int64_t> bounds);
 
 // Logs the provided status message with a backtrace.
 //
@@ -128,16 +127,6 @@ struct TimerStats {
   double max_secs ABSL_GUARDED_BY(stats_mutex) = 0;
   uint64_t times_called ABSL_GUARDED_BY(stats_mutex) = 0;
 };
-
-inline std::string XlaFormatDevice(int device_ordinal) {
-  return absl::StrFormat("device=[%d] ", device_ordinal);
-}
-
-#define XLA_VLOG_DEVICE(level, device_ordinal) \
-  VLOG(level) << xla::XlaFormatDevice(device_ordinal)
-
-#define XLA_LOG_DEVICE(level, device_ordinal) \
-  LOG(level) << xla::XlaFormatDevice(device_ordinal)
 
 // RAII timer for XLA_SCOPED_LOGGING_TIMER and XLA_SCOPED_LOGGING_TIMER_LEVEL
 // macros above.  Recommended usage is via the macros so you don't have to give
@@ -766,11 +755,6 @@ std::unique_ptr<Derived> unique_ptr_down_cast(std::unique_ptr<Base> ptr) {
   return absl::WrapUnique(tensorflow::down_cast<Derived*>(ptr.release()));
 }
 
-template <typename T>
-T Product(absl::Span<const T> xs) {
-  return absl::c_accumulate(xs, static_cast<T>(1), std::multiplies<T>());
-}
-
 int64_t Product(absl::Span<const int64_t> xs);
 
 // Returns an array of results after performing elementwise product of a and b.
@@ -816,10 +800,6 @@ DimensionVector GetNonContractingDims(
 
 // Removes illegal characters from filenames.
 std::string SanitizeFileName(std::string file_name);
-
-// Removes numerical identifiers and replaces separators in op names.
-std::string SanitizeOpName(std::string op_name, char separator,
-                           const std::string& replace_with);
 
 // Check that a sequence of distinct numbers can form a continuous interval.
 bool DistinctNumbersAreConsecutiveIfSorted(absl::Span<const int64_t>);
@@ -923,8 +903,7 @@ inline void PackIntN(int bits_per_element, absl::Span<const char> input,
 inline std::unique_ptr<char[]> PackIntN(int bits_per_element, const char* data,
                                         size_t size) {
   size_t packed_size = size * bits_per_element / 8;
-  // Note: we can use `std::make_unique_for_overwrite` once C++20 is supported.
-  std::unique_ptr<char[]> buffer(new char[packed_size]);
+  auto buffer = std::make_unique<char[]>(packed_size);
   auto src = absl::MakeSpan(data, size);
   auto dst = absl::MakeSpan(buffer.get(), packed_size);
   PackIntN(bits_per_element, src, dst);
@@ -977,8 +956,7 @@ inline void UnpackIntN(int bits_per_element, absl::Span<const char> input,
 inline std::unique_ptr<char[]> UnpackIntN(int bits_per_element,
                                           const char* data, size_t size) {
   size_t unpacked_size = size * 8 / bits_per_element;
-  // Note: we can use `std::make_unique_for_overwrite` once C++20 is supported.
-  std::unique_ptr<char[]> buffer(new char[unpacked_size]);
+  auto buffer = std::make_unique<char[]>(unpacked_size);
   auto src = absl::MakeSpan(data, size);
   auto dst = absl::MakeSpan(buffer.get(), unpacked_size);
   UnpackIntN(bits_per_element, src, dst);
@@ -1017,11 +995,32 @@ using Vector3 = std::array<int64_t, 3>;
 std::string PrintAllFields(const tsl::protobuf::Message& message);
 
 // Returns true if x is a power of 2.
-ABSL_DEPRECATE_AND_INLINE()
-constexpr bool IsPowerOf2(size_t x) {
+constexpr bool IsPowerOf2(size_t x) noexcept {
   // Checks that x is non-zero and has only a single bit set.
-  return absl::has_single_bit(x);
+  return x != 0 && (x & (x - 1)) == 0;
 }
+
+// A custom deleter that frees the pointer via std::free().
+struct FreeDeleter {
+  void operator()(void* ptr) {
+#if defined(_WIN32)
+    _aligned_free(ptr);
+#else
+    std::free(ptr);
+#endif
+  }
+};
+
+/**
+ * @brief Allocates memory with specified alignment.
+ * @param alignment Specifies the alignment. Power of two.
+ * @param size The number of bytes to allocate. Integral multiple of alignment
+ * @return A unique_ptr managing the allocated memory.
+ */
+std::unique_ptr<void, FreeDeleter> AlignedAlloc(std::size_t alignment,
+                                                std::size_t size);
+
+}  // namespace xla
 
 // Note that STRING is evaluated regardless of whether it will be logged.
 #define XLA_LOG_LINES(SEV, STRING) \
@@ -1033,32 +1032,5 @@ constexpr bool IsPowerOf2(size_t x) {
   do {                                                  \
     if (VLOG_IS_ON(LEVEL)) XLA_LOG_LINES(INFO, STRING); \
   } while (false)
-
-// Implementation details only below here
-
-template <typename Container>
-Container ToMixedRadix(int64_t n, absl::Span<const int64_t> bounds) {
-  if (bounds.empty()) {
-    return {};
-  }
-
-  Container digits;
-  digits.reserve(bounds.size());
-  int64_t divisor = Product(bounds);
-  CHECK_GT(divisor, 0);
-  int64_t remainder = n % divisor;
-  for (const int64_t radix : bounds) {
-    CHECK_GT(radix, 0);
-    divisor /= radix;
-    CHECK_GT(divisor, 0);
-
-    // The divisor is always 1 for the last iteration.
-    digits.push_back(remainder / divisor);
-    remainder = remainder % divisor;
-  }
-  return digits;
-}
-
-}  // namespace xla
 
 #endif  // XLA_UTIL_H_

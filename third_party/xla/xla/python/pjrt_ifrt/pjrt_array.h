@@ -34,12 +34,11 @@ limitations under the License.
 #include "xla/python/ifrt/array.h"
 #include "xla/python/ifrt/device_list.h"
 #include "xla/python/ifrt/dtype.h"
+#include "xla/python/ifrt/future.h"
 #include "xla/python/ifrt/memory.h"
 #include "xla/python/ifrt/shape.h"
 #include "xla/python/ifrt/sharding.h"
-#include "xla/python/ifrt/user_context.h"
 #include "xla/python/pjrt_ifrt/pjrt_client.h"
-#include "xla/tsl/concurrency/future.h"
 #include "xla/tsl/concurrency/ref_count.h"
 
 namespace xla {
@@ -68,44 +67,34 @@ class PjRtArray final
   using PjRtBuffers =
       absl::InlinedVector<std::shared_ptr<PjRtBuffer>, kPjRtBufferInlineSize>;
 
-  // General array construction (with static shape). `pjrt_buffers` may be
-  // empty. `layout == nullptr` indicates a default layout.
+  // General array construction (with static shape). pjrt_buffers may be empty.
   static absl::StatusOr<tsl::RCReference<PjRtArray>> Create(
       PjRtCompatibleClient* client, DType dtype, Shape shape,
       ShardingRef sharding, PjRtBuffers pjrt_buffers,
       std::shared_ptr<const xla::PjRtLayout> layout);
 
-  // General array construction (with dynamic shape). `pjrt_buffers` may be
-  // empty. `layout == nullptr` indicates a default layout.
+  // General array construction (with dynamic shape). pjrt_buffers may be empty.
   static absl::StatusOr<tsl::RCReference<PjRtArray>> Create(
       PjRtCompatibleClient* client, DType dtype, DynamicShape dynamic_shape,
       ShardingRef sharding, PjRtBuffers pjrt_buffers,
       std::shared_ptr<const xla::PjRtLayout> layout);
 
   // Shorthand for a single-shard array construction.
-  // See `PjRtCompatibleClient::CreatePjRtArray()` for the meaning of
-  // `has_custom_layout`.
   static absl::StatusOr<tsl::RCReference<PjRtArray>> Create(
-      PjRtCompatibleClient* client, std::shared_ptr<PjRtBuffer> pjrt_buffer,
-      bool has_custom_layout);
+      PjRtCompatibleClient* client, std::shared_ptr<PjRtBuffer> pjrt_buffer);
 
   // Shorthand for a multi-shard array construction using ConcreteSharding.
-  // `pjrt_buffers` must be non-empty.
-  // See `PjRtCompatibleClient::CreatePjRtArray()` for the meaning of
-  // `has_custom_layout`.
+  // pjrt_buffers must be non-empty.
   // TODO(hyeontaek): Remove this once IFRT Sharding and JAX Sharding is unified
   // so that ConcreteSharding can be replaced with a real Sharding.
   static absl::StatusOr<tsl::RCReference<PjRtArray>> Create(
-      PjRtCompatibleClient* client, Shape shape, PjRtBuffers pjrt_buffers,
-      bool has_custom_layout);
+      PjRtCompatibleClient* client, Shape shape, PjRtBuffers pjrt_buffers);
 
   // Shorthand for a multi-shard array construction using ConcreteSharding with
-  // DynamicShape. `pjrt_buffers` must be non-empty.
-  // See `PjRtCompatibleClient::CreatePjRtArray()` for the meaning of
-  // `has_custom_layout`.
+  // DynamicShape. pjrt_buffers must be non-empty.
   static absl::StatusOr<tsl::RCReference<PjRtArray>> Create(
       PjRtCompatibleClient* client, DynamicShape dynamic_shape,
-      PjRtBuffers pjrt_buffers, bool has_custom_layout);
+      PjRtBuffers pjrt_buffers);
 
   // PjRtCompatibleArray implementation.
 
@@ -168,14 +157,12 @@ class PjRtArray final
   absl::StatusOr<std::shared_ptr<const xla::PjRtLayout>> pjrt_layout()
       const override;
 
-  UserContextRef user_context() const override { return user_context_; }
-
   absl::StatusOr<std::vector<ArrayRef>> DisassembleIntoSingleDeviceArrays(
       ArrayCopySemantics array_copy_semantics,
       SingleDeviceShardSemantics single_device_shard_semantics) override;
 
   ABSL_MUST_USE_RESULT
-  tsl::Future<> CopyToHostBuffer(
+  Future<> CopyToHostBuffer(
       void* data, std::optional<absl::Span<const int64_t>> byte_strides,
       ArrayCopySemantics semantics) override;
 
@@ -184,12 +171,12 @@ class PjRtArray final
       std::optional<xla::ifrt::MemoryKind> memory_kind,
       ArrayCopySemantics semantics);
 
-  tsl::Future<> GetReadyFuture() const override;
+  Future<> GetReadyFuture() const override;
 
   std::shared_ptr<PjRtBuffer> GetPjRtBuffer(ArrayCopySemantics semantics,
                                             int index) const;
 
-  tsl::Future<> Delete() override;
+  Future<> Delete() override;
   bool IsDeleted() const override;
 
   std::string DebugString() const override;
@@ -215,7 +202,6 @@ class PjRtArray final
   ShardingRef sharding_;
   PjRtBuffers pjrt_buffers_;
   std::shared_ptr<const xla::PjRtLayout> layout_;
-  const xla::ifrt::UserContextRef user_context_;
   bool is_deleted_ = false;
 };
 

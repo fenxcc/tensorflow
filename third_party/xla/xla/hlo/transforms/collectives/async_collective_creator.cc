@@ -254,7 +254,7 @@ absl::StatusOr<bool> AsyncCollectiveCreator::ReplaceCollectives(
   return changed;
 }
 
-absl::StatusOr<bool> AsyncCollectiveCreator::RunImpl(
+absl::StatusOr<bool> AsyncCollectiveCreator::Run(
     HloModule* module,
     const absl::flat_hash_set<absl::string_view>& execution_threads) {
   bool changed = false;
