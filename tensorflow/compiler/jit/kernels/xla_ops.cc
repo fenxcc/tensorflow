@@ -1012,7 +1012,6 @@ void XlaRunOp::Compute(OpKernelContext* ctx) {
       GetRecvDeviceMemoryFunction(ctx, key);
   run_options.set_recv_device_memory_function(&recv_function);
 
-
   absl::StatusOr<xla::ExecutionOutput> execution_output = RunExecutable(
       platform_info_, launch_context, std::move(*execution_inputs), run_options,
       closure.executable(), ctx, allocator.get());

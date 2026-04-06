@@ -370,8 +370,7 @@ absl::Status PopulateNullOutputs(
       // Zero-initialize on CPU (best-effort; device memory is left as-is on
       // accelerators since correctness is not required in this debug mode).
       if (stream == nullptr && output_tensor->TotalBytes() > 0) {
-        memset(const_cast<char*>(output_tensor->tensor_data().data()), 0,
-               output_tensor->TotalBytes());
+        memset(output_tensor->data(), 0, output_tensor->TotalBytes());
       }
     }
   }
