@@ -16,7 +16,6 @@ limitations under the License.
 #include "tensorflow/compiler/jit/kernels/xla_ops.h"
 
 #include <cstdint>
-#include <cstring>
 #include <functional>
 #include <map>
 #include <memory>
@@ -480,39 +479,6 @@ void RunInThreadPoolIfCollectivesPresent(
     // Otherwise, just run normally: we merely "pretend" to be asynchronous.
     execution_fn();
   }
-}
-
-// Populates ctx outputs with null/zero values, skipping actual XLA execution.
-// Used when tf_xla_null_cluster_outputs is enabled for debugging.
-//   - Constant outputs: returns the compiled constant value.
-//   - DT_RESOURCE outputs: passes the corresponding input tensor through.
-//   - All other outputs: allocates a zero-initialized CPU tensor.
-static absl::Status PopulateNullOutputs(
-    OpKernelContext* ctx,
-    const XlaCompiler::CompilationResult* compilation_result,
-    int missing_ctx_input_prefix) {
-  CHECK_EQ(ctx->num_outputs(), compilation_result->outputs.size());
-  for (int i = 0; i < ctx->num_outputs(); ++i) {
-    const XlaOutputDescription& descr = compilation_result->outputs[i];
-    if (descr.is_constant) {
-      TF_RETURN_IF_ERROR(SetOutputForConstant(
-          ctx, /*requires_copy_to_device=*/false, compilation_result, i));
-    } else if (descr.type == DT_RESOURCE) {
-      int input_index = descr.input_index - missing_ctx_input_prefix;
-      TF_RET_CHECK(input_index >= 0 && input_index < ctx->num_inputs())
-          << "Invalid input index for null output " << i << ": " << input_index;
-      ctx->set_output(i, ctx->input(input_index));
-    } else {
-      Tensor* output_tensor;
-      TF_RETURN_IF_ERROR(ctx->allocate_output(i, descr.shape, &output_tensor));
-      // Zero-initialize the output buffer. CPU tensors are not guaranteed to
-      // be zero-initialized by the allocator.
-      if (descr.type != DT_STRING && output_tensor->NumElements() > 0) {
-        memset(output_tensor->data(), 0, output_tensor->TotalBytes());
-      }
-    }
-  }
-  return absl::OkStatus();
 }
 
 }  // namespace
