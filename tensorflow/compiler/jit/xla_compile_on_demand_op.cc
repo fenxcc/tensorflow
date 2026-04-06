@@ -139,6 +139,13 @@ absl::Status XlaCompileOnDemandOp::Run(
 
   const xla::HloInputOutputAliasConfig& input_output_alias =
       executable->executable()->module().input_output_alias_config();
+  // Early-exit before PopulateInputs when null outputs are requested.
+  if (GetXlaOpsCommonFlags()->tf_xla_null_cluster_outputs) {
+    VLOG(1) << "tf_xla_null_cluster_outputs: skipping XLA execution "
+               "(XlaCompileOnDemandOp::Run)";
+    return PopulateNullOutputs(ctx, result, /*missing_ctx_input_prefix=*/0);
+  }
+
   absl::StatusOr<std::vector<xla::ExecutionInput>> execution_inputs =
       launch_context.PopulateInputs(ctx, result, snapshot_ptrs,
                                     /*missing_ctx_input_prefix=*/0,
@@ -146,12 +153,6 @@ absl::Status XlaCompileOnDemandOp::Run(
   TF_RETURN_IF_ERROR(execution_inputs.status());
 
   VLOG(2) << "Executing computation: " << name();
-
-  if (GetXlaOpsCommonFlags()->tf_xla_null_cluster_outputs) {
-    VLOG(1) << "tf_xla_null_cluster_outputs: skipping XLA execution "
-               "(XlaCompileOnDemandOp::Run)";
-    return PopulateNullOutputs(ctx, result, /*missing_ctx_input_prefix=*/0);
-  }
 
   xla::ExecutableRunOptions run_options;
   xla::gpu::GpuExecutableRunOptions gpu_options;

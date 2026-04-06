@@ -567,6 +567,17 @@ void XlaLocalLaunchBase::ComputeAsync(OpKernelContext* ctx, DoneCallback done) {
     auto run_pjrt_cluster = [ctx, pjrt_client, pjrt_executable,
                              compilation_result, done, inputs,
                              resources = resources_]() {
+      // Early-exit when null outputs are requested: skip PJRT execution.
+      if (GetXlaOpsCommonFlags()->tf_xla_null_cluster_outputs) {
+        VLOG(1) << "tf_xla_null_cluster_outputs: skipping PJRT execution";
+        OP_REQUIRES_OK_ASYNC(
+            ctx,
+            PopulateNullOutputs(ctx, compilation_result,
+                                /*missing_ctx_input_prefix=*/0),
+            done);
+        done();
+        return;
+      }
       // Separate scope so that VariableInfo locks are released before done() is
       // called.
       {
@@ -578,17 +589,11 @@ void XlaLocalLaunchBase::ComputeAsync(OpKernelContext* ctx, DoneCallback done) {
             done);
         OP_REQUIRES_OK_ASYNC(ctx, LockVariables(absl::MakeSpan(variable_infos)),
                              done);
-        if (GetXlaOpsCommonFlags()->tf_xla_null_cluster_outputs) {
-          VLOG(1) << "tf_xla_null_cluster_outputs: skipping PJRT execution";
-          OP_REQUIRES_OK_ASYNC(
-              ctx, PopulateNullOutputs(ctx, compilation_result, /*missing_ctx_input_prefix=*/0), done);
-        } else {
-          OP_REQUIRES_OK_ASYNC(
-              ctx,
-              RunPjRtExecutable(inputs, variable_infos, *compilation_result,
-                                pjrt_client, pjrt_executable, ctx),
-              done);
-        }
+        OP_REQUIRES_OK_ASYNC(
+            ctx,
+            RunPjRtExecutable(inputs, variable_infos, *compilation_result,
+                              pjrt_client, pjrt_executable, ctx),
+            done);
       }
       VLOG(2) << "Done executing with PJRT.";
       done();
@@ -625,42 +630,46 @@ void XlaLocalLaunchBase::ComputeAsync(OpKernelContext* ctx, DoneCallback done) {
         resource_var_ptrs[resources[i]] = variable_infos[i].var()->tensor();
       }
 
-      std::shared_ptr<se::DeviceMemoryAllocator> allocator =
-          GetAllocator(ctx->device(), GetStream(ctx), platform_info);
-      XlaComputationLaunchContext launch_context =
-          GetLaunchContext(platform_info, ctx, client, allocator.get());
-
-      const xla::HloInputOutputAliasConfig& input_output_alias =
-          executable->executable()->module().input_output_alias_config();
-      absl::StatusOr<std::vector<xla::ExecutionInput>> execution_inputs =
-          launch_context.PopulateInputs(
-              ctx, compilation_result, resource_var_ptrs,
-              /*missing_ctx_input_prefix=*/0, input_output_alias);
-      OP_REQUIRES_OK_ASYNC(ctx, execution_inputs.status(), done);
-
-      xla::gpu::GpuExecutableRunOptions gpu_options;
-      xla::DeviceAssignment device_assignment;
-      xla::ExecutableRunOptions run_options;
-      if (compilation_result->collective_info.has_value()) {
-        OP_REQUIRES_OK_ASYNC(ctx,
-                             ResolveDeviceAssignment(
-                                 ctx, *compilation_result->collective_info,
-                                 run_options, device_assignment, gpu_options),
-                             done);
-      }
-
-      // Hardcode run id to always be zero: TF distributed strategy
-      // differentiates between subsequent runs using dependency edges. This
-      // is safe, as only TF dist-strat can produce distributed ops, and we
-      // can rely on TF dist-strat invariants.
-      xla::RunId run_id(0);
-      run_options.set_run_id(run_id);
-
+      // Early-exit before PopulateInputs when null outputs are requested.
       if (GetXlaOpsCommonFlags()->tf_xla_null_cluster_outputs) {
         VLOG(1) << "tf_xla_null_cluster_outputs: skipping XLA execution";
         OP_REQUIRES_OK_ASYNC(
-            ctx, PopulateNullOutputs(ctx, compilation_result, /*missing_ctx_input_prefix=*/0), done);
+            ctx,
+            PopulateNullOutputs(ctx, compilation_result,
+                                /*missing_ctx_input_prefix=*/0),
+            done);
       } else {
+        std::shared_ptr<se::DeviceMemoryAllocator> allocator =
+            GetAllocator(ctx->device(), GetStream(ctx), platform_info);
+        XlaComputationLaunchContext launch_context =
+            GetLaunchContext(platform_info, ctx, client, allocator.get());
+
+        const xla::HloInputOutputAliasConfig& input_output_alias =
+            executable->executable()->module().input_output_alias_config();
+        absl::StatusOr<std::vector<xla::ExecutionInput>> execution_inputs =
+            launch_context.PopulateInputs(
+                ctx, compilation_result, resource_var_ptrs,
+                /*missing_ctx_input_prefix=*/0, input_output_alias);
+        OP_REQUIRES_OK_ASYNC(ctx, execution_inputs.status(), done);
+
+        xla::gpu::GpuExecutableRunOptions gpu_options;
+        xla::DeviceAssignment device_assignment;
+        xla::ExecutableRunOptions run_options;
+        if (compilation_result->collective_info.has_value()) {
+          OP_REQUIRES_OK_ASYNC(ctx,
+                               ResolveDeviceAssignment(
+                                   ctx, *compilation_result->collective_info,
+                                   run_options, device_assignment, gpu_options),
+                               done);
+        }
+
+        // Hardcode run id to always be zero: TF distributed strategy
+        // differentiates between subsequent runs using dependency edges. This
+        // is safe, as only TF dist-strat can produce distributed ops, and we
+        // can rely on TF dist-strat invariants.
+        xla::RunId run_id(0);
+        run_options.set_run_id(run_id);
+
         absl::StatusOr<xla::ExecutionOutput> execution_output = RunExecutable(
             platform_info, launch_context, std::move(*execution_inputs),
             run_options, executable, ctx, allocator.get());
@@ -904,32 +913,33 @@ void XlaRunOp::Compute(OpKernelContext* ctx) {
     PjRtExecutableClosure closure =
         PjRtExecutableClosureStore::Global()->Consume(key);
 
-    // Fetch inputs from the OpKernelContext. Inputs are the same as the ones
-    // for XlaCompile, except that the must-be-constant inputs that appear in
-    // the beginning are stripped off and the closure key is appended as the
-    // last input. So the inputs look like: input tensors, resource variables,
-    // closure key tensor.
-    std::vector<const Tensor*> inputs = InputsFromContext(ctx);
-    absl::flat_hash_map<int, const Tensor*> variable_snapshots;
-    for (const auto& [variable_index, variable_tensor] :
-         closure.resource_var_snapshots()) {
-      variable_snapshots.emplace(variable_index, variable_tensor.has_value()
-                                                     ? &variable_tensor.value()
-                                                     : nullptr);
-    }
+    // Early-exit when null outputs are requested: skip all PJRT execution.
+    if (GetXlaOpsCommonFlags()->tf_xla_null_cluster_outputs) {
+      VLOG(1) << "tf_xla_null_cluster_outputs: skipping PJRT execution (XlaRunOp)";
+      OP_REQUIRES_OK(ctx,
+                     PopulateNullOutputs(ctx, closure.compilation_result(),
+                                         closure.num_constant_args()));
+    } else {
+      // Fetch inputs from the OpKernelContext. Inputs are the same as the ones
+      // for XlaCompile, except that the must-be-constant inputs that appear in
+      // the beginning are stripped off and the closure key is appended as the
+      // last input. So the inputs look like: input tensors, resource variables,
+      // closure key tensor.
+      std::vector<const Tensor*> inputs = InputsFromContext(ctx);
+      absl::flat_hash_map<int, const Tensor*> variable_snapshots;
+      for (const auto& [variable_index, variable_tensor] :
+           closure.resource_var_snapshots()) {
+        variable_snapshots.emplace(variable_index, variable_tensor.has_value()
+                                                       ? &variable_tensor.value()
+                                                       : nullptr);
+      }
 
-    {
-      absl::StatusOr<std::vector<VariableInfo>> updated_variables =
-          GatherVariableInfo(ctx, *closure.compilation_result(),
-                             closure.num_constant_args());
-      OP_REQUIRES_OK(ctx, updated_variables.status());
-      OP_REQUIRES_OK(ctx, LockVariables(absl::MakeSpan(*updated_variables)));
-      if (GetXlaOpsCommonFlags()->tf_xla_null_cluster_outputs) {
-        VLOG(1) << "tf_xla_null_cluster_outputs: skipping PJRT execution (XlaRunOp)";
-        OP_REQUIRES_OK(ctx,
-                       PopulateNullOutputs(ctx, closure.compilation_result(),
-                                           closure.num_constant_args()));
-      } else {
+      {
+        absl::StatusOr<std::vector<VariableInfo>> updated_variables =
+            GatherVariableInfo(ctx, *closure.compilation_result(),
+                               closure.num_constant_args());
+        OP_REQUIRES_OK(ctx, updated_variables.status());
+        OP_REQUIRES_OK(ctx, LockVariables(absl::MakeSpan(*updated_variables)));
         OP_REQUIRES_OK(
             ctx,
             RunPjRtExecutable(closure.num_constant_args(), inputs,
@@ -947,6 +957,17 @@ void XlaRunOp::Compute(OpKernelContext* ctx) {
 
   XlaExecutableClosure closure =
       XlaExecutableClosureStore::Global()->Consume(key);
+
+  // Early-exit before PopulateInputs when null outputs are requested: skip
+  // all GPU input marshalling and the XLA execution itself.
+  if (GetXlaOpsCommonFlags()->tf_xla_null_cluster_outputs) {
+    VLOG(1) << "tf_xla_null_cluster_outputs: skipping XLA execution (XlaRunOp)";
+    OP_REQUIRES_OK(ctx,
+                   PopulateNullOutputs(ctx, closure.compilation_result(),
+                                       closure.num_constant_args()));
+    return;
+  }
+
   std::shared_ptr<se::DeviceMemoryAllocator> allocator =
       GetAllocator(ctx->device(), GetStream(ctx), platform_info_);
   XlaComputationLaunchContext launch_context =
@@ -991,13 +1012,6 @@ void XlaRunOp::Compute(OpKernelContext* ctx) {
       GetRecvDeviceMemoryFunction(ctx, key);
   run_options.set_recv_device_memory_function(&recv_function);
 
-  if (GetXlaOpsCommonFlags()->tf_xla_null_cluster_outputs) {
-    VLOG(1) << "tf_xla_null_cluster_outputs: skipping XLA execution (XlaRunOp)";
-    OP_REQUIRES_OK(ctx,
-                   PopulateNullOutputs(ctx, closure.compilation_result(),
-                                       closure.num_constant_args()));
-    return;
-  }
 
   absl::StatusOr<xla::ExecutionOutput> execution_output = RunExecutable(
       platform_info_, launch_context, std::move(*execution_inputs), run_options,
