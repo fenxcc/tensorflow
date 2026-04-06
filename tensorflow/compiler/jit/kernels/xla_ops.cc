@@ -494,11 +494,15 @@ void RunInThreadPoolIfCollectivesPresent(
 
 }  // namespace
 
-// Populates outputs with zero-initialized tensors, bypassing XLA execution.
+// Populates outputs with default (zero) tensors, bypassing XLA execution.
 // Used by tf_xla_null_cluster_outputs debug mode: the cluster is compiled
 // (so shapes are known) but the actual computation is skipped.
 // Constant outputs still use their compile-time values; resource outputs
 // still pass through the input resource tensors unchanged.
+// Non-constant tensor outputs are allocated and zero-initialized on CPU.
+// Note: on accelerator devices (GPU/TPU) the raw memory is left in an
+// unspecified state; this is intentional since the flag is a debug-only tool
+// and callers explicitly do not require numerically correct output values.
 static absl::Status PopulateNullOutputs(
     OpKernelContext* ctx,
     const XlaCompiler::CompilationResult* compilation_result) {
@@ -521,6 +525,12 @@ static absl::Status PopulateNullOutputs(
       Tensor* output_tensor;
       TF_RETURN_IF_ERROR(ctx->allocate_output(
           i, compilation_result->outputs[i].shape, &output_tensor));
+      // Zero-initialize on CPU (best-effort; device memory is left as-is
+      // on accelerators since correctness is not required in this debug mode).
+      if (stream == nullptr && output_tensor->TotalBytes() > 0) {
+        memset(const_cast<char*>(output_tensor->tensor_data().data()), 0,
+               output_tensor->TotalBytes());
+      }
     }
   }
   return absl::OkStatus();
