@@ -153,7 +153,6 @@ absl::Status XlaCompileOnDemandOp::Run(
   TF_RETURN_IF_ERROR(execution_inputs.status());
 
   VLOG(2) << "Executing computation: " << name();
-
   xla::ExecutableRunOptions run_options;
   xla::gpu::GpuExecutableRunOptions gpu_options;
   xla::DeviceAssignment device_assignment;
@@ -288,7 +287,6 @@ void XlaCompileOnDemandOp::Compute(OpKernelContext* ctx) {
     VLOG(2) << "Compiled op with PJRT: " << ctx->status();
     VLOG(2) << "result != nullptr: " << (result != nullptr);
     VLOG(2) << "pjrt_executable != nullptr: " << (pjrt_executable != nullptr);
-
     if (GetXlaOpsCommonFlags()->tf_xla_null_cluster_outputs) {
       VLOG(1) << "tf_xla_null_cluster_outputs: skipping PJRT execution "
                  "(XlaCompileOnDemandOp)";

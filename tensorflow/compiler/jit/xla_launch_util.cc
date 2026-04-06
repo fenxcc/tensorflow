@@ -367,8 +367,10 @@ absl::Status PopulateNullOutputs(
       Tensor* output_tensor;
       TF_RETURN_IF_ERROR(ctx->allocate_output(
           i, compilation_result->outputs[i].shape, &output_tensor));
-      // Zero-initialize on CPU (best-effort; device memory is left as-is on
-      // accelerators since correctness is not required in this debug mode).
+      // Zero-initialize on CPU. XLA only operates on numeric (POD) dtypes, so
+      // memset to 0 produces valid zero-valued outputs. Device memory is left
+      // as-is on accelerators since correctness is not required in this debug
+      // mode.
       if (stream == nullptr && output_tensor->TotalBytes() > 0) {
         memset(output_tensor->data(), 0, output_tensor->TotalBytes());
       }
