@@ -16,6 +16,7 @@ limitations under the License.
 #include "tensorflow/compiler/jit/xla_launch_util.h"
 
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <optional>
 #include <set>
@@ -316,6 +317,36 @@ absl::Status SetOutputForConstant(
     // No copy required.
     ctx->set_output(output_num, const_tensor);
     output_tensor = ctx->mutable_output(output_num);
+  }
+  return absl::OkStatus();
+}
+
+absl::Status PopulateNullOutputs(
+    OpKernelContext* ctx,
+    const XlaCompiler::CompilationResult* compilation_result,
+    int missing_ctx_input_prefix) {
+  TF_RET_CHECK(ctx->num_outputs() ==
+               static_cast<int>(compilation_result->outputs.size()));
+  for (int i = 0; i < ctx->num_outputs(); ++i) {
+    const XlaOutputDescription& descr = compilation_result->outputs[i];
+    if (descr.is_constant) {
+      TF_RETURN_IF_ERROR(SetOutputForConstant(
+          ctx, /*requires_copy_to_device=*/false, compilation_result, i));
+    } else if (descr.type == DT_RESOURCE) {
+      int input_index = descr.input_index - missing_ctx_input_prefix;
+      TF_RET_CHECK(input_index >= 0 && input_index < ctx->num_inputs())
+          << "Invalid input index for null output " << i << ": " << input_index;
+      ctx->set_output(i, ctx->input(input_index));
+    } else {
+      Tensor* output_tensor;
+      TF_RETURN_IF_ERROR(ctx->allocate_output(i, descr.shape, &output_tensor));
+      // DT_STRING tensors store std::string objects, not raw bytes, so they
+      // must not be zero-initialized with memset; their default constructor
+      // already produces valid empty strings.
+      if (descr.type != DT_STRING && output_tensor->NumElements() > 0) {
+        memset(output_tensor->data(), 0, output_tensor->TotalBytes());
+      }
+    }
   }
   return absl::OkStatus();
 }

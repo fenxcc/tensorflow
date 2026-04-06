@@ -270,8 +270,16 @@ void XlaCompileOnDemandOp::Compute(OpKernelContext* ctx) {
     VLOG(2) << "Compiled op with PJRT: " << ctx->status();
     VLOG(2) << "result != nullptr: " << (result != nullptr);
     VLOG(2) << "pjrt_executable != nullptr: " << (pjrt_executable != nullptr);
-    VLOG(2) << "Executing with PJRT ...";
 
+    if (GetBuildXlaOpsPassFlags()->tf_xla_null_cluster_outputs) {
+      VLOG(2) << "Skipping PJRT execution (tf_xla_null_cluster_outputs=true).";
+      OP_REQUIRES_OK(ctx,
+                     PopulateNullOutputs(ctx, result,
+                                         /*missing_ctx_input_prefix=*/0));
+      return;
+    }
+
+    VLOG(2) << "Executing with PJRT ...";
     OP_REQUIRES_OK(ctx, RunPjRtExecutable(inputs, variables, *result,
                                           pjrt_device_compiler->client(),
                                           pjrt_executable, ctx));
@@ -300,6 +308,14 @@ void XlaCompileOnDemandOp::Compute(OpKernelContext* ctx) {
     // will retain references, but this is more obviously correct.)
     core::ScopedUnref xla_device_compiler_ref(xla_device_compiler);
     core::ScopedUnref profiler_ref(profiler);
+
+    if (GetBuildXlaOpsPassFlags()->tf_xla_null_cluster_outputs) {
+      VLOG(2) << "Skipping XLA execution (tf_xla_null_cluster_outputs=true).";
+      OP_REQUIRES_OK(ctx,
+                     PopulateNullOutputs(ctx, result,
+                                         /*missing_ctx_input_prefix=*/0));
+      return;
+    }
 
     // Locks are acquired again when populating the `ctx` outputs.
     OP_REQUIRES_OK(

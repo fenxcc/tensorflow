@@ -53,6 +53,20 @@ absl::Status SetOutputForConstant(
     OpKernelContext* ctx, bool requires_copy_to_device,
     const XlaCompiler::CompilationResult* compilation_result, int output_num);
 
+// Populates ctx outputs with null/zero values, skipping actual XLA execution.
+// Used when tf_xla_null_cluster_outputs is enabled for debugging.
+//   - Constant outputs: returns the compiled constant value.
+//   - DT_RESOURCE outputs: passes the corresponding input tensor through.
+//   - All other outputs: allocates a zero-initialized CPU tensor with the
+//     correct type and shape. Only the CPU (host) scenario is supported.
+//
+// `missing_ctx_input_prefix` is the number of leading inputs that are
+// constants baked into the compiled kernel and are absent from `ctx`.
+absl::Status PopulateNullOutputs(
+    OpKernelContext* ctx,
+    const XlaCompiler::CompilationResult* compilation_result,
+    int missing_ctx_input_prefix);
+
 // Converts input tensors and variables which are parameters of the
 // XlaComputation into PjRtBuffers to be fed as input to the
 // PjRtLoadedExecutable.

@@ -568,11 +568,19 @@ void XlaLocalLaunchBase::ComputeAsync(OpKernelContext* ctx, DoneCallback done) {
             done);
         OP_REQUIRES_OK_ASYNC(ctx, LockVariables(absl::MakeSpan(variable_infos)),
                              done);
-        OP_REQUIRES_OK_ASYNC(
-            ctx,
-            RunPjRtExecutable(inputs, variable_infos, *compilation_result,
-                              pjrt_client, pjrt_executable, ctx),
-            done);
+        if (GetBuildXlaOpsPassFlags()->tf_xla_null_cluster_outputs) {
+          OP_REQUIRES_OK_ASYNC(
+              ctx,
+              PopulateNullOutputs(ctx, compilation_result,
+                                  /*missing_ctx_input_prefix=*/0),
+              done);
+        } else {
+          OP_REQUIRES_OK_ASYNC(
+              ctx,
+              RunPjRtExecutable(inputs, variable_infos, *compilation_result,
+                                pjrt_client, pjrt_executable, ctx),
+              done);
+        }
       }
       VLOG(2) << "Done executing with PJRT.";
       done();
@@ -640,19 +648,27 @@ void XlaLocalLaunchBase::ComputeAsync(OpKernelContext* ctx, DoneCallback done) {
       xla::RunId run_id(0);
       run_options.set_run_id(run_id);
 
-      absl::StatusOr<xla::ExecutionOutput> execution_output = RunExecutable(
-          platform_info, launch_context, std::move(*execution_inputs),
-          run_options, executable, ctx, allocator.get());
-      OP_REQUIRES_ASYNC(ctx, execution_output.ok(), execution_output.status(),
-                        done);
+      if (GetBuildXlaOpsPassFlags()->tf_xla_null_cluster_outputs) {
+        OP_REQUIRES_OK_ASYNC(
+            ctx,
+            PopulateNullOutputs(ctx, compilation_result,
+                                /*missing_ctx_input_prefix=*/0),
+            done);
+      } else {
+        absl::StatusOr<xla::ExecutionOutput> execution_output = RunExecutable(
+            platform_info, launch_context, std::move(*execution_inputs),
+            run_options, executable, ctx, allocator.get());
+        OP_REQUIRES_ASYNC(ctx, execution_output.ok(), execution_output.status(),
+                          done);
 
-      OP_REQUIRES_OK_ASYNC(
-          ctx,
-          launch_context.PopulateOutputs(
-              ctx, compilation_result, execution_output->ConsumeResult(),
-              /*missing_ctx_input_prefix=*/0, absl::MakeSpan(variable_infos),
-              input_output_alias, resource_var_ptrs),
-          done);
+        OP_REQUIRES_OK_ASYNC(
+            ctx,
+            launch_context.PopulateOutputs(
+                ctx, compilation_result, execution_output->ConsumeResult(),
+                /*missing_ctx_input_prefix=*/0, absl::MakeSpan(variable_infos),
+                input_output_alias, resource_var_ptrs),
+            done);
+      }
       VLOG(1) << "Done";
     }
     done();
@@ -902,11 +918,17 @@ void XlaRunOp::Compute(OpKernelContext* ctx) {
                              closure.num_constant_args());
       OP_REQUIRES_OK(ctx, updated_variables.status());
       OP_REQUIRES_OK(ctx, LockVariables(absl::MakeSpan(*updated_variables)));
-      OP_REQUIRES_OK(
-          ctx, RunPjRtExecutable(closure.num_constant_args(), inputs,
-                                 variable_snapshots, *updated_variables,
-                                 *closure.compilation_result(),
-                                 closure.client(), closure.executable(), ctx));
+      if (GetBuildXlaOpsPassFlags()->tf_xla_null_cluster_outputs) {
+        OP_REQUIRES_OK(ctx,
+                       PopulateNullOutputs(ctx, closure.compilation_result(),
+                                           closure.num_constant_args()));
+      } else {
+        OP_REQUIRES_OK(
+            ctx, RunPjRtExecutable(closure.num_constant_args(), inputs,
+                                   variable_snapshots, *updated_variables,
+                                   *closure.compilation_result(),
+                                   closure.client(), closure.executable(), ctx));
+      }
     }
 
     OP_REQUIRES_OK(ctx, absl::OkStatus());
@@ -960,6 +982,13 @@ void XlaRunOp::Compute(OpKernelContext* ctx) {
   xla::RecvDeviceMemoryFunction recv_function =
       GetRecvDeviceMemoryFunction(ctx, key);
   run_options.set_recv_device_memory_function(&recv_function);
+
+  if (GetBuildXlaOpsPassFlags()->tf_xla_null_cluster_outputs) {
+    OP_REQUIRES_OK(ctx,
+                   PopulateNullOutputs(ctx, closure.compilation_result(),
+                                       closure.num_constant_args()));
+    return;
+  }
 
   absl::StatusOr<xla::ExecutionOutput> execution_output = RunExecutable(
       platform_info_, launch_context, std::move(*execution_inputs), run_options,

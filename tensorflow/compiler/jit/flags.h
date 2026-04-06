@@ -273,6 +273,15 @@ struct BuildXlaOpsPassFlags {
   // guarantee that tests are run on XLA and not on TF's CPU implementation.
   bool tf_xla_disable_constant_folding;
 
+  // If true, XLA clusters are compiled but not executed. Outputs are filled
+  // with null/zero values instead of actual computation results:
+  //   - Constant outputs still return their compile-time constant values.
+  //   - DT_RESOURCE outputs pass the input resource tensor through unchanged.
+  //   - All other outputs are allocated with the correct type and shape and
+  //     zero-initialized. Only CPU (host) tensors are supported; this flag
+  //     should not be used with GPU or other accelerator devices.
+  bool tf_xla_null_cluster_outputs;
+
   // Disables full embedding pipelining when true. Instead, strict SparseCore
   // TensorCore sequencing will be used.
   bool tf_xla_disable_full_embedding_pipelining;
