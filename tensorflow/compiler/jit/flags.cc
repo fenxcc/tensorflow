@@ -265,6 +265,7 @@ void AllocateAndParseFlags() {
   ops_flags = new XlaOpsCommonFlags;
   ops_flags->tf_xla_always_defer_compilation = false;
   ops_flags->tf_xla_async_compilation = false;
+  ops_flags->tf_xla_null_cluster_outputs = false;
   ops_flags->tf_xla_use_device_api.enabled_for_xla_launch_ = true;
   ops_flags->tf_xla_use_device_api.enabled_for_compile_on_demand_ = true;
   ops_flags->tf_xla_use_device_api.enabled_for_compile_and_run_ = true;
@@ -343,6 +344,15 @@ void AllocateAndParseFlags() {
             "When lazy compilation is enabled, asynchronous compilation starts "
             "the cluster compilation in the background, and the fallback path "
             "is executed until the compilation has finished."),
+       Flag("tf_xla_null_cluster_outputs",
+            &ops_flags->tf_xla_null_cluster_outputs,
+            "If true, XLA cluster execution is skipped (nulled out): the "
+            "cluster is still compiled so that output shapes are known, but "
+            "the actual computation is not run. Outputs are zero-initialized "
+            "tensors of the correct type and shape (constants still use their "
+            "compile-time values; resource outputs still pass through). "
+            "Useful for debugging XLA compilation/execution issues without "
+            "caring about numeric correctness. Defaults to false."),
        Flag("tf_xla_use_device_api_for_xla_launch",
             &ops_flags->tf_xla_use_device_api.enabled_for_xla_launch_,
             "If true, uses Device API (PjRt) for single device compilation and "

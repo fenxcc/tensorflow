@@ -494,11 +494,42 @@ void RunInThreadPoolIfCollectivesPresent(
 
 }  // namespace
 
-XlaLocalLaunchBase::XlaLocalLaunchBase(OpKernelConstruction* ctx,
-                                       const std::vector<int>& constants,
-                                       const std::vector<int>& resources,
-                                       const NameAttrList& function,
-                                       bool has_ref_vars)
+// Populates outputs with zero-initialized tensors, bypassing XLA execution.
+// Used by tf_xla_null_cluster_outputs debug mode: the cluster is compiled
+// (so shapes are known) but the actual computation is skipped.
+// Constant outputs still use their compile-time values; resource outputs
+// still pass through the input resource tensors unchanged.
+static absl::Status PopulateNullOutputs(
+    OpKernelContext* ctx,
+    const XlaCompiler::CompilationResult* compilation_result) {
+  se::Stream* stream = ctx->op_device_context()
+                           ? ctx->op_device_context()->stream()
+                           : nullptr;
+  for (int i = 0, end = ctx->num_outputs(); i < end; ++i) {
+    const DataType& type = compilation_result->outputs[i].type;
+    if (compilation_result->outputs[i].is_constant) {
+      TF_RETURN_IF_ERROR(SetOutputForConstant(
+          ctx, /*requires_copy_to_device=*/stream != nullptr,
+          compilation_result, i));
+    } else if (type == DT_RESOURCE) {
+      int input_index = compilation_result->outputs[i].input_index;
+      TF_RET_CHECK(input_index >= 0 && input_index < ctx->num_inputs())
+          << "Invalid input index for resource output " << i << ": "
+          << input_index;
+      ctx->set_output(i, ctx->input(input_index));
+    } else {
+      Tensor* output_tensor;
+      TF_RETURN_IF_ERROR(ctx->allocate_output(
+          i, compilation_result->outputs[i].shape, &output_tensor));
+    }
+  }
+  return absl::OkStatus();
+}
+
+XlaLocalLaunchBase::XlaLocalLaunchBase(
+    OpKernelConstruction* ctx, const std::vector<int>& constants,
+    const std::vector<int>& resources, const NameAttrList& function,
+    bool has_ref_vars)
     : AsyncOpKernel(ctx),
       constants_(constants),
       resources_(resources),
@@ -579,11 +610,17 @@ void XlaLocalLaunchBase::ComputeAsync(OpKernelContext* ctx, DoneCallback done) {
             done);
         OP_REQUIRES_OK_ASYNC(ctx, LockVariables(absl::MakeSpan(variable_infos)),
                              done);
-        OP_REQUIRES_OK_ASYNC(
-            ctx,
-            RunPjRtExecutable(inputs, variable_infos, *compilation_result,
-                              pjrt_client, pjrt_executable, ctx),
-            done);
+        if (GetXlaOpsCommonFlags()->tf_xla_null_cluster_outputs) {
+          VLOG(1) << "tf_xla_null_cluster_outputs: skipping PJRT execution";
+          OP_REQUIRES_OK_ASYNC(
+              ctx, PopulateNullOutputs(ctx, compilation_result), done);
+        } else {
+          OP_REQUIRES_OK_ASYNC(
+              ctx,
+              RunPjRtExecutable(inputs, variable_infos, *compilation_result,
+                                pjrt_client, pjrt_executable, ctx),
+              done);
+        }
       }
       VLOG(2) << "Done executing with PJRT.";
       done();
@@ -651,19 +688,25 @@ void XlaLocalLaunchBase::ComputeAsync(OpKernelContext* ctx, DoneCallback done) {
       xla::RunId run_id(0);
       run_options.set_run_id(run_id);
 
-      absl::StatusOr<xla::ExecutionOutput> execution_output = RunExecutable(
-          platform_info, launch_context, std::move(*execution_inputs),
-          run_options, executable, ctx, allocator.get());
-      OP_REQUIRES_ASYNC(ctx, execution_output.ok(), execution_output.status(),
-                        done);
+      if (GetXlaOpsCommonFlags()->tf_xla_null_cluster_outputs) {
+        VLOG(1) << "tf_xla_null_cluster_outputs: skipping XLA execution";
+        OP_REQUIRES_OK_ASYNC(
+            ctx, PopulateNullOutputs(ctx, compilation_result), done);
+      } else {
+        absl::StatusOr<xla::ExecutionOutput> execution_output = RunExecutable(
+            platform_info, launch_context, std::move(*execution_inputs),
+            run_options, executable, ctx, allocator.get());
+        OP_REQUIRES_ASYNC(ctx, execution_output.ok(), execution_output.status(),
+                          done);
 
-      OP_REQUIRES_OK_ASYNC(
-          ctx,
-          launch_context.PopulateOutputs(
-              ctx, compilation_result, execution_output->ConsumeResult(),
-              /*missing_ctx_input_prefix=*/0, absl::MakeSpan(variable_infos),
-              input_output_alias, resource_var_ptrs),
-          done);
+        OP_REQUIRES_OK_ASYNC(
+            ctx,
+            launch_context.PopulateOutputs(
+                ctx, compilation_result, execution_output->ConsumeResult(),
+                /*missing_ctx_input_prefix=*/0, absl::MakeSpan(variable_infos),
+                input_output_alias, resource_var_ptrs),
+            done);
+      }
       VLOG(1) << "Done";
     }
     done();

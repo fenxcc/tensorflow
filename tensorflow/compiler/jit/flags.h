@@ -152,6 +152,15 @@ struct XlaOpsCommonFlags {
   // the main execution. The fallback path is taken while compilation happens.
   bool tf_xla_async_compilation;
 
+  // If true, XLA cluster execution is skipped (nulled out): the cluster is
+  // still compiled so that output shapes are known, but the actual computation
+  // is not run.  Outputs are zero-initialized tensors of the correct type and
+  // shape (constants still use their compile-time values; resource outputs
+  // still pass through the input resource tensors).  Useful for debugging to
+  // isolate XLA compilation/execution issues without caring about numeric
+  // correctness.  Defaults to false.
+  bool tf_xla_null_cluster_outputs;
+
   class PjRtForSingleDeviceCompilationRollout {
    public:
     // Allow using Device API (PjRt) for `device_type` in the XlaLaunch op.
