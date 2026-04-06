@@ -278,7 +278,8 @@ struct BuildXlaOpsPassFlags {
   //   - Constant outputs still return their compile-time constant values.
   //   - DT_RESOURCE outputs pass the input resource tensor through unchanged.
   //   - All other outputs are allocated with the correct type and shape and
-  //     zero-initialized on the CPU. Only the CPU scenario is considered.
+  //     zero-initialized. Only CPU (host) tensors are supported; this flag
+  //     should not be used with GPU or other accelerator devices.
   bool tf_xla_null_cluster_outputs;
 
   // Disables full embedding pipelining when true. Instead, strict SparseCore

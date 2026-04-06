@@ -508,8 +508,7 @@ static absl::Status PopulateNullOutputs(
       // Zero-initialize the output buffer. CPU tensors are not guaranteed to
       // be zero-initialized by the allocator.
       if (descr.type != DT_STRING && output_tensor->NumElements() > 0) {
-        auto raw = output_tensor->tensor_data();
-        memset(const_cast<char*>(raw.data()), 0, raw.size());
+        memset(output_tensor->data(), 0, output_tensor->TotalBytes());
       }
     }
   }
