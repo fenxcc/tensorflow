@@ -494,48 +494,6 @@ void RunInThreadPoolIfCollectivesPresent(
 
 }  // namespace
 
-// Populates outputs with default (zero) tensors, bypassing XLA execution.
-// Used by tf_xla_null_cluster_outputs debug mode: the cluster is compiled
-// (so shapes are known) but the actual computation is skipped.
-// Constant outputs still use their compile-time values; resource outputs
-// still pass through the input resource tensors unchanged.
-// Non-constant tensor outputs are allocated and zero-initialized on CPU.
-// Note: on accelerator devices (GPU/TPU) the raw memory is left in an
-// unspecified state; this is intentional since the flag is a debug-only tool
-// and callers explicitly do not require numerically correct output values.
-static absl::Status PopulateNullOutputs(
-    OpKernelContext* ctx,
-    const XlaCompiler::CompilationResult* compilation_result) {
-  se::Stream* stream = ctx->op_device_context()
-                           ? ctx->op_device_context()->stream()
-                           : nullptr;
-  for (int i = 0, end = ctx->num_outputs(); i < end; ++i) {
-    const DataType& type = compilation_result->outputs[i].type;
-    if (compilation_result->outputs[i].is_constant) {
-      TF_RETURN_IF_ERROR(SetOutputForConstant(
-          ctx, /*requires_copy_to_device=*/stream != nullptr,
-          compilation_result, i));
-    } else if (type == DT_RESOURCE) {
-      int input_index = compilation_result->outputs[i].input_index;
-      TF_RET_CHECK(input_index >= 0 && input_index < ctx->num_inputs())
-          << "Invalid input index for resource output " << i << ": "
-          << input_index;
-      ctx->set_output(i, ctx->input(input_index));
-    } else {
-      Tensor* output_tensor;
-      TF_RETURN_IF_ERROR(ctx->allocate_output(
-          i, compilation_result->outputs[i].shape, &output_tensor));
-      // Zero-initialize on CPU (best-effort; device memory is left as-is
-      // on accelerators since correctness is not required in this debug mode).
-      if (stream == nullptr && output_tensor->TotalBytes() > 0) {
-        memset(const_cast<char*>(output_tensor->tensor_data().data()), 0,
-               output_tensor->TotalBytes());
-      }
-    }
-  }
-  return absl::OkStatus();
-}
-
 XlaLocalLaunchBase::XlaLocalLaunchBase(
     OpKernelConstruction* ctx, const std::vector<int>& constants,
     const std::vector<int>& resources, const NameAttrList& function,
@@ -623,7 +581,7 @@ void XlaLocalLaunchBase::ComputeAsync(OpKernelContext* ctx, DoneCallback done) {
         if (GetXlaOpsCommonFlags()->tf_xla_null_cluster_outputs) {
           VLOG(1) << "tf_xla_null_cluster_outputs: skipping PJRT execution";
           OP_REQUIRES_OK_ASYNC(
-              ctx, PopulateNullOutputs(ctx, compilation_result), done);
+              ctx, PopulateNullOutputs(ctx, compilation_result, /*missing_ctx_input_prefix=*/0), done);
         } else {
           OP_REQUIRES_OK_ASYNC(
               ctx,
@@ -701,7 +659,7 @@ void XlaLocalLaunchBase::ComputeAsync(OpKernelContext* ctx, DoneCallback done) {
       if (GetXlaOpsCommonFlags()->tf_xla_null_cluster_outputs) {
         VLOG(1) << "tf_xla_null_cluster_outputs: skipping XLA execution";
         OP_REQUIRES_OK_ASYNC(
-            ctx, PopulateNullOutputs(ctx, compilation_result), done);
+            ctx, PopulateNullOutputs(ctx, compilation_result, /*missing_ctx_input_prefix=*/0), done);
       } else {
         absl::StatusOr<xla::ExecutionOutput> execution_output = RunExecutable(
             platform_info, launch_context, std::move(*execution_inputs),
@@ -966,11 +924,19 @@ void XlaRunOp::Compute(OpKernelContext* ctx) {
                              closure.num_constant_args());
       OP_REQUIRES_OK(ctx, updated_variables.status());
       OP_REQUIRES_OK(ctx, LockVariables(absl::MakeSpan(*updated_variables)));
-      OP_REQUIRES_OK(
-          ctx, RunPjRtExecutable(closure.num_constant_args(), inputs,
-                                 variable_snapshots, *updated_variables,
-                                 *closure.compilation_result(),
-                                 closure.client(), closure.executable(), ctx));
+      if (GetXlaOpsCommonFlags()->tf_xla_null_cluster_outputs) {
+        VLOG(1) << "tf_xla_null_cluster_outputs: skipping PJRT execution (XlaRunOp)";
+        OP_REQUIRES_OK(ctx,
+                       PopulateNullOutputs(ctx, closure.compilation_result(),
+                                           closure.num_constant_args()));
+      } else {
+        OP_REQUIRES_OK(
+            ctx,
+            RunPjRtExecutable(closure.num_constant_args(), inputs,
+                               variable_snapshots, *updated_variables,
+                               *closure.compilation_result(),
+                               closure.client(), closure.executable(), ctx));
+      }
     }
 
     OP_REQUIRES_OK(ctx, absl::OkStatus());
@@ -1024,6 +990,14 @@ void XlaRunOp::Compute(OpKernelContext* ctx) {
   xla::RecvDeviceMemoryFunction recv_function =
       GetRecvDeviceMemoryFunction(ctx, key);
   run_options.set_recv_device_memory_function(&recv_function);
+
+  if (GetXlaOpsCommonFlags()->tf_xla_null_cluster_outputs) {
+    VLOG(1) << "tf_xla_null_cluster_outputs: skipping XLA execution (XlaRunOp)";
+    OP_REQUIRES_OK(ctx,
+                   PopulateNullOutputs(ctx, closure.compilation_result(),
+                                       closure.num_constant_args()));
+    return;
+  }
 
   absl::StatusOr<xla::ExecutionOutput> execution_output = RunExecutable(
       platform_info_, launch_context, std::move(*execution_inputs), run_options,

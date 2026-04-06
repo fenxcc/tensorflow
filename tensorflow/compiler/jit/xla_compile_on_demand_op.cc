@@ -146,6 +146,13 @@ absl::Status XlaCompileOnDemandOp::Run(
   TF_RETURN_IF_ERROR(execution_inputs.status());
 
   VLOG(2) << "Executing computation: " << name();
+
+  if (GetXlaOpsCommonFlags()->tf_xla_null_cluster_outputs) {
+    VLOG(1) << "tf_xla_null_cluster_outputs: skipping XLA execution "
+               "(XlaCompileOnDemandOp::Run)";
+    return PopulateNullOutputs(ctx, result, /*missing_ctx_input_prefix=*/0);
+  }
+
   xla::ExecutableRunOptions run_options;
   xla::gpu::GpuExecutableRunOptions gpu_options;
   xla::DeviceAssignment device_assignment;
@@ -280,13 +287,19 @@ void XlaCompileOnDemandOp::Compute(OpKernelContext* ctx) {
     VLOG(2) << "Compiled op with PJRT: " << ctx->status();
     VLOG(2) << "result != nullptr: " << (result != nullptr);
     VLOG(2) << "pjrt_executable != nullptr: " << (pjrt_executable != nullptr);
-    VLOG(2) << "Executing with PJRT ...";
 
-    OP_REQUIRES_OK(ctx, RunPjRtExecutable(inputs, variables, *result,
-                                          pjrt_device_compiler->client(),
-                                          pjrt_executable, ctx));
-
-    VLOG(2) << "Completed executing with PJRT!";
+    if (GetXlaOpsCommonFlags()->tf_xla_null_cluster_outputs) {
+      VLOG(1) << "tf_xla_null_cluster_outputs: skipping PJRT execution "
+                 "(XlaCompileOnDemandOp)";
+      OP_REQUIRES_OK(
+          ctx, PopulateNullOutputs(ctx, result, /*missing_ctx_input_prefix=*/0));
+    } else {
+      VLOG(2) << "Executing with PJRT ...";
+      OP_REQUIRES_OK(ctx, RunPjRtExecutable(inputs, variables, *result,
+                                            pjrt_device_compiler->client(),
+                                            pjrt_executable, ctx));
+      VLOG(2) << "Completed executing with PJRT!";
+    }
   } else {
     ResourceVarsSnapshot variable_args;
     std::vector<XlaCompiler::Argument> args;

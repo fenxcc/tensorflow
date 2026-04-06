@@ -17,6 +17,7 @@ limitations under the License.
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <optional>
 #include <string>
@@ -339,6 +340,40 @@ absl::Status SetOutputForConstant(
     // No copy required.
     ctx->set_output(output_num, const_tensor);
     output_tensor = ctx->mutable_output(output_num);
+  }
+  return absl::OkStatus();
+}
+
+absl::Status PopulateNullOutputs(
+    OpKernelContext* ctx,
+    const XlaCompiler::CompilationResult* compilation_result,
+    int missing_ctx_input_prefix) {
+  se::Stream* stream =
+      ctx->op_device_context() ? ctx->op_device_context()->stream() : nullptr;
+  for (int i = 0, end = ctx->num_outputs(); i < end; ++i) {
+    const DataType& type = compilation_result->outputs[i].type;
+    if (compilation_result->outputs[i].is_constant) {
+      TF_RETURN_IF_ERROR(SetOutputForConstant(
+          ctx, /*requires_copy_to_device=*/stream != nullptr,
+          compilation_result, i));
+    } else if (type == DT_RESOURCE) {
+      int input_index =
+          compilation_result->outputs[i].input_index - missing_ctx_input_prefix;
+      TF_RET_CHECK(input_index >= 0 && input_index < ctx->num_inputs())
+          << "Invalid input index for resource output " << i << ": "
+          << input_index;
+      ctx->set_output(i, ctx->input(input_index));
+    } else {
+      Tensor* output_tensor;
+      TF_RETURN_IF_ERROR(ctx->allocate_output(
+          i, compilation_result->outputs[i].shape, &output_tensor));
+      // Zero-initialize on CPU (best-effort; device memory is left as-is on
+      // accelerators since correctness is not required in this debug mode).
+      if (stream == nullptr && output_tensor->TotalBytes() > 0) {
+        memset(const_cast<char*>(output_tensor->tensor_data().data()), 0,
+               output_tensor->TotalBytes());
+      }
+    }
   }
   return absl::OkStatus();
 }
