@@ -220,6 +220,7 @@ void AllocateAndParseFlags() {
   build_ops_flags->tf_xla_check_cluster_input_numerics = false;
   build_ops_flags->tf_xla_check_cluster_output_numerics = false;
   build_ops_flags->tf_xla_disable_constant_folding = false;
+  build_ops_flags->tf_xla_null_cluster_outputs = false;
   build_ops_flags->tf_xla_disable_full_embedding_pipelining = false;
   build_ops_flags->tf_xla_disable_full_embedding_pipelining_with_summaries =
       true;
@@ -310,6 +311,14 @@ void AllocateAndParseFlags() {
             &build_ops_flags->tf_xla_disable_constant_folding,
             "If true then disables constant folding on TF graph before XLA "
             "compilation."),
+        Flag("tf_xla_null_cluster_outputs",
+             &build_ops_flags->tf_xla_null_cluster_outputs,
+             "If true then XLA clusters are compiled but not executed. "
+             "Outputs are filled with null/zero values: constant outputs "
+             "return their compile-time values, DT_RESOURCE outputs pass "
+             "input resource tensors through unchanged, and all other outputs "
+             "are zero-initialized CPU tensors with the correct type and "
+             "shape. Only the CPU scenario is considered."),
        Flag("tf_xla_disable_full_embedding_pipelining",
             &build_ops_flags->tf_xla_disable_full_embedding_pipelining,
             "If true then disables full embedding pipelining and instead use "
