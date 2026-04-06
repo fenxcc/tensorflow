@@ -325,7 +325,8 @@ absl::Status PopulateNullOutputs(
     OpKernelContext* ctx,
     const XlaCompiler::CompilationResult* compilation_result,
     int missing_ctx_input_prefix) {
-  CHECK_EQ(ctx->num_outputs(), compilation_result->outputs.size());
+  TF_RET_CHECK(ctx->num_outputs() ==
+               static_cast<int>(compilation_result->outputs.size()));
   for (int i = 0; i < ctx->num_outputs(); ++i) {
     const XlaOutputDescription& descr = compilation_result->outputs[i];
     if (descr.is_constant) {
@@ -339,6 +340,9 @@ absl::Status PopulateNullOutputs(
     } else {
       Tensor* output_tensor;
       TF_RETURN_IF_ERROR(ctx->allocate_output(i, descr.shape, &output_tensor));
+      // DT_STRING tensors store std::string objects, not raw bytes, so they
+      // must not be zero-initialized with memset; their default constructor
+      // already produces valid empty strings.
       if (descr.type != DT_STRING && output_tensor->NumElements() > 0) {
         memset(output_tensor->data(), 0, output_tensor->TotalBytes());
       }
